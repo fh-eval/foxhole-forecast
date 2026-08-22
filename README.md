@@ -36,7 +36,7 @@ web/                       Astro GitHub Pages dashboard
 .github/workflows/         Collection, CI, and Pages automation
 ```
 
-The configured model series are GPT-5.6 Luna through OpenRouter (pinned to OpenAI), Gemini 3.7 Flash through OpenRouter (pinned to Google Vertex), DeepSeek V4 Flash through DeepSeek's direct API, Inkling and Nemotron 3 Ultra 550B A55B through NVIDIA NIM, and Ox Alpha through OpenRouter. Retired NVIDIA-hosted GLM 5.2 and DeepSeek V4 Flash definitions remain disabled for historical continuity. Gateway, requested model, returned model, and upstream provider are recorded so silent routing changes cannot masquerade as the same series. Raw provider responses remain in the repository data but are excluded from the public dashboard JSON.
+The configured model series are GPT-5.6 Luna through OpenRouter (pinned to OpenAI), Gemini 3.7 Flash through OpenRouter (pinned to Google Vertex), DeepSeek V4 Flash through DeepSeek's direct API, Inkling and Nemotron 3 Ultra 550B A55B through NVIDIA NIM, and Ox Alpha through OpenRouter. Gateway, requested model, returned model, and upstream provider are recorded so silent routing changes cannot masquerade as the same series. Raw provider responses remain in the repository data but are excluded from the public dashboard JSON.
 
 ## Run locally
 
