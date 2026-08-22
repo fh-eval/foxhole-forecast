@@ -384,6 +384,12 @@ import "../styles/global.css";
         return eventLabel(bet.status);
       }
 
+      function roundResolutionLabel(round) {
+        const expected = dashboard?.methodology?.predictions_per_round ?? 8;
+        const resolved = (round.predictions || []).filter((bet) => bet.status && bet.status !== "open").length;
+        return `${resolved}/${expected} Predictions Resolved`;
+      }
+
       function renderRounds(rounds) {
         const list = document.querySelector("#round-list");
         list.replaceChildren();
@@ -398,7 +404,7 @@ import "../styles/global.css";
           summary.append(
             element("strong", "", `${round.model_label}, Round ${round.round_number}`),
             element("time", "", formatDate(round.cutoff)),
-            element("span", `status status--${round.settlement_status}`, eventLabel(round.settlement_status)),
+            element("span", `status status--${round.settlement_status}`, roundResolutionLabel(round)),
           );
           const body = element("div", "round__body");
           body.append(
