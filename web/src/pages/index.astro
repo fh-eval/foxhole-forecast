@@ -32,7 +32,6 @@ import "../styles/global.css";
         <a href="#war-data">War data</a>
         <a href="#rounds">Rounds</a>
         <a href="#briefings">Briefings</a>
-        <a href="#outlook">Base outlook</a>
         <a href="#predictions">Predictions</a>
         <a href="#history">History</a>
         <a href="#method">Method</a>
@@ -92,20 +91,6 @@ import "../styles/global.css";
           <label class="select-label">Model <select id="briefing-model"></select></label>
         </div>
         <div id="briefing-list" class="briefing-list"></div>
-      </section>
-
-      <section id="outlook" class="section-block">
-        <div class="section-heading">
-          <div><p class="kicker">Archived protocol</p><h2>Legacy horizon outlook</h2></div>
-          <p>Historical 1h/6h/24h probability forecasts remain visible, but new cohorts use ranked exact-ETA rounds.</p>
-        </div>
-        <div class="table-shell outlook-shell">
-          <table>
-            <thead><tr><th>Model</th><th>Base and evidence</th><th>Owner now</th><th>1 hour</th><th>6 hours</th><th>24 hours</th></tr></thead>
-            <tbody id="outlook-rows"></tbody>
-          </table>
-          <p id="outlook-empty" class="empty-state" hidden>No named base forecasts yet.</p>
-        </div>
       </section>
 
       <section id="predictions" class="section-block">
@@ -177,12 +162,31 @@ import "../styles/global.css";
       let dashboard = null;
       let betView = "open";
       let briefingFilter = "all";
+      let visibleSeries = new Set();
+
+      function isCompleteCurrentRound(round) {
+        const expected = dashboard?.methodology?.predictions_per_round ?? 8;
+        const currentProtocol = dashboard?.methodology?.current_protocol;
+        const predictions = round.predictions || [];
+        return round.protocol === currentProtocol
+          && predictions.length === expected
+          && predictions.every((bet) =>
+            ["CAPTURED", "DESTROYED"].includes(bet.predicted_outcome)
+            && bet.base_name
+            && bet.base_type
+            && bet.current_team
+            && bet.confidence != null
+            && bet.eta_utc
+            && Array.isArray(bet.evidence)
+            && bet.evidence.length > 0
+          );
+      }
 
       function renderScores(models) {
         const grid = document.querySelector("#score-grid");
         grid.replaceChildren();
         if (!models.length) {
-          grid.append(element("p", "empty-state", "No model cohorts yet. Collection can begin as soon as provider keys are configured."));
+          grid.append(element("p", "empty-state", "No model has completed a full round under the current protocol yet."));
           return;
         }
         models.forEach((model, index) => {
@@ -297,7 +301,7 @@ import "../styles/global.css";
         });
         select.addEventListener("change", () => {
           briefingFilter = select.value;
-          renderBriefings(dashboard.models || []);
+          renderBriefings((dashboard.models || []).filter((model) => visibleSeries.has(model.series_id)));
         });
       }
 
@@ -415,7 +419,8 @@ import "../styles/global.css";
         const rows = document.querySelector("#prediction-rows");
         const empty = document.querySelector("#prediction-empty");
         rows.replaceChildren();
-        const bets = betView === "open" ? dashboard.open_bets : dashboard.resolved_bets;
+        const source = betView === "open" ? dashboard.open_bets : dashboard.resolved_bets;
+        const bets = (source || []).filter((bet) => visibleSeries.has(bet.series_id) && bet.predicted_outcome);
         empty.hidden = bets.length > 0;
         bets.slice(0, 100).forEach((bet) => {
           const row = document.createElement("tr");
@@ -427,33 +432,6 @@ import "../styles/global.css";
             modelCell,
             predictionCell,
             element("td", `status status--${bet.status}`, status),
-          );
-          rows.append(row);
-        });
-      }
-
-      function renderOutlook() {
-        const rows = document.querySelector("#outlook-rows");
-        const empty = document.querySelector("#outlook-empty");
-        rows.replaceChildren();
-        const forecasts = dashboard.base_forecasts || [];
-        empty.hidden = forecasts.length > 0;
-        forecasts.slice(0, 100).forEach((forecast) => {
-          const row = document.createElement("tr");
-          const baseCell = element("td", "prediction-cell");
-          baseCell.append(element("strong", "", `${forecast.base_name}, ${forecast.map_name}`));
-          const evidence = element("div", "evidence-list");
-          (forecast.evidence || []).slice(0, 5).forEach((item) => {
-            evidence.append(evidenceChip(item));
-          });
-          baseCell.append(evidence);
-          row.append(
-            element("td", "", forecast.model_label),
-            baseCell,
-            element("td", `faction faction--${String(forecast.current_team).toLowerCase()}`, eventLabel(forecast.current_team)),
-            element("td", "probability", percent(forecast.p_change_1h)),
-            element("td", "probability", percent(forecast.p_change_6h)),
-            element("td", "probability probability--primary", percent(forecast.p_change_24h)),
           );
           rows.append(row);
         });
@@ -475,7 +453,8 @@ import "../styles/global.css";
         const select = document.querySelector("#history-model");
         const list = document.querySelector("#history-list");
         list.replaceChildren();
-        const model = dashboard.models.find((item) => item.series_id === select.value) || dashboard.models[0];
+        const currentModels = (dashboard.models || []).filter((item) => visibleSeries.has(item.series_id));
+        const model = currentModels.find((item) => item.series_id === select.value) || currentModels[0];
         if (!model?.history?.length) {
           list.append(element("li", "empty-state", "No history for this model yet."));
           return;
@@ -498,19 +477,21 @@ import "../styles/global.css";
           const response = await fetch(`${base}data/dashboard.json`, { cache: "no-store" });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           dashboard = await response.json();
+          const currentRounds = (dashboard.rounds || []).filter(isCompleteCurrentRound);
+          visibleSeries = new Set(currentRounds.map((round) => round.series_id));
+          const currentModels = (dashboard.models || []).filter((model) => visibleSeries.has(model.series_id));
           document.querySelector("#war-number").textContent = dashboard.war ? `World Conquest ${dashboard.war.warNumber}` : "Waiting for data";
           document.querySelector("#last-observation").textContent = formatDate(dashboard.last_collected_at);
           document.querySelector("#base-count").textContent = dashboard.strategic_base_count ?? 0;
           document.querySelector("#poll-count").textContent = dashboard.collector_runs ?? 0;
           document.querySelector("#generated-at").textContent = dashboard.generated_at ? `Generated ${formatDate(dashboard.generated_at)}` : "No dataset generated yet";
           renderWarData(dashboard.war_api_snapshot);
-          renderScores(dashboard.models || []);
-          renderRounds(dashboard.rounds || []);
-          setupBriefingFilter(dashboard.models || []);
-          renderBriefings(dashboard.models || []);
-          renderOutlook();
+          renderScores(currentModels);
+          renderRounds(currentRounds);
+          setupBriefingFilter(currentModels);
+          renderBriefings(currentModels);
           renderPredictions();
-          setupHistory(dashboard.models || []);
+          setupHistory(currentModels);
         } catch (error) {
           document.querySelector("#score-grid").append(element("p", "empty-state", `Dashboard data could not be loaded: ${error.message}`));
         }

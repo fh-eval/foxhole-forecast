@@ -121,6 +121,7 @@ def build_dashboard_data() -> dict[str, Any]:
                     "cutoff": run["cutoff"],
                     "war_summary": run.get("war_summary"),
                     "selected_regions": run.get("selected_regions", []),
+                    "protocol": settlement.get("protocol"),
                     "settlement_status": settlement.get("status", "not_available"),
                     "timing_score_pct": settlement.get("timing_score_pct"),
                     "event_brier": settlement.get("event_brier"),
@@ -195,7 +196,7 @@ def build_dashboard_data() -> dict[str, Any]:
     base_forecasts.sort(key=lambda row: (-row["p_change_24h"], row["model_label"], row["base_name"]))
     rounds.sort(key=lambda row: row["cutoff"], reverse=True)
     output = {
-        "schema_version": 3,
+        "schema_version": 4,
         "generated_at": isoformat(),
         "war": latest.get("war"),
         "last_collected_at": latest.get("observed_at"),
