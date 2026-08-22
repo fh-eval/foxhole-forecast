@@ -68,3 +68,31 @@ test("a successful run inside the guard window suppresses a duplicate", () => {
   assert.equal(successfulRunSince(runs, Date.parse("2026-08-22T12:00:00Z"))?.id, 42);
   assert.equal(successfulRunSince(runs, Date.parse("2026-08-22T12:20:00Z")), undefined);
 });
+
+test("an ended war pauses forecasts without triggering an extra collection", async () => {
+  const requests = [];
+  const result = await checkAndDispatch(
+    {
+      GITHUB_TOKEN: "test-token",
+      STATUS_DATA_URL: "https://example.test/watchdog.json",
+      STALE_AFTER_MINUTES: "14",
+      FORECAST_WORKFLOW: "forecast.yml",
+    },
+    async (url) => {
+      requests.push(url);
+      return Response.json({
+        observed_at: "2026-08-22T11:47:00Z",
+        last_forecast_slot: "2026-08-22T09:00:00Z",
+        forecast_status: "war_inactive",
+      });
+    },
+    now,
+  );
+
+  assert.equal(requests.length, 1);
+  assert.deepEqual(result.actions, [{
+    action: "forecast_paused",
+    reason: "war_inactive",
+    workflow: "forecast.yml",
+  }]);
+});

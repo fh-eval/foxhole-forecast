@@ -7,6 +7,12 @@ from .config import DATA_DIR, Settings
 from .domain import extract_bases, transition_events
 from .storage import append_jsonl, isoformat, read_json, write_json
 from .warapi import WarApiClient
+from .war_lifecycle import (
+    should_emit_transitions,
+    update_war_registry,
+    war_ended_at,
+    war_is_active,
+)
 
 
 def collect_once(settings: Settings, now: datetime | None = None) -> dict[str, Any]:
@@ -27,12 +33,23 @@ def collect_once(settings: Settings, now: datetime | None = None) -> dict[str, A
     if not war or not war.get("warId"):
         raise RuntimeError("War API did not return an active war identifier")
 
-    previous_war_id = (state.get("war") or {}).get("warId")
-    if previous_war_id and previous_war_id != war["warId"]:
+    previous_war = state.get("war") or {}
+    previous_war_id = previous_war.get("warId")
+    war_changed = bool(previous_war_id and previous_war_id != war["warId"])
+    if war_changed:
         state["maps"] = {}
         state["etag"] = {"war": war_result.etag}
         state["last_hourly_sample"] = None
         state["last_forecast_slot"] = None
+
+    active = war_is_active(war)
+    lifecycle = update_war_registry(
+        read_json(DATA_DIR / "wars.json", default={}),
+        war,
+        observed_at,
+        previous_war,
+    )
+    write_json(DATA_DIR / "wars.json", lifecycle)
 
     map_names = client.get_with_retry("maps").data
     map_names = [name for name in map_names if name not in {"HomeRegionC", "HomeRegionW"}]
@@ -73,7 +90,7 @@ def collect_once(settings: Settings, now: datetime | None = None) -> dict[str, A
         else:
             bases = extract_bases(map_name, static, dynamic_result.data, settings.strategic_icon_types)
             map_observed_at = observed_at
-            if old_map.get("bases"):
+            if old_map.get("bases") and should_emit_transitions(previous_war, war):
                 events = transition_events(
                     old_map["bases"],
                     bases,
@@ -100,6 +117,7 @@ def collect_once(settings: Settings, now: datetime | None = None) -> dict[str, A
                 state["etag"][key] = result.etag
 
     state["war"] = war
+    state["war_active"] = active
     state["last_collected_at"] = observed_at
     append_jsonl(DATA_DIR / "events.jsonl", all_events)
 
@@ -137,6 +155,9 @@ def collect_once(settings: Settings, now: datetime | None = None) -> dict[str, A
     summary = {
         "observed_at": observed_at,
         "war_id": war["warId"],
+        "war_number": war.get("warNumber"),
+        "war_active": active,
+        "war_ended_at": war_ended_at(war, observed_at),
         "maps": len(map_names),
         "strategic_bases": sum(len(state["maps"][name].get("bases", {})) for name in map_names),
         "events": len(all_events),

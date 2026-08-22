@@ -13,6 +13,7 @@ from .providers import MissingApiKey, ModelProvider, ProviderResponse
 from .schemas import forecast_schema, scout_schema
 from .storage import append_jsonl, isoformat, read_json, write_json
 from .validation import ValidationError, validate_forecast, validate_scout
+from .war_lifecycle import war_ended_at, war_is_active
 
 
 PROMPT_DIR = ROOT / "prompts"
@@ -44,15 +45,35 @@ def run_forecast_cohort(
     due, slot = forecast_due(state, settings)
     if not due and not force:
         return {"status": "not_due", "slot": slot}
-
-    scout_packet = build_scout_packet(settings)
-    cutoff = scout_packet["cutoff"]
-    cohort_id = _identifier(scout_packet["war"]["warId"], cutoff)
-    cohort_dir = DATA_DIR / "raw" / "cohorts" / cohort_id
-    write_json(cohort_dir / "scout-packet.json", scout_packet)
     models = load_models()
     if series_id and not any(model["series_id"] == series_id for model in models):
         raise ValueError(f"Unknown model series: {series_id}")
+
+    scout_packet = build_scout_packet(settings)
+    cutoff = scout_packet["cutoff"]
+    if not war_is_active(scout_packet.get("war")):
+        state["last_forecast_slot"] = slot
+        write_json(state_path, state)
+        return {
+            "status": "war_inactive",
+            "slot": slot,
+            "war_id": scout_packet["war"].get("warId"),
+            "war_ended_at": war_ended_at(scout_packet.get("war"), cutoff),
+        }
+    history_hours = float(scout_packet.get("history_hours_available") or 0)
+    if history_hours < settings.minimum_forecast_history_hours:
+        state["last_forecast_slot"] = slot
+        write_json(state_path, state)
+        return {
+            "status": "warming_up",
+            "slot": slot,
+            "war_id": scout_packet["war"].get("warId"),
+            "history_hours_available": history_hours,
+            "minimum_history_hours": settings.minimum_forecast_history_hours,
+        }
+    cohort_id = _identifier(scout_packet["war"]["warId"], cutoff)
+    cohort_dir = DATA_DIR / "raw" / "cohorts" / cohort_id
+    write_json(cohort_dir / "scout-packet.json", scout_packet)
     model_results: list[dict[str, Any]] = []
     for model_config in models:
         if series_id and model_config["series_id"] != series_id:

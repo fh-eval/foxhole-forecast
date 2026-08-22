@@ -92,10 +92,12 @@ export async function checkAndDispatch(env, fetchImpl = fetch, now = Date.now())
 
   const staleAfterMinutes = Number(env.STALE_AFTER_MINUTES || 14);
   const slot = forecastSlot(now);
+  const forecastStatus = status.forecast_status || "ready";
+  const forecastEligible = forecastStatus === "ready";
   const forecastDue = Date.parse(status.last_forecast_slot || "") !== slot.getTime();
   const observationInSlot = Date.parse(status.observed_at) >= slot.getTime();
   const collectionNeeded = observationIsStale(status.observed_at, now, staleAfterMinutes)
-    || (forecastDue && !observationInSlot);
+    || (forecastEligible && forecastDue && !observationInSlot);
   const actions = [];
 
   if (collectionNeeded) {
@@ -106,7 +108,9 @@ export async function checkAndDispatch(env, fetchImpl = fetch, now = Date.now())
       now - staleAfterMinutes * 60_000,
     ));
   }
-  if (forecastDue && observationInSlot) {
+  if (!forecastEligible && forecastDue) {
+    actions.push({ action: "forecast_paused", reason: forecastStatus, workflow: env.FORECAST_WORKFLOW });
+  } else if (forecastDue && observationInSlot) {
     actions.push(await dispatchIfIdle(env, env.FORECAST_WORKFLOW, fetchImpl, slot.getTime()));
   } else if (forecastDue) {
     actions.push({ action: "waiting_for_current_slot_observation", workflow: env.FORECAST_WORKFLOW });
@@ -115,6 +119,7 @@ export async function checkAndDispatch(env, fetchImpl = fetch, now = Date.now())
   return {
     observed_at: status.observed_at,
     forecast_slot: slot.toISOString(),
+    forecast_status: forecastStatus,
     actions,
   };
 }

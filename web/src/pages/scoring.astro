@@ -121,6 +121,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <ul class="rationale-list">
           <li><strong>Missing coverage.</strong> A gap greater than two expected polling intervals—currently 30 minutes—means we may have missed or badly localized a transition.</li>
           <li><strong>Ambiguous transition interval.</strong> For a coarse interval, we score only when every possible event time in that interval produces the same timing credit. Otherwise we censor it.</li>
+          <li><strong>War boundary.</strong> If a war ends before a prediction’s ETA-plus-three-hour scoring window closes, and no qualifying transition was already observed, the prediction is censored rather than treated as a miss.</li>
           <li><strong>Certain coarse miss.</strong> A wide interval can still receive zero when even its closest possible event time is outside the credit window.</li>
         </ul>
       </section>
@@ -137,7 +138,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         </ol>
       </section>
 
-      <p class="method-version">Current protocol: <code>event_outcome_v4</code>. Historical rounds made under older probability-horizon protocols may remain in the archive, but do not enter the current frontend leaderboard.</p>
+      <p class="method-version">Current protocol: <code>event_outcome_v4</code>. A new war receives a two-hour telemetry warm-up before forecasting begins. Historical rounds made under older protocols remain archived but do not enter either current-protocol score view.</p>
     </main>
 
     <footer><div class="page-width"><strong>FOXHOLE FORECAST</strong><a href={basePath}>Live dashboard</a></div></footer>

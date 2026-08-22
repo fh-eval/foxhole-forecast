@@ -1150,7 +1150,8 @@
     }
   ],
   "collector_runs": 52,
-  "generated_at": "2026-08-22T16:46:24.474398Z",
+  "forecast_status": "ready",
+  "generated_at": "2026-08-22T16:47:31.261835Z",
   "last_collected_at": "2026-08-22T16:46:10.972861Z",
   "methodology": {
     "current_protocol": "event_outcome_v4",
@@ -1161,6 +1162,7 @@
       24
     ],
     "neutral_alternative_state_credit": 0.75,
+    "new_war_warmup_hours": 2,
     "omitted_probability": 0,
     "partial_credit_window_minutes": 180,
     "predictions_per_round": 8,
@@ -1170,6 +1172,120 @@
       "extended": "ETA 6-24 hours",
       "immediate": "ETA within 6 hours"
     }
+  },
+  "model_behavior": {
+    "all_time": [
+      {
+        "calibration": 0.6015,
+        "censored": 12,
+        "confidence": 0.83425,
+        "eta_error_minutes": 218.85,
+        "extended_lead_minutes": 764.2,
+        "hits": 0,
+        "immediate_lead_minutes": 145.64,
+        "matched_transitions": 3,
+        "misses": 2,
+        "model_label": "Inkling",
+        "open": 25,
+        "partials": 1,
+        "published_bets": 40,
+        "score": 0.08333333,
+        "scoreable_bets": 3,
+        "series_id": "nvidia-thinkingmachines-inkling-event-v4"
+      },
+      {
+        "calibration": 0.26739495,
+        "censored": 13,
+        "confidence": 0.6595,
+        "eta_error_minutes": 618.91,
+        "extended_lead_minutes": 764.2,
+        "hits": 0,
+        "immediate_lead_minutes": 108.14,
+        "matched_transitions": 3,
+        "misses": 10,
+        "model_label": "Nemotron 3 Ultra 550B A55B",
+        "open": 16,
+        "partials": 1,
+        "published_bets": 40,
+        "score": 0.0530303,
+        "scoreable_bets": 11,
+        "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4"
+      },
+      {
+        "calibration": 0.15312556,
+        "censored": 7,
+        "confidence": 0.4778125,
+        "eta_error_minutes": 250.0,
+        "extended_lead_minutes": 619.2,
+        "hits": 0,
+        "immediate_lead_minutes": 190.29,
+        "matched_transitions": 5,
+        "misses": 8,
+        "model_label": "Ox Alpha",
+        "open": 15,
+        "partials": 2,
+        "published_bets": 32,
+        "score": 0.125,
+        "scoreable_bets": 10,
+        "series_id": "openrouter-stealth-ox-alpha-event-v4"
+      }
+    ],
+    "current_war": [
+      {
+        "calibration": 0.6015,
+        "censored": 12,
+        "confidence": 0.83425,
+        "eta_error_minutes": 218.85,
+        "extended_lead_minutes": 764.2,
+        "hits": 0,
+        "immediate_lead_minutes": 145.64,
+        "matched_transitions": 3,
+        "misses": 2,
+        "model_label": "Inkling",
+        "open": 25,
+        "partials": 1,
+        "published_bets": 40,
+        "score": 0.08333333,
+        "scoreable_bets": 3,
+        "series_id": "nvidia-thinkingmachines-inkling-event-v4"
+      },
+      {
+        "calibration": 0.26739495,
+        "censored": 13,
+        "confidence": 0.6595,
+        "eta_error_minutes": 618.91,
+        "extended_lead_minutes": 764.2,
+        "hits": 0,
+        "immediate_lead_minutes": 108.14,
+        "matched_transitions": 3,
+        "misses": 10,
+        "model_label": "Nemotron 3 Ultra 550B A55B",
+        "open": 16,
+        "partials": 1,
+        "published_bets": 40,
+        "score": 0.0530303,
+        "scoreable_bets": 11,
+        "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4"
+      },
+      {
+        "calibration": 0.15312556,
+        "censored": 7,
+        "confidence": 0.4778125,
+        "eta_error_minutes": 250.0,
+        "extended_lead_minutes": 619.2,
+        "hits": 0,
+        "immediate_lead_minutes": 190.29,
+        "matched_transitions": 5,
+        "misses": 8,
+        "model_label": "Ox Alpha",
+        "open": 15,
+        "partials": 2,
+        "published_bets": 32,
+        "score": 0.125,
+        "scoreable_bets": 10,
+        "series_id": "openrouter-stealth-ox-alpha-event-v4"
+      }
+    ]
   },
   "models": [
     {
@@ -1201,6 +1317,8 @@
           ],
           "settlement_status": "open",
           "status": "valid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": "Day 95 of War 139, no winner yet. The map is heavily polarized: many regions are fully swept by one side (Colonials hold most southern/eastern hexes; Wardens hold Reaching Trail, Viper Pit, Weathered Expanse, etc.), while a handful of contested hexes carry nearly all the fighting. The hottest fronts are Callahan's Passage (extreme casualty rates, ~900-1200/hr and accelerating), Clahstra (heavy fighting with 15 base events in 24h), Onyx (evenly split 3-3, 17 events, very high casualties), Oarbreaker (most event-dense: 39 events in 24h across Posterus, Grisly Refuge, Partisan Island), Endless Shore (Woodbind churn, 14 events), Mooring County (Borderlane churn, 19 events), plus Olavis Wake and Stlican Shelf showing recent heavy but cooling action. Casualty rates are accelerating broadly across the active fronts while quiet regions show only trickle enlistments. Uncertainty: the packet's per-base event windows are limited to ~13h of history, several hot regions show zero events in the last 2h despite high casualties (possible lulls or stalemates at town-tier defenses), and enlistment surges everywhere suggest fresh manpower arriving whose effect on base ownership is not yet visible."
         },
         {
@@ -1220,6 +1338,8 @@
           ],
           "settlement_status": "open",
           "status": "valid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": "War 139, day 93, no winner yet (32 victory towns required). The map is heavily polarized: many regions are fully owned by one side with near-zero current combat (e.g., Acrithia, Dead Lands, Heartlands for Colonials; Reaching Trail, Viper Pit, Weathered Expanse for Wardens), indicating stable rear areas. Active fighting is concentrated in a handful of contested regions: Oarbreaker (37 base events in 24h, ongoing flips at Posterus/Grisly Refuge), Clahstra (14 events, heavy accelerating casualties ~1,700/6h with Warden edge), Mooring County (18 events but quiet in last 6h), Stlican Shelf (17 events, casualties surging from near-zero to ~1,100/6h), Endless Shore (11 events, cooling from a spike), and Olavis Wake/Onyx (high casualty rates, recent activity). Callahan's Passage shows the highest raw casualty rates (~6,200/6h) but no recorded base events. Uncertainty: event feeds show zero events in the last 2h across all regions despite high casualty rates, suggesting either lull or reporting lag; history covers only ~11 hours, so trend durability is unverified; several hot regions' latest events are 10+ hours old."
         },
         {
@@ -1239,6 +1359,8 @@
           ],
           "settlement_status": "open",
           "status": "valid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": "War 139, day 89, no winner yet (30 victory towns required). The map is heavily polarized: many hexes are fully owned by one side with near-zero current combat, while fighting is concentrated in a handful of contested fronts. The heaviest active pressure is in Callahans Passage (~1k casualties/2h per side), Olavis Wake (~1.1k/2h), Dead Lands (~850/2h, warden-tilted losses), Speaking Woods (~750/2h), Onyx (~600/2h, evenly split at 3-3), and Clahstra (~880/2h). Base-flip activity in the last 24h clusters in Oarbreaker (26 events, ongoing as of 07:20Z), Mooring County (20 events), Clahstra (19), Stlican Shelf (20, though its last ~6h show sharp cooling after a big fight), Onyx (14), Endless Shore (8), Olavis Wake (8), plus smaller skirmishes at Tempest Isle, Morgens Crossing, Stema Landing, and Palantine Berm. Casualty rates across all hot zones show the same pattern: a large spike roughly 2-6h ago now cooling in the most recent hour, with enlistment inflows accelerating again — consistent with a lull between pushes rather than front collapse. Key uncertainties: only ~7h of event history is available; several high-casualty hexes (Callahans, Olavis, Speaking Woods) report zero base events despite massive casualties, so whether that fighting threatens strategic bases is unknown; and recent-hour cooling could mean either an operational pause or a completed push whose ownership effects have not yet been logged."
         },
         {
@@ -1258,6 +1380,8 @@
           ],
           "settlement_status": "open",
           "status": "valid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": "War 139 is on day 87 with no winner yet (32 victory towns required). The map shows a heavily polarized stalemate: many regions are fully consolidated by one side, while the active fronts are concentrated in a handful of contested hexes. The hottest fighting by casualty rates is in Callahans Passage (~537/498 casualties per 2h), Olavis Wake (~511/423), Clahstra (~463/480), Dead Lands (~265/457), Endless Shore (~245/450), and Speaking Woods (~424/411). Base-flip activity in the last 24h is concentrated in Oarbreaker (26 events, ongoing as of cutoff), Mooring County (22), Stlican Shelf (22), Clahstra (19), Onyx (14), plus smaller activity in Endless Shore, Olavis Wake, Tempest Isle (a base just went neutral at cutoff), Morgens Crossing, Stema Landing, and Palantine Berm. Oarbreaker and Tempest Isle are the only regions with events inside the last ~2 hours, indicating live operations. Uncertainty is high: the event history window covers only ~5 hours, most casualty 'accelerating' signals reflect the recent-hour spike after a quiet prior hour rather than sustained escalation, and several hot-casualty hexes show no base flips yet, so it is unclear whether current pressure will translate into ownership changes within 24h."
         }
       ],
@@ -1280,6 +1404,29 @@
         ],
         "settlement_status": "open",
         "status": "valid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
+        "war_summary": "Day 95 of War 139, no winner yet. The map is heavily polarized: many regions are fully swept by one side (Colonials hold most southern/eastern hexes; Wardens hold Reaching Trail, Viper Pit, Weathered Expanse, etc.), while a handful of contested hexes carry nearly all the fighting. The hottest fronts are Callahan's Passage (extreme casualty rates, ~900-1200/hr and accelerating), Clahstra (heavy fighting with 15 base events in 24h), Onyx (evenly split 3-3, 17 events, very high casualties), Oarbreaker (most event-dense: 39 events in 24h across Posterus, Grisly Refuge, Partisan Island), Endless Shore (Woodbind churn, 14 events), Mooring County (Borderlane churn, 19 events), plus Olavis Wake and Stlican Shelf showing recent heavy but cooling action. Casualty rates are accelerating broadly across the active fronts while quiet regions show only trickle enlistments. Uncertainty: the packet's per-base event windows are limited to ~13h of history, several hot regions show zero events in the last 2h despite high casualties (possible lulls or stalemates at town-tier defenses), and enlistment surges everywhere suggest fresh manpower arriving whose effect on base ownership is not yet visible."
+      },
+      "latest_all_time": {
+        "brier_skill_score": null,
+        "cost_usd": 0.0,
+        "cutoff": "2026-08-22T15:01:39.358762Z",
+        "forecast_count": 8,
+        "integrated_brier": null,
+        "run_id": "2026-08-22-8ebd92c2e319:openrouter-stealth-ox-alpha-event-v4",
+        "selected_regions": [
+          "OarbreakerHex",
+          "OnyxHex",
+          "ClahstraHex",
+          "MooringCountyHex",
+          "EndlessShoreHex",
+          "CallahansPassageHex"
+        ],
+        "settlement_status": "open",
+        "status": "valid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
         "war_summary": "Day 95 of War 139, no winner yet. The map is heavily polarized: many regions are fully swept by one side (Colonials hold most southern/eastern hexes; Wardens hold Reaching Trail, Viper Pit, Weathered Expanse, etc.), while a handful of contested hexes carry nearly all the fighting. The hottest fronts are Callahan's Passage (extreme casualty rates, ~900-1200/hr and accelerating), Clahstra (heavy fighting with 15 base events in 24h), Onyx (evenly split 3-3, 17 events, very high casualties), Oarbreaker (most event-dense: 39 events in 24h across Posterus, Grisly Refuge, Partisan Island), Endless Shore (Woodbind churn, 14 events), Mooring County (Borderlane churn, 19 events), plus Olavis Wake and Stlican Shelf showing recent heavy but cooling action. Casualty rates are accelerating broadly across the active fronts while quiet regions show only trickle enlistments. Uncertainty: the packet's per-base event windows are limited to ~13h of history, several hot regions show zero events in the last 2h despite high casualties (possible lulls or stalemates at town-tier defenses), and enlistment surges everywhere suggest fresh manpower arriving whose effect on base ownership is not yet visible."
       },
       "median_eta_error_minutes": 250.0,
@@ -1324,6 +1471,8 @@
           ],
           "settlement_status": "open",
           "status": "valid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": "War 139 is on day 95 with no winner and conquest not ended. Colonial forces hold a clear strategic-base majority across the map, controlling all bases in many regions (e.g., AcrithiaHex, AllodsBightHex, DeadLandsHex, MooringCountyHex) while Wardens hold smaller pockets (e.g., BasinSionnachHex, ClansheadValleyHex, ReachingTrailHex). The heaviest pressure is concentrated in split or contested regions: CallahansPassageHex (Warden 8/Colonial 2, massive accelerating casualties), ClahstraHex (Warden 5/Colonial 3, 15 recent capture events), EndlessShoreHex (Warden 9/Colonial 1, 14 events), OnyxHex (3/3 split, 17 events), OarbreakerHex (Warden 5/Colonial 4, 39 events), MooringCountyHex (Colonial 10/Warden 2, 19 events), and GodcroftsHex (Colonial 6/Warden 3, 8 events). Several other regions show rising enlistments and casualty acceleration despite no recent ownership flips, suggesting building pressure. Uncertainty remains high because recent event logs are sparse or missing in some high-casualty zones (e.g., CallahansPassageHex, SpeakingWoodsHex, MarbanHollow), and the 24-hour event windows may not fully capture live base transitions."
         },
         {
@@ -1343,6 +1492,8 @@
           ],
           "settlement_status": "open",
           "status": "valid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": "War 139 is on day 93 with no winner and conquest not ended. The front is split: Colonial-held regions dominate in number but several Warden-held and split regions show intense, accelerating combat. The heaviest pressure is in Callahan's Passage, Clahstra, Speaking Woods, Stlican Shelf, Oarbreaker, Godcrofts, and Onyx, with frequent base-capture events in Clahstra, Mooring County, Oarbreaker, Stlican Shelf, and Endless Shore. Many Colonial-controlled zones are quiet with minimal Warden presence, while contested zones show sharply rising casualty and enlistment rates, indicating active pushes. Uncertainty remains high in split-ownership regions where recent capture events and accelerating trends could flip strategic bases within 24 hours."
         },
         {
@@ -1362,6 +1513,8 @@
           ],
           "settlement_status": "open",
           "status": "valid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": "War 139 (Conquest, day 89) is in a prolonged contested state with no winner and no resistance/conquest end in sight. The front is split: Colonial forces hold full or dominant strategic-base majorities in many regions (e.g., Acrithia, Allods Bight, Dead Lands, Mooring County, Olavis Wake, Onyx), while Wardens hold others (e.g., Basin Sionnach, Clahstra, Callahan's Passage, Endless Shore, Speaking Woods, Stlican Shelf). The heaviest sustained pressure is concentrated in Callahan's Passage, Clahstra, Dead Lands, Endless Shore, Speaking Woods, Oarbreaker, and Olavis Wake, where casualty rates are high and accelerating over 2h windows despite 1h cooling. Actual ownership-change events in the last 24h are sparse but present in Clahstra, Endless Shore, Mooring County, Oarbreaker, Onyx, Stlican Shelf, Morgens Crossing, Stema Landing, and Tempest Island—indicating localized base-flipping rather than broad territorial collapse. Uncertainty remains high because recent event logs are missing for several high-casualty regions (e.g., Callahan's Passage, Dead Lands, Speaking Woods), so whether current fighting translates into imminent strategic-base captures is unclear."
         },
         {
@@ -1381,6 +1534,8 @@
           ],
           "settlement_status": "open",
           "status": "valid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": "War 139 is on day 87 in conquest mode with no winner and 32 towns required. The front is split: Colonial forces hold full or near-full control in many regions (Acrithia, Allods Bight, Ash Fields, Callums Cape, Drowned Vale, Farranac Coast, Fishermans Row, Great March, Heartlands, Kalokai, Kings Cage, Kuura Strand, Linn Mercy, Loch Mor, Lykos Isle, Nevish Line, Origin, Palantine Berm, Pari Peak, Pipers Enclave, Red River, Sableport, Shackled Chasm, Stonecradle, Terminus, The Fingers, Tyrant Foothills, Umbral Wildwood, Westgate, Wresta), while Wardens hold full or dominant control in others (Basin Sionnach, Clanshead Valley, Howl County, Reaching Trail, Stlican Shelf, Viper Pit, Weathered Expanse, Morgens Crossing, Marban Hollow, Godcrofts, Speaking Woods). The heaviest pressure is concentrated in split or contested zones—Callahans Passage (W 8/C 2), Clahstra (W 6/C 2), Dead Lands (W 1/C 10), Endless Shore (W 7/C 3), Mooring County (W 2/C 10), Oarbreaker (W 7/C 2), Olavis Wake (W 1/C 4), Onyx (W 3/C 3), and especially Callahans Passage, Clahstra, Dead Lands, Endless Shore, Mooring County, and Oarbreaker—where casualty rates are accelerating and recent capture/loss events are frequent. Uncertainty remains high because several high-activity regions show zero recent ownership-flip events in the last 2h despite heavy fighting, and one base in Tempest Island is in NONE state, leaving strategic-base ownership vulnerable to rapid shifts in the next 24 hours."
         },
         {
@@ -1400,6 +1555,8 @@
           ],
           "settlement_status": "open",
           "status": "valid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": "War 139 is on day 86 of conquest with no winner declared; victory requires 32 towns (30 short). The front is split between Colonial-held and Warden-held regions with several contested zones. Pressure is heavily concentrated in ClahstraHex, CallahansPassageHex, DeadLandsHex, SpeakingWoodsHex, StlicanShelfHex, OarbreakerHex, and MooringCountyHex, where casualty rates are high and recent capture events are frequent. Uncertainty is greatest in split-ownership regions—especially OarbreakerHex (5/4 Warden), OnyxHex (3/3), GodcroftsHex (5/4 Warden), CallahansPassageHex (8/2 Warden), and MooringCountyHex (2/10 Warden)—where accelerating enlistments and recent base-flip events suggest ownership could shift within 24 hours. Many other regions show zero recent events and stable ownership, reducing near-term strategic risk there."
         }
       ],
@@ -1422,6 +1579,29 @@
         ],
         "settlement_status": "open",
         "status": "valid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
+        "war_summary": "War 139 is on day 95 with no winner and conquest not ended. Colonial forces hold a clear strategic-base majority across the map, controlling all bases in many regions (e.g., AcrithiaHex, AllodsBightHex, DeadLandsHex, MooringCountyHex) while Wardens hold smaller pockets (e.g., BasinSionnachHex, ClansheadValleyHex, ReachingTrailHex). The heaviest pressure is concentrated in split or contested regions: CallahansPassageHex (Warden 8/Colonial 2, massive accelerating casualties), ClahstraHex (Warden 5/Colonial 3, 15 recent capture events), EndlessShoreHex (Warden 9/Colonial 1, 14 events), OnyxHex (3/3 split, 17 events), OarbreakerHex (Warden 5/Colonial 4, 39 events), MooringCountyHex (Colonial 10/Warden 2, 19 events), and GodcroftsHex (Colonial 6/Warden 3, 8 events). Several other regions show rising enlistments and casualty acceleration despite no recent ownership flips, suggesting building pressure. Uncertainty remains high because recent event logs are sparse or missing in some high-casualty zones (e.g., CallahansPassageHex, SpeakingWoodsHex, MarbanHollow), and the 24-hour event windows may not fully capture live base transitions."
+      },
+      "latest_all_time": {
+        "brier_skill_score": null,
+        "cost_usd": 0.0,
+        "cutoff": "2026-08-22T15:01:39.358762Z",
+        "forecast_count": 8,
+        "integrated_brier": null,
+        "run_id": "2026-08-22-8ebd92c2e319:nvidia-thinkingmachines-inkling-event-v4",
+        "selected_regions": [
+          "CallahansPassageHex",
+          "ClahstraHex",
+          "EndlessShoreHex",
+          "OnyxHex",
+          "OarbreakerHex",
+          "MooringCountyHex"
+        ],
+        "settlement_status": "open",
+        "status": "valid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
         "war_summary": "War 139 is on day 95 with no winner and conquest not ended. Colonial forces hold a clear strategic-base majority across the map, controlling all bases in many regions (e.g., AcrithiaHex, AllodsBightHex, DeadLandsHex, MooringCountyHex) while Wardens hold smaller pockets (e.g., BasinSionnachHex, ClansheadValleyHex, ReachingTrailHex). The heaviest pressure is concentrated in split or contested regions: CallahansPassageHex (Warden 8/Colonial 2, massive accelerating casualties), ClahstraHex (Warden 5/Colonial 3, 15 recent capture events), EndlessShoreHex (Warden 9/Colonial 1, 14 events), OnyxHex (3/3 split, 17 events), OarbreakerHex (Warden 5/Colonial 4, 39 events), MooringCountyHex (Colonial 10/Warden 2, 19 events), and GodcroftsHex (Colonial 6/Warden 3, 8 events). Several other regions show rising enlistments and casualty acceleration despite no recent ownership flips, suggesting building pressure. Uncertainty remains high because recent event logs are sparse or missing in some high-casualty zones (e.g., CallahansPassageHex, SpeakingWoodsHex, MarbanHollow), and the 24-hour event windows may not fully capture live base transitions."
       },
       "median_eta_error_minutes": 218.85,
@@ -1466,6 +1646,8 @@
           ],
           "settlement_status": "open",
           "status": "valid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": "War 139 is on day 95 with no winner yet. Colonials hold a majority of strategic bases across the map, but Wardens control several key regions. The highest intensity fighting is concentrated in a few regions with very high casualty rates and frequent base ownership changes: CallahansPassageHex, ClahstraHex, EndlessShoreHex, OarbreakerHex, OnyxHex, and MooringCountyHex. These regions show accelerating casualty trends on both sides, high enlistment growth, and recent capture events indicating active frontlines. Most other regions are quiet with low casualties and no recent base changes. Uncertainty remains around whether the current high-tempo fights will produce decisive base flips or stabilize, and whether Warden-held regions like BasinSionnachHex or ClansheadValleyHex will come under pressure."
         },
         {
@@ -1485,6 +1667,8 @@
           ],
           "settlement_status": "open",
           "status": "valid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": "War 139 is on day 93 with no winner yet. Colonials hold a majority of strategic bases across the map, but Wardens control several key regions. The heaviest fighting is concentrated in a few active fronts: Callahans Passage, Clahstra, Oarbreaker, Stlican Shelf, and Olavis Wake show very high and accelerating casualty rates on both sides, indicating intense, sustained combat. Godcrofts, Endless Shore, Mooring County, Dead Lands, and Tempest Island have recent ownership changes (captures/neutral events) within the last 24 hours, signaling fluid frontlines. Most other regions are quiet with zero recent events and low casualties, suggesting stable rear areas or stalled sectors. The next 24 hours will likely see continued base flips in the active contested zones, while the broader strategic picture remains uncertain due to the high velocity of fighting on multiple fronts simultaneously."
         },
         {
@@ -1504,6 +1688,8 @@
           ],
           "settlement_status": "open",
           "status": "valid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": "War 139 is on day 89 with no winner yet. The map is heavily polarized: Colonials hold 136 strategic bases across 24 regions (mostly rear/central areas), while Wardens hold 73 bases across 10 regions concentrated in the north/west (Callahans Passage, Clahstra, Endless Shore, Marban Hollow, Oarbreaker, Olavis Wake, Onyx, Speaking Woods, Stlican Shelf, Viper Pit, Weathered Expanse). Only 5 regions show mixed ownership. Recent combat is intense in several Warden-held regions: Callahans Passage (~2k casualties/2h), Clahstra (~1.8k/2h), Dead Lands (~1.7k/2h), Endless Shore (~1.3k/2h), Olavis Wake (~2.1k/2h), Onyx (~1.2k/2h), Speaking Woods (~1.5k/2h). These areas also show accelerating 2h-vs-prior casualty trends and high enlistment surges, indicating active frontlines. Ownership changes in the last 24h are confirmed in Clahstra (19 events, 3 bases hot), Endless Shore (8 events, 2 bases), Mooring County (20 events, 5 bases), Oarbreaker (26 events, 5 bases), Olavis Wake (8 events, 3 bases), Onyx (14 events, 5 bases), Stlican Shelf (20 events, 5 bases), and smaller activity in Morgens Crossing, Stema Landing, Tempest Island. The next 24h will likely see continued base flips in these contested zones, especially where Warden-held bases face sustained Colonial pressure."
         },
         {
@@ -1523,6 +1709,8 @@
           ],
           "settlement_status": "open",
           "status": "valid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": "War 139 is on day 87 with no winner yet. The map is heavily polarized: Colonials hold 134 strategic bases across 21 regions, Wardens hold 74 across 10 regions, and only 1 base (Tempest Island) is neutral. High-casualty, high-enlistment fronts dominate the contested zones: Callahans Passage (61.7k total casualties, 5k enlistments), Deadlands (77.6k casualties, 6.8k enlistments), Clahstra (26.2k casualties, 3.5k enlistments), Endless Shore (25.1k casualties, 3.7k enlistments), Oarbreaker (2.8k casualties, 1.2k enlistments), Olavis Wake (44.8k casualties, 3k enlistments), Onyx (36.6k casualties, 2.9k enlistments), Speaking Woods (32.1k casualties, 4.6k enlistments), and Stlican Shelf (14.5k casualties, 2.5k enlistments). Recent 2-hour deltas show intense fighting at Callahans Passage (+1,035 casualties), Clahstra (+943), Deadlands (+722), Endless Shore (+695), Olavis Wake (+934), Onyx (+606), and Speaking Woods (+835). Only four regions have recorded ownership events in the last 24 hours: Clahstra (19 events, latest 02:47 UTC), Endless Shore (8 events, latest 00:09 UTC), Mooring County (22 events, latest 00:46 UTC), and Stlican Shelf (22 events, latest 05:17 UTC). Oarbreaker is the only region with events in the last 2 hours (5 events, latest at cutoff) and 26 events in 24 hours. Morgens Crossing, Stema Landing, Tempest Island, and Palantine Berm show low but non-zero recent event activity. The majority of regions are quiet with zero recent ownership changes."
         },
         {
@@ -1542,6 +1730,8 @@
           ],
           "settlement_status": "open",
           "status": "valid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": "War 139 is on day 86 with no winner yet. The map is heavily polarized: Colonials hold 140 strategic bases across 27 regions, Wardens hold 68 across 10 regions, and no bases are neutral. Combat is concentrated in a handful of contested regions. Clahstra, Stlican Shelf, Oarbreaker, Mooring County, Endless Shore, and Onyx show recent ownership flips (captures and owner-losses) and elevated casualties. Clahstra and Stlican Shelf have the highest 24h event counts (21 and 25) with multiple bases seeing repeated captures. Oarbreaker saw 7 events in the last 2h and 22 in 24h, including bases turning neutral. Mooring County and Endless Shore also have multi-base churn. Olavis Wake and Speaking Woods have high casualty rates but fewer recent flips. Most other regions are quiet with zero 24h events and one-sided ownership."
         }
       ],
@@ -1564,6 +1754,29 @@
         ],
         "settlement_status": "open",
         "status": "valid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
+        "war_summary": "War 139 is on day 95 with no winner yet. Colonials hold a majority of strategic bases across the map, but Wardens control several key regions. The highest intensity fighting is concentrated in a few regions with very high casualty rates and frequent base ownership changes: CallahansPassageHex, ClahstraHex, EndlessShoreHex, OarbreakerHex, OnyxHex, and MooringCountyHex. These regions show accelerating casualty trends on both sides, high enlistment growth, and recent capture events indicating active frontlines. Most other regions are quiet with low casualties and no recent base changes. Uncertainty remains around whether the current high-tempo fights will produce decisive base flips or stabilize, and whether Warden-held regions like BasinSionnachHex or ClansheadValleyHex will come under pressure."
+      },
+      "latest_all_time": {
+        "brier_skill_score": null,
+        "cost_usd": 0.0,
+        "cutoff": "2026-08-22T15:01:39.358762Z",
+        "forecast_count": 8,
+        "integrated_brier": null,
+        "run_id": "2026-08-22-8ebd92c2e319:nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+        "selected_regions": [
+          "CallahansPassageHex",
+          "ClahstraHex",
+          "EndlessShoreHex",
+          "OarbreakerHex",
+          "OnyxHex",
+          "MooringCountyHex"
+        ],
+        "settlement_status": "open",
+        "status": "valid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
         "war_summary": "War 139 is on day 95 with no winner yet. Colonials hold a majority of strategic bases across the map, but Wardens control several key regions. The highest intensity fighting is concentrated in a few regions with very high casualty rates and frequent base ownership changes: CallahansPassageHex, ClahstraHex, EndlessShoreHex, OarbreakerHex, OnyxHex, and MooringCountyHex. These regions show accelerating casualty trends on both sides, high enlistment growth, and recent capture events indicating active frontlines. Most other regions are quiet with low casualties and no recent base changes. Uncertainty remains around whether the current high-tempo fights will produce decisive base flips or stabilize, and whether Warden-held regions like BasinSionnachHex or ClansheadValleyHex will come under pressure."
       },
       "median_eta_error_minutes": 618.91,
@@ -1608,6 +1821,8 @@
           ],
           "settlement_status": "open",
           "status": "valid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": "War 139 is on day 86 with no winner and conquest running; victory requires 32 towns. The front is split: Colonial holds full or near-full control in many regions (Acrithia, Allods Bight, Ash Fields, Drowned Vale, Farranac Coast, etc.), while Wardens hold others (Basin Sionnach, Clanshead Valley, Howl County, Reaching Trail, Stlican Shelf, Viper Pit, Weathered Expanse). The heaviest pressure is in contested split-ownership zones—Clahstra (W 6/C 2), Callahans Passage (W 8/C 2), Godcrofts (W 5/C 4), Mooring County (W 2/C 10), Oarbreaker (W 5/C 4), Onyx (3/3), Olavis Wake (W 1/C 4), Speaking Woods (W 7/C 1), and Stema Landing (W 1/C 8)—with very high casualty rates and accelerating enlistments in several. Recent capture/flip activity is concentrated in Clahstra (21 events/24h, latest ~02:47), Mooring County (22 events/24h, latest ~00:46), Oarbreaker (22 events/24h, latest ~05:32), Stlican Shelf (26 events/24h, latest ~05:17), Endless Shore (8 events/24h), Morgens Crossing (4 events/24h), and Onyx (15 events/24h). Uncertainty remains high because several high-casualty regions (Callahans Passage, Dead Lands, Speaking Woods) show intense fighting but no recent event records, suggesting either stalled fronts or data lag; meanwhile accelerating enlistments in contested zones point to continued assaults over the next 24 hours."
         },
         {
@@ -1627,6 +1842,8 @@
           ],
           "settlement_status": "not_available",
           "status": "invalid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": "War 139 is on day 86 with no winner and conquest running; victory requires 32 towns (30 short). Colonial forces hold a clear strategic-base majority across the map, controlling full or dominant shares in regions like Acrithia, Allods Bight, Ash Fields, Dead Lands, Mooring County, and Clahstra, while Wardens hold pockets including Basin Sionnach, Callahans Passage, Clanshead Valley, Howl County, Marban Hollow, Reaching Trail, Stlican Shelf, and Viper Pit. The heaviest sustained pressure is in Callahans Passage, Clahstra, Dead Lands, Mooring County, Oarbreaker, Speaking Woods, and Stlican Shelf, where casualty rates are high and enlistments are accelerating. Recent ownership-flip activity is concentrated in Clahstra (21 events/24h), Mooring County (22), Oarbreaker (22), Stlican Shelf (26), Onyx (15), Endless Shore (8), and Olavis Wake (8), with the latest events within minutes at Oarbreaker and Stlican Shelf. Uncertainty remains high in split-ownership zones—especially Oarbreaker (5-4), Godcrofts (5-4), Onyx (3-3), Callahans Passage (8-2), and Mooring County (10-2)—where accelerating casualties and active base captures could shift strategic-base counts in the next 24 hours, while fully held regions show little near-term change risk."
         },
         {
@@ -1646,6 +1863,8 @@
           ],
           "settlement_status": "not_available",
           "status": "invalid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": "War 139 is on day 86 with no winner and conquest active. The front is split: Colonial forces hold the majority of strategic bases across many regions (e.g., Acrithia, Allods Bight, Ash Fields, Dead Lands, Mooring County, Olavis Wake, Onyx, Stema Landing), while Wardens hold consolidated blocks (Basin Sionnach, Callahans Passage, Clahstra, Clanshead Valley, Howl County, Marban Hollow, Reaching Trail, Stlican Shelf, Viper Pit, Weathered Expanse). The heaviest sustained pressure is in Callahans Passage (~61k casualties, Warden 8/10 bases), Clahstra (Warden 6/8 with 21 capture events in 24h), Dead Lands (Colonial 10/11 with ~77k casualties), Mooring County (Colonial 10/12 with 22 events in 24h), Oarbreaker (Warden 5/9 with 22 events in 24h and very recent captures at 05:32), Stlican Shelf (Warden 9/9 with 26 events in 24h and accelerating casualties), and Speaking Woods (Warden 7/8 with accelerating casualties). Several other regions show zero recent capture events and stable ownership. Uncertainty remains highest where recent capture events are frequent and casualty rates are accelerating, especially near the cutoff."
         }
       ],
@@ -1668,6 +1887,29 @@
         ],
         "settlement_status": "open",
         "status": "valid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
+        "war_summary": "War 139 is on day 86 with no winner and conquest running; victory requires 32 towns. The front is split: Colonial holds full or near-full control in many regions (Acrithia, Allods Bight, Ash Fields, Drowned Vale, Farranac Coast, etc.), while Wardens hold others (Basin Sionnach, Clanshead Valley, Howl County, Reaching Trail, Stlican Shelf, Viper Pit, Weathered Expanse). The heaviest pressure is in contested split-ownership zones—Clahstra (W 6/C 2), Callahans Passage (W 8/C 2), Godcrofts (W 5/C 4), Mooring County (W 2/C 10), Oarbreaker (W 5/C 4), Onyx (3/3), Olavis Wake (W 1/C 4), Speaking Woods (W 7/C 1), and Stema Landing (W 1/C 8)—with very high casualty rates and accelerating enlistments in several. Recent capture/flip activity is concentrated in Clahstra (21 events/24h, latest ~02:47), Mooring County (22 events/24h, latest ~00:46), Oarbreaker (22 events/24h, latest ~05:32), Stlican Shelf (26 events/24h, latest ~05:17), Endless Shore (8 events/24h), Morgens Crossing (4 events/24h), and Onyx (15 events/24h). Uncertainty remains high because several high-casualty regions (Callahans Passage, Dead Lands, Speaking Woods) show intense fighting but no recent event records, suggesting either stalled fronts or data lag; meanwhile accelerating enlistments in contested zones point to continued assaults over the next 24 hours."
+      },
+      "latest_all_time": {
+        "brier_skill_score": null,
+        "cost_usd": 0.0,
+        "cutoff": "2026-08-22T05:52:32.551343Z",
+        "forecast_count": 8,
+        "integrated_brier": null,
+        "run_id": "2026-08-22-bd99d8f53ea7:nvidia-thinkingmachines-inkling-timed-v3",
+        "selected_regions": [
+          "ClahstraHex",
+          "MooringCountyHex",
+          "OarbreakerHex",
+          "StlicanShelfHex",
+          "OnyxHex",
+          "CallahansPassageHex"
+        ],
+        "settlement_status": "open",
+        "status": "valid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
         "war_summary": "War 139 is on day 86 with no winner and conquest running; victory requires 32 towns. The front is split: Colonial holds full or near-full control in many regions (Acrithia, Allods Bight, Ash Fields, Drowned Vale, Farranac Coast, etc.), while Wardens hold others (Basin Sionnach, Clanshead Valley, Howl County, Reaching Trail, Stlican Shelf, Viper Pit, Weathered Expanse). The heaviest pressure is in contested split-ownership zones—Clahstra (W 6/C 2), Callahans Passage (W 8/C 2), Godcrofts (W 5/C 4), Mooring County (W 2/C 10), Oarbreaker (W 5/C 4), Onyx (3/3), Olavis Wake (W 1/C 4), Speaking Woods (W 7/C 1), and Stema Landing (W 1/C 8)—with very high casualty rates and accelerating enlistments in several. Recent capture/flip activity is concentrated in Clahstra (21 events/24h, latest ~02:47), Mooring County (22 events/24h, latest ~00:46), Oarbreaker (22 events/24h, latest ~05:32), Stlican Shelf (26 events/24h, latest ~05:17), Endless Shore (8 events/24h), Morgens Crossing (4 events/24h), and Onyx (15 events/24h). Uncertainty remains high because several high-casualty regions (Callahans Passage, Dead Lands, Speaking Woods) show intense fighting but no recent event records, suggesting either stalled fronts or data lag; meanwhile accelerating enlistments in contested zones point to continued assaults over the next 24 hours."
       },
       "median_eta_error_minutes": null,
@@ -1705,6 +1947,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "skipped_budget",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         },
         {
@@ -1717,6 +1961,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "skipped_budget",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         },
         {
@@ -1736,6 +1982,8 @@
           ],
           "settlement_status": "open",
           "status": "valid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": "The most volatile fronts are Clahstra, Stlican Shelf, Oarbreaker, and Mooring County, where recent bases have repeatedly changed hands. Clahstra and Stlican show near-parity combat with sustained activity; Oarbreaker has an immediate Fort Fogwood reversal; Mooring remains contested. Onyx and Endless Shore have meaningful but less immediate ownership risk."
         },
         {
@@ -1755,6 +2003,8 @@
           ],
           "settlement_status": "open",
           "status": "valid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": "The selected fronts are highly active but largely attritional. Oarbreaker is the clearest immediate transition point after Fort Fogwood became neutral, while Clahstra, Stlican Shelf, Mooring County, Onyx, and Endless Shore show repeated rapid reversals. Warden pressure is strongest in Oarbreaker and Stlican Shelf; Colonial pressure remains competitive in Clahstra and Mooring County."
         },
         {
@@ -1774,6 +2024,8 @@
           ],
           "settlement_status": "open",
           "status": "valid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": "The selected fronts are highly active and fluid. Clahstra, Stlican Shelf, Mooring County, and Onyx show repeated rapid reversals, while casualty ratios indicate a slight Colonial edge in Clahstra, Mooring County, and Stlican Shelf and a slight Warden edge in Endless Shore and Oarbreaker. The highest near-term change risk is concentrated on recently contested bases in Clahstra, Stlican Shelf, Mooring County, and Onyx."
         },
         {
@@ -1786,6 +2038,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "skipped_missing_key",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         }
       ],
@@ -1801,6 +2055,22 @@
         "selected_regions": [],
         "settlement_status": "not_available",
         "status": "skipped_budget",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
+        "war_summary": null
+      },
+      "latest_all_time": {
+        "brier_skill_score": null,
+        "cost_usd": 0.0,
+        "cutoff": "2026-08-22T03:35:40.980574Z",
+        "forecast_count": 0,
+        "integrated_brier": null,
+        "run_id": "2026-08-22-e6572a746282:openrouter-openai-gpt-5.6-luna",
+        "selected_regions": [],
+        "settlement_status": "not_available",
+        "status": "skipped_budget",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
         "war_summary": null
       },
       "median_eta_error_minutes": 311.4,
@@ -1838,6 +2108,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "invalid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         },
         {
@@ -1850,6 +2122,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "skipped_missing_key",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         }
       ],
@@ -1865,6 +2139,22 @@
         "selected_regions": [],
         "settlement_status": "not_available",
         "status": "invalid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
+        "war_summary": null
+      },
+      "latest_all_time": {
+        "brier_skill_score": null,
+        "cost_usd": 0.03441525,
+        "cutoff": "2026-08-22T02:55:57.623467Z",
+        "forecast_count": 0,
+        "integrated_brier": null,
+        "run_id": "2026-08-22-e4427399773e:openrouter-google-gemini-3.7-flash",
+        "selected_regions": [],
+        "settlement_status": "not_available",
+        "status": "invalid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
         "war_summary": null
       },
       "median_eta_error_minutes": null,
@@ -1902,6 +2192,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "invalid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         },
         {
@@ -1914,6 +2206,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "skipped_missing_key",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         }
       ],
@@ -1929,6 +2223,22 @@
         "selected_regions": [],
         "settlement_status": "not_available",
         "status": "invalid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
+        "war_summary": null
+      },
+      "latest_all_time": {
+        "brier_skill_score": null,
+        "cost_usd": 0.0,
+        "cutoff": "2026-08-22T02:55:57.623467Z",
+        "forecast_count": 0,
+        "integrated_brier": null,
+        "run_id": "2026-08-22-e4427399773e:nvidia-z-ai-glm-5.2",
+        "selected_regions": [],
+        "settlement_status": "not_available",
+        "status": "invalid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
         "war_summary": null
       },
       "median_eta_error_minutes": null,
@@ -1966,6 +2276,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "invalid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         },
         {
@@ -1978,6 +2290,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "invalid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         },
         {
@@ -1990,6 +2304,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "invalid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         },
         {
@@ -2002,6 +2318,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "invalid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         },
         {
@@ -2014,6 +2332,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "invalid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         },
         {
@@ -2026,6 +2346,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "skipped_missing_key",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         }
       ],
@@ -2041,6 +2363,22 @@
         "selected_regions": [],
         "settlement_status": "not_available",
         "status": "invalid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
+        "war_summary": null
+      },
+      "latest_all_time": {
+        "brier_skill_score": null,
+        "cost_usd": 0.0,
+        "cutoff": "2026-08-22T03:35:40.980574Z",
+        "forecast_count": 0,
+        "integrated_brier": null,
+        "run_id": "2026-08-22-e6572a746282:openrouter-stealth-ox-alpha",
+        "selected_regions": [],
+        "settlement_status": "not_available",
+        "status": "invalid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
         "war_summary": null
       },
       "median_eta_error_minutes": null,
@@ -2078,6 +2416,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "skipped_budget",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         },
         {
@@ -2090,6 +2430,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "skipped_budget",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         },
         {
@@ -2102,6 +2444,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "skipped_budget",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         },
         {
@@ -2114,6 +2458,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "invalid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         }
       ],
@@ -2129,6 +2475,22 @@
         "selected_regions": [],
         "settlement_status": "not_available",
         "status": "skipped_budget",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
+        "war_summary": null
+      },
+      "latest_all_time": {
+        "brier_skill_score": null,
+        "cost_usd": 0.0,
+        "cutoff": "2026-08-22T03:35:40.980574Z",
+        "forecast_count": 0,
+        "integrated_brier": null,
+        "run_id": "2026-08-22-e6572a746282:openrouter-google-gemini-3.7-flash-json-v1",
+        "selected_regions": [],
+        "settlement_status": "not_available",
+        "status": "skipped_budget",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
         "war_summary": null
       },
       "median_eta_error_minutes": null,
@@ -2166,6 +2528,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "invalid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         },
         {
@@ -2178,6 +2542,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "invalid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         },
         {
@@ -2190,6 +2556,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "invalid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         }
       ],
@@ -2205,6 +2573,22 @@
         "selected_regions": [],
         "settlement_status": "not_available",
         "status": "invalid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
+        "war_summary": null
+      },
+      "latest_all_time": {
+        "brier_skill_score": null,
+        "cost_usd": 0.0,
+        "cutoff": "2026-08-22T03:35:40.980574Z",
+        "forecast_count": 0,
+        "integrated_brier": null,
+        "run_id": "2026-08-22-e6572a746282:nvidia-thinkingmachines-inkling",
+        "selected_regions": [],
+        "settlement_status": "not_available",
+        "status": "invalid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
         "war_summary": null
       },
       "median_eta_error_minutes": null,
@@ -2242,6 +2626,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "invalid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         },
         {
@@ -2254,6 +2640,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "invalid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         },
         {
@@ -2266,6 +2654,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "invalid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         }
       ],
@@ -2281,6 +2671,22 @@
         "selected_regions": [],
         "settlement_status": "not_available",
         "status": "invalid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
+        "war_summary": null
+      },
+      "latest_all_time": {
+        "brier_skill_score": null,
+        "cost_usd": 0.0,
+        "cutoff": "2026-08-22T03:35:40.980574Z",
+        "forecast_count": 0,
+        "integrated_brier": null,
+        "run_id": "2026-08-22-e6572a746282:nvidia-nemotron-3-ultra-550b-a55b",
+        "selected_regions": [],
+        "settlement_status": "not_available",
+        "status": "invalid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
         "war_summary": null
       },
       "median_eta_error_minutes": null,
@@ -2318,6 +2724,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "invalid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         },
         {
@@ -2330,6 +2738,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "invalid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         },
         {
@@ -2342,6 +2752,8 @@
           "selected_regions": [],
           "settlement_status": "not_available",
           "status": "invalid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": null
         }
       ],
@@ -2357,6 +2769,22 @@
         "selected_regions": [],
         "settlement_status": "not_available",
         "status": "invalid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
+        "war_summary": null
+      },
+      "latest_all_time": {
+        "brier_skill_score": null,
+        "cost_usd": 0.02140713,
+        "cutoff": "2026-08-22T03:51:25.192951Z",
+        "forecast_count": 0,
+        "integrated_brier": null,
+        "run_id": "2026-08-22-ee874d6896e8:deepseek-v4-flash-direct-json-v1",
+        "selected_regions": [],
+        "settlement_status": "not_available",
+        "status": "invalid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
         "war_summary": null
       },
       "median_eta_error_minutes": null,
@@ -2401,6 +2829,8 @@
           ],
           "settlement_status": "open",
           "status": "valid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": "The war is in its late stage (day 84) with no winner yet. The Colonials hold a significant majority of strategic bases, controlling most of the map, while the Wardens maintain a strong presence in a few key regions. Recent activity is concentrated in a central band of regions, with intense back-and-forth fighting in Clahstra, Stlican Shelf, Mooring County, Oarbreaker, Onyx, and others. The Colonials appear to be pushing on multiple fronts, but the Wardens are contesting fiercely, leading to frequent base ownership changes. The overall strategic picture is fluid, with the Colonials holding a numerical advantage but the Wardens showing resilience in contested areas."
         }
       ],
@@ -2423,6 +2853,29 @@
         ],
         "settlement_status": "open",
         "status": "valid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
+        "war_summary": "The war is in its late stage (day 84) with no winner yet. The Colonials hold a significant majority of strategic bases, controlling most of the map, while the Wardens maintain a strong presence in a few key regions. Recent activity is concentrated in a central band of regions, with intense back-and-forth fighting in Clahstra, Stlican Shelf, Mooring County, Oarbreaker, Onyx, and others. The Colonials appear to be pushing on multiple fronts, but the Wardens are contesting fiercely, leading to frequent base ownership changes. The overall strategic picture is fluid, with the Colonials holding a numerical advantage but the Wardens showing resilience in contested areas."
+      },
+      "latest_all_time": {
+        "brier_skill_score": null,
+        "cost_usd": 0.01865808,
+        "cutoff": "2026-08-22T03:55:42.006165Z",
+        "forecast_count": 24,
+        "integrated_brier": null,
+        "run_id": "2026-08-22-e64756fb58bb:deepseek-v4-flash-direct-json-war-overview-v2",
+        "selected_regions": [
+          "ClahstraHex",
+          "StlicanShelfHex",
+          "MooringCountyHex",
+          "OarbreakerHex",
+          "OnyxHex",
+          "EndlessShoreHex"
+        ],
+        "settlement_status": "open",
+        "status": "valid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
         "war_summary": "The war is in its late stage (day 84) with no winner yet. The Colonials hold a significant majority of strategic bases, controlling most of the map, while the Wardens maintain a strong presence in a few key regions. Recent activity is concentrated in a central band of regions, with intense back-and-forth fighting in Clahstra, Stlican Shelf, Mooring County, Oarbreaker, Onyx, and others. The Colonials appear to be pushing on multiple fronts, but the Wardens are contesting fiercely, leading to frequent base ownership changes. The overall strategic picture is fluid, with the Colonials holding a numerical advantage but the Wardens showing resilience in contested areas."
       },
       "median_eta_error_minutes": 550.46,
@@ -2467,6 +2920,8 @@
           ],
           "settlement_status": "not_available",
           "status": "invalid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": "War 139 is on day 85 with no winner and conquest not ended. The front is split: Colonials hold full or near-full control in many regions (Acrithia, Allods Bight, Ash Fields, Drowned Vale, Farranac Coast, etc.), while Wardens hold others (Basin Sionnach, Clanshead Valley, Howl County, Reaching Trail, Stlican Shelf, Viper Pit, Weathered Expanse). The heaviest pressure is concentrated in split or contested zones—Clahstra, Callahans Passage, Callums Cape, Dead Lands, Endless Shore, Godcrofts, Mooring County, Oarbreaker, Olavis Wake, Onyx, Speaking Woods, Stema Landing, and especially Stlican Shelf and Oarbreaker—where casualty rates are high and ownership events are frequent. Several regions show accelerating casualties and enlistments despite cooling in others, and recent capture/loss events within the last 6 hours indicate active base-level fighting. Uncertainty remains high because live population splits are unavailable and enlistment is only a proxy; however, the event history points to Clahstra, Mooring County, Oarbreaker, Stlican Shelf, Onyx, and Olavis Wake as the most volatile for strategic-base ownership shifts in the next 24 hours."
         },
         {
@@ -2486,6 +2941,8 @@
           ],
           "settlement_status": "not_available",
           "status": "invalid",
+          "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+          "war_number": 139,
           "war_summary": "War 139 is in conquest mode (32 victory towns required, no winner yet) with a fragmented front: many regions are fully held by one faction, but intense localized fighting is concentrated in a few hotspots. Colonial forces control broad territories including Dead Lands, Drowned Vale, Farranac Coast, and others, while Wardens hold strong pockets such as Basin Sionnach, Clanshead Valley, Howl County, and Reaching Trail. The heaviest pressure is in Stlican Shelf (26 recent events, massive casualty spikes, bases flipping repeatedly), The Moors/Mooring County (22 events, 10-2 Colonial base lead but constant turnover), The Clahstra (21 events, 6-2 Warden split with high casualties), Oarbreaker Isles (21 events, 4-4-1 split with neutral involvement), Onyx (15 events, 3-3 deadlock), and Endless Shore (8 events, 7-3 Warden split). Uncertainty remains because high event volumes in Stlican Shelf coincide with a current 9-0 Warden ownership snapshot, suggesting rapid recapture cycles or snapshot lag; the 3.11-hour history window also limits momentum assessment, and casualty ratios are near parity in the hottest zones, making 24-hour strategic-base predictions highly contingent on reinforcement flows not visible here."
         }
       ],
@@ -2508,6 +2965,29 @@
         ],
         "settlement_status": "not_available",
         "status": "invalid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
+        "war_summary": "War 139 is on day 85 with no winner and conquest not ended. The front is split: Colonials hold full or near-full control in many regions (Acrithia, Allods Bight, Ash Fields, Drowned Vale, Farranac Coast, etc.), while Wardens hold others (Basin Sionnach, Clanshead Valley, Howl County, Reaching Trail, Stlican Shelf, Viper Pit, Weathered Expanse). The heaviest pressure is concentrated in split or contested zones—Clahstra, Callahans Passage, Callums Cape, Dead Lands, Endless Shore, Godcrofts, Mooring County, Oarbreaker, Olavis Wake, Onyx, Speaking Woods, Stema Landing, and especially Stlican Shelf and Oarbreaker—where casualty rates are high and ownership events are frequent. Several regions show accelerating casualties and enlistments despite cooling in others, and recent capture/loss events within the last 6 hours indicate active base-level fighting. Uncertainty remains high because live population splits are unavailable and enlistment is only a proxy; however, the event history points to Clahstra, Mooring County, Oarbreaker, Stlican Shelf, Onyx, and Olavis Wake as the most volatile for strategic-base ownership shifts in the next 24 hours."
+      },
+      "latest_all_time": {
+        "brier_skill_score": null,
+        "cost_usd": 0.0,
+        "cutoff": "2026-08-22T05:32:36.884587Z",
+        "forecast_count": 0,
+        "integrated_brier": null,
+        "run_id": "2026-08-22-1efe04fdefb5:nvidia-thinkingmachines-inkling-war-overview-v2",
+        "selected_regions": [
+          "ClahstraHex",
+          "MooringCountyHex",
+          "OarbreakerHex",
+          "StlicanShelfHex",
+          "OnyxHex",
+          "OlavisWakeHex"
+        ],
+        "settlement_status": "not_available",
+        "status": "invalid",
+        "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+        "war_number": 139,
         "war_summary": "War 139 is on day 85 with no winner and conquest not ended. The front is split: Colonials hold full or near-full control in many regions (Acrithia, Allods Bight, Ash Fields, Drowned Vale, Farranac Coast, etc.), while Wardens hold others (Basin Sionnach, Clanshead Valley, Howl County, Reaching Trail, Stlican Shelf, Viper Pit, Weathered Expanse). The heaviest pressure is concentrated in split or contested zones—Clahstra, Callahans Passage, Callums Cape, Dead Lands, Endless Shore, Godcrofts, Mooring County, Oarbreaker, Olavis Wake, Onyx, Speaking Woods, Stema Landing, and especially Stlican Shelf and Oarbreaker—where casualty rates are high and ownership events are frequent. Several regions show accelerating casualties and enlistments despite cooling in others, and recent capture/loss events within the last 6 hours indicate active base-level fighting. Uncertainty remains high because live population splits are unavailable and enlistment is only a proxy; however, the event history points to Clahstra, Mooring County, Oarbreaker, Stlican Shelf, Onyx, and Olavis Wake as the most volatile for strategic-base ownership shifts in the next 24 hours."
       },
       "median_eta_error_minutes": null,
@@ -11605,7 +12085,7 @@
       "war_summary": null
     }
   ],
-  "schema_version": 7,
+  "schema_version": 8,
   "strategic_base_count": 436,
   "war": {
     "conquestEndTime": null,
@@ -16028,5 +16508,11 @@
       "NONE": 2,
       "WARDENS": 109
     }
+  },
+  "war_lifecycle": {
+    "ended_at": null,
+    "status": "active",
+    "war_id": "e92117bb-bd91-4e5a-8711-ca022362afbe",
+    "war_number": 139
   }
 }

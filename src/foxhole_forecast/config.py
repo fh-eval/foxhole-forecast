@@ -23,6 +23,7 @@ class Settings:
     war_api_base: str
     poll_minutes: int
     forecast_interval_hours: int
+    minimum_forecast_history_hours: int
     forecast_horizons_hours: tuple[int, ...]
     strategic_icon_types: frozenset[int]
     scout_region_limit: int

@@ -15,6 +15,51 @@ from foxhole_forecast.forecasting import (
 
 
 class ForecastBudgetTests(unittest.TestCase):
+    def test_inactive_war_does_not_call_models(self) -> None:
+        with patch(
+            "foxhole_forecast.forecasting.read_json", return_value={}
+        ), patch(
+            "foxhole_forecast.forecasting.forecast_due",
+            return_value=(True, "2026-08-22T03:00:00Z"),
+        ), patch(
+            "foxhole_forecast.forecasting.load_models", return_value=[]
+        ), patch(
+            "foxhole_forecast.forecasting.build_scout_packet",
+            return_value={
+                "cutoff": "2026-08-22T03:10:00Z",
+                "war": {
+                    "warId": "war",
+                    "warNumber": 1,
+                    "winner": "WARDENS",
+                },
+                "history_hours_available": 24,
+            },
+        ), patch("foxhole_forecast.forecasting.write_json"):
+            result = run_forecast_cohort(Settings.load())
+
+        self.assertEqual(result["status"], "war_inactive")
+
+    def test_new_war_waits_for_two_hours_of_history(self) -> None:
+        with patch(
+            "foxhole_forecast.forecasting.read_json", return_value={}
+        ), patch(
+            "foxhole_forecast.forecasting.forecast_due",
+            return_value=(True, "2026-08-22T03:00:00Z"),
+        ), patch(
+            "foxhole_forecast.forecasting.load_models", return_value=[]
+        ), patch(
+            "foxhole_forecast.forecasting.build_scout_packet",
+            return_value={
+                "cutoff": "2026-08-22T03:10:00Z",
+                "war": {"warId": "war", "warNumber": 1, "winner": "NONE"},
+                "history_hours_available": 1.5,
+            },
+        ), patch("foxhole_forecast.forecasting.write_json"):
+            result = run_forecast_cohort(Settings.load())
+
+        self.assertEqual(result["status"], "warming_up")
+        self.assertEqual(result["minimum_history_hours"], 2)
+
     def test_unknown_series_filter_is_rejected(self) -> None:
         with patch("foxhole_forecast.forecasting.forecast_due", return_value=(True, "slot")), patch(
             "foxhole_forecast.forecasting.build_scout_packet",

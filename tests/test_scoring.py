@@ -172,6 +172,29 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(bet["timing_credit"], 0.75)
         self.assertAlmostEqual(bet["brier"], 0.0025)
 
+    def test_timed_prediction_is_censored_when_war_ends_before_window_closes(self) -> None:
+        settings = Settings.load()
+        cutoff = datetime(2026, 1, 1, tzinfo=UTC)
+        run = self._single_timed_run(cutoff, cutoff + timedelta(hours=2))
+
+        settlement = settle_run(
+            run,
+            {"strategic_base_ids": ["base-1"]},
+            [],
+            [],
+            settings,
+            cutoff + timedelta(hours=6),
+            war_end=cutoff + timedelta(hours=3),
+        )
+
+        bet = settlement["timed_predictions"][0]
+        self.assertEqual(bet["status"], "censored")
+        self.assertEqual(
+            bet["settlement_reason"],
+            "war_ended_before_scoring_window_closed",
+        )
+        self.assertIsNone(bet["timing_credit"])
+
     def test_timing_curve_and_state_equivalence(self) -> None:
         self.assertEqual(_timing_credit(0), 1)
         self.assertAlmostEqual(_timing_credit(15), 11 / 12)

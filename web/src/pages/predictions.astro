@@ -166,7 +166,13 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const empty = document.querySelector("#prediction-empty");
         const summary = document.querySelector("#prediction-summary");
         rows.replaceChildren();
-        const allBets = (dashboard.rounds || []).filter(isCompleteCurrentRound).flatMap((round) => round.predictions || []);
+        const allBets = (dashboard.rounds || []).filter(isCompleteCurrentRound).flatMap((round) =>
+          (round.predictions || []).map((bet) => ({
+            ...bet,
+            war_number: round.war_number,
+            round_slot: round.round_slot,
+          }))
+        );
         const bets = allBets.filter((bet) =>
           visibleSeries.has(bet.series_id)
           && bet.predicted_outcome
@@ -178,7 +184,10 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         bets.forEach((bet) => {
           const row = document.createElement("tr");
           const modelCell = element("td", "prediction-browser__model");
-          modelCell.append(element("strong", "", bet.model_label), element("small", "", `${regionLabel(bet.map_name)} · ${formatDate(bet.cutoff)}`));
+          modelCell.append(
+            element("strong", "", bet.model_label),
+            element("small", "", `${bet.war_number ? `War ${bet.war_number} · ` : ""}${regionLabel(bet.map_name)} · ${formatDate(bet.cutoff)}`),
+          );
           const predictionCell = element("td", "prediction-cell");
           predictionCell.append(predictionHeadline(bet), supportingEvidence(bet.evidence));
           const resultCell = element("td", "result-cell");

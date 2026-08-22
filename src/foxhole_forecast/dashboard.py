@@ -3,18 +3,112 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import timedelta
 import re
+import statistics
 from typing import Any
 
 from .config import DATA_DIR, ROOT, Settings
 from .domain import strategic_base_type
 from .packets import build_scout_packet
 from .storage import isoformat, parse_time, read_json, read_jsonl, write_json
+from .war_lifecycle import war_ended_at, war_is_active
 
 
 def _round_slot(cutoff: str, interval_hours: int) -> str:
     timestamp = parse_time(cutoff)
     slot_hour = timestamp.hour - timestamp.hour % interval_hours
     return isoformat(timestamp.replace(hour=slot_hour, minute=0, second=0, microsecond=0))
+
+
+def _forecast_status(
+    war: dict[str, Any] | None,
+    history_hours_available: float,
+    minimum_history_hours: int,
+) -> str:
+    if not war_is_active(war):
+        return "war_inactive"
+    if float(history_hours_available or 0) < minimum_history_hours:
+        return "warming_up"
+    return "ready"
+
+
+def _behavior_summary(
+    rounds: list[dict[str, Any]],
+    war_id: str | None,
+    predictions_per_round: int,
+) -> list[dict[str, Any]]:
+    by_series: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    labels: dict[str, str] = {}
+    for round_record in rounds:
+        if war_id is not None and round_record.get("war_id") != war_id:
+            continue
+        predictions = round_record.get("predictions", [])
+        if (
+            round_record.get("protocol") != "event_outcome_v4"
+            or len(predictions) != predictions_per_round
+        ):
+            continue
+        by_series[round_record["series_id"]].extend(predictions)
+        labels[round_record["series_id"]] = round_record["model_label"]
+
+    output: list[dict[str, Any]] = []
+    for series, bets in by_series.items():
+        scoreable = [
+            bet
+            for bet in bets
+            if bet.get("status") in {"hit", "partial", "miss"}
+            and bet.get("timing_credit") is not None
+        ]
+        confidences = [float(bet["confidence"]) for bet in bets]
+        immediate_leads = _lead_minutes(bets, "IMMEDIATE")
+        extended_leads = _lead_minutes(bets, "EXTENDED")
+        eta_errors = [
+            float(bet["eta_error_minutes"])
+            for bet in scoreable
+            if bet.get("eta_error_minutes") is not None
+        ]
+        credits = [float(bet["timing_credit"]) for bet in scoreable]
+        calibration = [
+            (float(bet["confidence"]) - float(bet["timing_credit"])) ** 2
+            for bet in scoreable
+        ]
+        output.append(
+            {
+                "series_id": series,
+                "model_label": labels[series],
+                "published_bets": len(bets),
+                "scoreable_bets": len(scoreable),
+                "score": _mean(credits),
+                "confidence": _mean(confidences),
+                "immediate_lead_minutes": _median(immediate_leads),
+                "extended_lead_minutes": _median(extended_leads),
+                "eta_error_minutes": _median(eta_errors),
+                "matched_transitions": len(eta_errors),
+                "calibration": _mean(calibration),
+                "hits": sum(bet.get("status") == "hit" for bet in bets),
+                "partials": sum(bet.get("status") == "partial" for bet in bets),
+                "misses": sum(bet.get("status") == "miss" for bet in bets),
+                "censored": sum(bet.get("status") == "censored" for bet in bets),
+                "open": sum(bet.get("status") == "open" for bet in bets),
+            }
+        )
+    return sorted(output, key=lambda row: row["model_label"])
+
+
+def _lead_minutes(bets: list[dict[str, Any]], tranche: str) -> list[float]:
+    return [
+        (parse_time(bet["eta_utc"]) - parse_time(bet["cutoff"])).total_seconds()
+        / 60
+        for bet in bets
+        if bet.get("tranche") == tranche and bet.get("eta_utc") and bet.get("cutoff")
+    ]
+
+
+def _mean(values: list[float]) -> float | None:
+    return round(statistics.fmean(values), 8) if values else None
+
+
+def _median(values: list[float]) -> float | None:
+    return round(statistics.median(values), 2) if values else None
 
 
 def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
@@ -29,6 +123,15 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
     settlements = read_json(DATA_DIR / "settlements.json", default={})
     collector_runs = read_jsonl(DATA_DIR / "collector_runs.jsonl")
     official_events = read_jsonl(DATA_DIR / "events.jsonl")
+    wars = read_json(DATA_DIR / "wars.json", default={}).get("wars", {})
+    current_war = latest.get("war", {})
+    current_war_id = current_war.get("warId")
+    scout_packet = build_scout_packet(current_settings) if latest else None
+    forecast_status = _forecast_status(
+        current_war,
+        (scout_packet or {}).get("history_hours_available", 0),
+        current_settings.minimum_forecast_history_hours,
+    )
 
     bases = {
         identifier: base
@@ -42,7 +145,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
         series = run["series_id"]
         metric_lookup = _metric_lookup(run)
         cutoff_bases = _base_lookup(run)
-        if run.get("status") == "valid" and (
+        if run.get("status") == "valid" and run.get("war_id") == current_war_id and (
             series not in latest_valid_runs or run["cutoff"] > latest_valid_runs[series]["cutoff"]
         ):
             latest_valid_runs[series] = run
@@ -52,6 +155,8 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
         )
         history = {
             "run_id": run["run_id"],
+            "war_id": run.get("war_id"),
+            "war_number": cohorts.get(run.get("cohort_id"), {}).get("war_number"),
             "cutoff": run["cutoff"],
             "status": run["status"],
             "war_summary": run.get("war_summary", run.get("forecast", {}).get("war_summary")),
@@ -157,6 +262,9 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
     score_lookup = {row["series_id"]: row for row in scores.get("models", [])}
     for series, history in by_series.items():
         history.sort(key=lambda row: row["cutoff"], reverse=True)
+        current_war_history = [
+            row for row in history if row.get("war_id") == current_war_id
+        ]
         identity = next(run for run in reversed(runs) if run["series_id"] == series)
         models.append(
             {
@@ -167,7 +275,8 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                 "requested_model": identity.get("requested_model"),
                 "returned_model": identity.get("returned_model"),
                 "upstream_provider": identity.get("upstream_provider"),
-                "latest": history[0],
+                "latest": current_war_history[0] if current_war_history else None,
+                "latest_all_time": history[0],
                 "history": history[:100],
             }
         )
@@ -221,24 +330,41 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
         key=lambda row: (row["round_slot"], row["cutoff"]),
         reverse=True,
     )
+    behavior = {
+        "current_war": _behavior_summary(
+            rounds, current_war_id, current_settings.event_bet_limit
+        ),
+        "all_time": _behavior_summary(
+            rounds, None, current_settings.event_bet_limit
+        ),
+    }
     output = {
-        "schema_version": 7,
+        "schema_version": 8,
         "generated_at": isoformat(),
         "war": latest.get("war"),
         "last_collected_at": latest.get("observed_at"),
+        "forecast_status": forecast_status,
         "collector_runs": len(collector_runs),
         "strategic_base_count": len(bases),
         "war_api_snapshot": _build_war_api_snapshot(
             latest,
             official_events,
-            build_scout_packet(current_settings) if latest else None,
+            scout_packet,
         ),
+        "war_lifecycle": wars.get(current_war_id, {
+            "war_id": current_war_id,
+            "war_number": current_war.get("warNumber"),
+            "status": "active" if war_is_active(current_war) else "ended",
+            "ended_at": war_ended_at(current_war, latest.get("observed_at")),
+        }),
         "models": models,
+        "model_behavior": behavior,
         "rounds": rounds[:500],
         "base_forecasts": base_forecasts[:500],
         "methodology": {
             "current_protocol": "event_outcome_v4",
             "predictions_per_round": 8,
+            "new_war_warmup_hours": current_settings.minimum_forecast_history_hours,
             "tranches": {
                 "immediate": "ETA within 6 hours",
                 "extended": "ETA 6-24 hours",
@@ -258,6 +384,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
             "schema_version": 1,
             "observed_at": latest.get("observed_at"),
             "last_forecast_slot": pipeline_state.get("last_forecast_slot"),
+            "forecast_status": forecast_status,
         },
     )
     write_json(ROOT / "web" / "public" / "data" / "dashboard.json", output)

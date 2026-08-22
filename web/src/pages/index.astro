@@ -23,7 +23,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         </div>
         <div class="war-stamp" aria-live="polite">
           <span class="pulse"></span>
-          <div><small>OBSERVING</small><strong id="war-number">Waiting for data</strong></div>
+          <div><small id="war-status">OBSERVING</small><strong id="war-number">Waiting for data</strong></div>
         </div>
       </div>
     </header>
@@ -52,7 +52,13 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       <section id="scoreboard" class="section-block">
         <div class="section-heading">
           <div><p class="kicker">Performance and behavior</p><h2>How the models think</h2></div>
-          <p>Score measures what the model got right. Confidence, target horizon, ETA error, and calibration describe how it tends to make those calls. Credits and probabilities use one consistent 0.00–1.00 scale.</p>
+          <div class="score-heading-controls">
+            <p>Score measures what the model got right. Confidence, target horizon, ETA error, and calibration describe how it tends to make those calls. Credits and probabilities use one consistent 0.00–1.00 scale.</p>
+            <div class="segmented" role="group" aria-label="Score history scope">
+              <button class="active" data-score-scope="current">Current war</button>
+              <button data-score-scope="all">All wars</button>
+            </div>
+          </div>
         </div>
         <div class="table-shell">
           <table class="score-table" aria-describedby="score-guide">
@@ -179,6 +185,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       };
       let dashboard = null;
       let briefingFilter = "all";
+      let scoreScope = "current";
+      let protocolRounds = [];
       let visibleSeries = new Set();
 
       function isCompleteCurrentRound(round) {
@@ -229,6 +237,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           model,
           bets,
           scoreable,
+          publishedCount: bets.length,
+          scoreableCount: scoreable.length,
           score: mean(credits),
           confidence: mean(confidences),
           immediateLeadMinutes: median(leadMinutes("IMMEDIATE")),
@@ -250,7 +260,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         return cell;
       }
 
-      function renderScores(models, rounds) {
+      function renderScores(models, rounds, summaries = []) {
         const rows = document.querySelector("#score-rows");
         const empty = document.querySelector("#score-empty");
         rows.replaceChildren();
@@ -258,7 +268,27 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         if (!models.length) {
           return;
         }
-        const behaviors = models.map((model) => modelBehavior(model, rounds)).sort((a, b) =>
+        const summaryLookup = new Map(summaries.map((summary) => [summary.series_id, summary]));
+        const behaviors = models.map((model) => {
+          const summary = summaryLookup.get(model.series_id);
+          return summary ? {
+            model,
+            publishedCount: summary.published_bets,
+            scoreableCount: summary.scoreable_bets,
+            score: summary.score,
+            confidence: summary.confidence,
+            immediateLeadMinutes: summary.immediate_lead_minutes,
+            extendedLeadMinutes: summary.extended_lead_minutes,
+            etaErrorMinutes: summary.eta_error_minutes,
+            matched: summary.matched_transitions,
+            calibration: summary.calibration,
+            hits: summary.hits,
+            partials: summary.partials,
+            misses: summary.misses,
+            censored: summary.censored,
+            open: summary.open,
+          } : modelBehavior(model, rounds);
+        }).sort((a, b) =>
           (a.score == null) - (b.score == null)
           || (b.score ?? -1) - (a.score ?? -1)
           || (a.calibration ?? Infinity) - (b.calibration ?? Infinity)
@@ -279,8 +309,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           row.append(
             element("td", "score-table__rank", String(index + 1).padStart(2, "0")),
             modelCell,
-            metricCell(decimal(behavior.score), `${behavior.scoreable.length} scoreable bets`, "score-table__primary"),
-            metricCell(decimal(behavior.confidence), `${behavior.bets.length} published bets`),
+            metricCell(decimal(behavior.score), `${behavior.scoreableCount} scoreable bets`, "score-table__primary"),
+            metricCell(decimal(behavior.confidence), `${behavior.publishedCount} published bets`),
             metricCell(duration(behavior.immediateLeadMinutes), "within required tranche"),
             metricCell(duration(behavior.extendedLeadMinutes), "within required tranche"),
             metricCell(duration(behavior.etaErrorMinutes), `${behavior.matched} matched transitions`),
@@ -289,6 +319,22 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           );
           rows.append(row);
         });
+      }
+
+      function renderScoreboard() {
+        const scopedRounds = scoreScope === "current"
+          ? protocolRounds.filter((round) => round.war_id === dashboard?.war?.warId)
+          : protocolRounds;
+        const summaries = scoreScope === "current"
+          ? dashboard?.model_behavior?.current_war || []
+          : dashboard?.model_behavior?.all_time || [];
+        const scopedSeries = new Set(
+          summaries.length
+            ? summaries.map((summary) => summary.series_id)
+            : scopedRounds.map((round) => round.series_id)
+        );
+        const scopedModels = (dashboard?.models || []).filter((model) => scopedSeries.has(model.series_id));
+        renderScores(scopedModels, scopedRounds, summaries);
       }
 
       function renderWarData(snapshot) {
@@ -639,7 +685,10 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           const marker = element("span", `history-marker history-marker--${entry.settlement_status}`);
           const body = element("div", "");
           const top = element("div", "history-item__top");
-          top.append(element("time", "", formatDate(entry.cutoff)), element("strong", "", `${entry.forecast_count} bases · ${entry.settlement_status}`));
+          top.append(
+            element("time", "", `${entry.war_number ? `War ${entry.war_number} · ` : ""}${formatDate(entry.cutoff)}`),
+            element("strong", "", `${entry.forecast_count} bases · ${entry.settlement_status}`),
+          );
           body.append(top, element("p", "", entry.war_summary || `Run ${entry.status}; no summary available.`));
           item.append(marker, body);
           list.append(item);
@@ -653,15 +702,21 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           dashboard = await response.json();
           const currentRounds = (dashboard.rounds || []).filter(isCompleteCurrentRound);
+          protocolRounds = currentRounds;
           visibleSeries = new Set(currentRounds.map((round) => round.series_id));
           const currentModels = (dashboard.models || []).filter((model) => visibleSeries.has(model.series_id));
           document.querySelector("#war-number").textContent = dashboard.war ? `World Conquest ${dashboard.war.warNumber}` : "Waiting for data";
+          document.querySelector("#war-status").textContent = dashboard.forecast_status === "war_inactive"
+            ? "WAR ENDED"
+            : dashboard.forecast_status === "warming_up"
+              ? "WARMING UP"
+              : "OBSERVING";
           document.querySelector("#last-observation").textContent = formatDate(dashboard.last_collected_at);
           document.querySelector("#base-count").textContent = dashboard.strategic_base_count ?? 0;
           document.querySelector("#poll-count").textContent = dashboard.collector_runs ?? 0;
           document.querySelector("#generated-at").textContent = dashboard.generated_at ? `Generated ${formatDate(dashboard.generated_at)}` : "No dataset generated yet";
           renderWarData(dashboard.war_api_snapshot);
-          renderScores(currentModels, currentRounds);
+          renderScoreboard();
           renderRounds(currentRounds);
           setupBriefingFilter(currentModels);
           renderBriefings(currentModels);
@@ -672,6 +727,12 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           empty.hidden = false;
         }
       }
+
+      document.querySelectorAll("[data-score-scope]").forEach((button) => button.addEventListener("click", () => {
+        scoreScope = button.dataset.scoreScope;
+        document.querySelectorAll("[data-score-scope]").forEach((item) => item.classList.toggle("active", item === button));
+        if (dashboard) renderScoreboard();
+      }));
 
       boot();
     </script>

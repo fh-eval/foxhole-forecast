@@ -4,6 +4,8 @@ import unittest
 
 from foxhole_forecast.dashboard import (
     _build_war_api_snapshot,
+    _behavior_summary,
+    _forecast_status,
     _metric_label,
     _predicted_outcome,
     _present_evidence,
@@ -13,6 +15,43 @@ from foxhole_forecast.forecasting import _freeze_evidence
 
 
 class DashboardTests(unittest.TestCase):
+    def test_behavior_summary_can_separate_current_war_from_all_time(self) -> None:
+        def round_for(war_id: str, credit: float) -> dict:
+            return {
+                "war_id": war_id,
+                "protocol": "event_outcome_v4",
+                "series_id": "model-1",
+                "model_label": "Model One",
+                "predictions": [
+                    {
+                        "status": "hit" if credit else "miss",
+                        "timing_credit": credit,
+                        "confidence": 0.5,
+                        "tranche": "IMMEDIATE",
+                        "cutoff": "2026-01-01T00:00:00Z",
+                        "eta_utc": "2026-01-01T02:00:00Z",
+                        "eta_error_minutes": 15,
+                    }
+                ],
+            }
+
+        rounds = [round_for("war-1", 0), round_for("war-2", 1)]
+
+        current = _behavior_summary(rounds, "war-2", 1)[0]
+        all_time = _behavior_summary(rounds, None, 1)[0]
+        self.assertEqual(current["score"], 1)
+        self.assertEqual(current["published_bets"], 1)
+        self.assertEqual(all_time["score"], 0.5)
+        self.assertEqual(all_time["published_bets"], 2)
+
+    def test_forecast_status_respects_war_end_and_history_warmup(self) -> None:
+        active = {"warId": "war-1", "winner": "NONE"}
+        ended = {"warId": "war-1", "winner": "WARDENS"}
+
+        self.assertEqual(_forecast_status(active, 1.5, 2), "warming_up")
+        self.assertEqual(_forecast_status(active, 2, 2), "ready")
+        self.assertEqual(_forecast_status(ended, 24, 2), "war_inactive")
+
     def test_round_slot_is_shared_across_a_three_hour_block(self) -> None:
         self.assertEqual(
             _round_slot("2026-08-22T07:59:59Z", 3),

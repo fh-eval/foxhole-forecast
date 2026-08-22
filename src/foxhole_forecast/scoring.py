@@ -10,6 +10,11 @@ from .config import DATA_DIR, Settings
 from .storage import isoformat, parse_time, read_json, read_jsonl, write_json
 
 
+def _war_end(wars: dict[str, dict[str, Any]], war_id: str) -> datetime | None:
+    value = wars.get(war_id, {}).get("ended_at")
+    return parse_time(value) if value else None
+
+
 def settle_and_score(settings: Settings, now: datetime | None = None) -> dict[str, Any]:
     current = (now or datetime.now(UTC)).astimezone(UTC)
     runs = read_jsonl(DATA_DIR / "model_runs.jsonl")
@@ -17,6 +22,7 @@ def settle_and_score(settings: Settings, now: datetime | None = None) -> dict[st
     events = read_jsonl(DATA_DIR / "events.jsonl")
     collector_runs = read_jsonl(DATA_DIR / "collector_runs.jsonl")
     settlements = read_json(DATA_DIR / "settlements.json", default={})
+    wars = read_json(DATA_DIR / "wars.json", default={}).get("wars", {})
 
     for run in runs:
         if run.get("status") != "valid" or run["cohort_id"] not in cohorts:
@@ -28,6 +34,7 @@ def settle_and_score(settings: Settings, now: datetime | None = None) -> dict[st
             collector_runs,
             settings,
             current,
+            _war_end(wars, run["war_id"]),
         )
     write_json(DATA_DIR / "settlements.json", settlements)
     scores = aggregate_scores(runs, settlements, current)
@@ -42,9 +49,12 @@ def settle_run(
     collector_runs: list[dict[str, Any]],
     settings: Settings,
     now: datetime,
+    war_end: datetime | None = None,
 ) -> dict[str, Any]:
     if "predictions" in run.get("forecast", {}):
-        return _settle_timed_run(run, events, collector_runs, settings, now)
+        return _settle_timed_run(
+            run, events, collector_runs, settings, now, war_end
+        )
 
     cutoff = parse_time(run["cutoff"])
     war_id = run["war_id"]
@@ -63,7 +73,10 @@ def settle_run(
 
     for hours in settings.forecast_horizons_hours:
         deadline = cutoff + timedelta(hours=hours)
-        coverage = _coverage_status(collector_runs, war_id, cutoff, deadline, settings)
+        crosses_war_end = war_end is not None and deadline > war_end
+        coverage = not crosses_war_end and _coverage_status(
+            collector_runs, war_id, cutoff, deadline, settings
+        )
         brier_sum = 0.0
         baseline_sum = 0.0
         positives = 0
@@ -71,7 +84,7 @@ def settle_run(
         censored = 0
         for identifier in universe:
             outcome = _change_outcome(identifier, relevant_events, cutoff, deadline)
-            if now < deadline or not coverage or outcome is None:
+            if crosses_war_end or now < deadline or not coverage or outcome is None:
                 base_outcomes[identifier][str(hours)] = None
                 censored += 1
                 continue
@@ -83,7 +96,13 @@ def settle_run(
             positives += outcome
             count += 1
         horizons[str(hours)] = {
-            "status": "complete" if count == len(universe) and count else "open_or_censored",
+            "status": (
+                "censored_war_end"
+                if crosses_war_end
+                else "complete"
+                if count == len(universe) and count
+                else "open_or_censored"
+            ),
             "deadline": isoformat(deadline),
             "evaluated": count,
             "censored": censored,
@@ -95,7 +114,7 @@ def settle_run(
         total_baseline += baseline_sum
         evaluated += count
 
-    event_bets = _settle_event_bets(run, relevant_events, cutoff, now)
+    event_bets = _settle_event_bets(run, relevant_events, cutoff, now, war_end)
     ibs = total_brier / evaluated if evaluated else None
     baseline_ibs = total_baseline / evaluated if evaluated else None
     skill = None
@@ -108,7 +127,12 @@ def settle_run(
         "cohort_id": run["cohort_id"],
         "cutoff": run["cutoff"],
         "updated_at": isoformat(now),
-        "status": "complete" if horizons.get("24", {}).get("status") == "complete" else "open",
+        "status": (
+            "complete"
+            if horizons.get("24", {}).get("status")
+            in {"complete", "censored_war_end"}
+            else "open"
+        ),
         "horizons": horizons,
         "base_outcomes": base_outcomes,
         "integrated_brier": round(ibs, 8) if ibs is not None else None,
@@ -124,6 +148,7 @@ def _settle_timed_run(
     collector_runs: list[dict[str, Any]],
     settings: Settings,
     now: datetime,
+    war_end: datetime | None = None,
 ) -> dict[str, Any]:
     cutoff = parse_time(run["cutoff"])
     deadline = max(
@@ -137,6 +162,7 @@ def _settle_timed_run(
             if event.get("war_id") == run["war_id"]
             and parse_time(event["observed_to"]) > cutoff
             and parse_time(event["observed_to"]) <= deadline
+            and (war_end is None or parse_time(event["observed_to"]) <= war_end)
         ]
     )
     settled: list[dict[str, Any]] = []
@@ -282,6 +308,10 @@ def _settle_timed_run(
                     else "miss"
                 )
                 settlement_reason = "interval_timing_credit_certain"
+        elif war_end is not None and bet_deadline > war_end:
+            status = "censored"
+            outcome = None
+            settlement_reason = "war_ended_before_scoring_window_closed"
         elif now < bet_deadline:
             status = "open"
             outcome = None
@@ -499,6 +529,7 @@ def _settle_event_bets(
     events: list[dict[str, Any]],
     cutoff: datetime,
     now: datetime,
+    war_end: datetime | None = None,
 ) -> list[dict[str, Any]]:
     deadline = cutoff + timedelta(hours=24)
     settled: list[dict[str, Any]] = []
@@ -511,6 +542,7 @@ def _settle_event_bets(
                 and event.get("event_type") == prediction["event_type"]
                 and event.get("actor") == prediction["actor"]
                 and parse_time(event["observed_to"]) <= deadline
+                and (war_end is None or parse_time(event["observed_to"]) <= war_end)
             ]
             match = min(matching, key=lambda row: row["observed_to"]) if matching else None
             if match:
@@ -521,6 +553,10 @@ def _settle_event_bets(
                     parse_time(match["observed_from"]),
                     parse_time(match["observed_to"]),
                 )
+            elif war_end is not None and deadline > war_end:
+                status = "censored"
+                outcome = None
+                eta_error = None
             elif now >= deadline:
                 status = "miss"
                 outcome = 0
