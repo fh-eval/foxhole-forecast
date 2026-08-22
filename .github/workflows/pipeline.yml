@@ -30,6 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: main
           fetch-depth: 1
           persist-credentials: false
       - uses: actions/setup-python@v6
@@ -70,6 +71,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: main
           fetch-depth: 1
       - name: Download generated data
         uses: actions/download-artifact@v8
