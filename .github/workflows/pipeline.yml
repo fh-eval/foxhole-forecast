@@ -1,0 +1,79 @@
+name: Collect and forecast
+
+on:
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+    inputs:
+      force_forecast:
+        description: Run a forecast even if this three-hour slot already exists
+        required: false
+        default: false
+        type: boolean
+
+permissions: {}
+
+concurrency:
+  group: foxhole-data-pipeline
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Collect, forecast, settle, and publish data
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+        run: |
+          if [[ "${{ inputs.force_forecast }}" == "true" ]]; then
+            PYTHONPATH=src python -m foxhole_forecast run --force-forecast
+          else
+            PYTHONPATH=src python -m foxhole_forecast run
+          fi
+      - name: Pass generated data to the persistence job
+        uses: actions/upload-artifact@v7
+        with:
+          name: foxhole-data
+          path: |
+            data
+            web/public/data/dashboard.json
+          if-no-files-found: error
+          retention-days: 1
+
+  persist:
+    needs: evaluate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Download generated data
+        uses: actions/download-artifact@v8
+        with:
+          name: foxhole-data
+          path: .
+      - name: Commit new observations and results
+        run: |
+          git config user.name "foxhole-forecast[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data web/public/data/dashboard.json
+          if git diff --cached --quiet; then
+            echo "No persisted changes"
+          else
+            git commit -m "data: update war observations and forecasts"
+            git push
+          fi

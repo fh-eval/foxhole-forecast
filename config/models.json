@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "models": [
+    {
+      "series_id": "openrouter-openai-gpt-5.6-luna",
+      "label": "GPT-5.6 Luna",
+      "gateway": "openrouter",
+      "model": "openai/gpt-5.6-luna",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "paid": true,
+      "provider_only": ["openai"],
+      "omit_temperature": true,
+      "allow_fallbacks": false,
+      "enabled": true
+    },
+    {
+      "series_id": "openrouter-google-gemini-3.7-flash",
+      "label": "Gemini 3.7 Flash",
+      "gateway": "openrouter",
+      "model": "google/gemini-3.7-flash",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "paid": true,
+      "provider_only": ["google-vertex"],
+      "omit_temperature": true,
+      "allow_fallbacks": false,
+      "enabled": true
+    },
+    {
+      "series_id": "nvidia-z-ai-glm-5.2",
+      "label": "GLM 5.2",
+      "gateway": "nvidia_nim",
+      "model": "z-ai/glm-5.2",
+      "api_key_env": "NVIDIA_API_KEY",
+      "paid": false,
+      "enabled": true
+    },
+    {
+      "series_id": "nvidia-deepseek-v4-flash",
+      "label": "DeepSeek V4 Flash",
+      "gateway": "nvidia_nim",
+      "model": "deepseek-ai/deepseek-v4-flash",
+      "api_key_env": "NVIDIA_API_KEY",
+      "paid": false,
+      "enabled": false,
+      "disabled_reason": "NVIDIA marks the free endpoint deprecated; enable only after configuring an available partner endpoint."
+    },
+    {
+      "series_id": "openrouter-stealth-ox-alpha",
+      "label": "Ox Alpha",
+      "gateway": "openrouter",
+      "model": "stealth/ox-alpha",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "paid": false,
+      "structured_outputs": false,
+      "allow_fallbacks": false,
+      "enabled": true
+    }
+  ]
+}

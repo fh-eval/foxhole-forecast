@@ -1,0 +1,298 @@
+---
+import "../styles/global.css";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content="A live, prospective evaluation of LLM forecasts on the Foxhole war." />
+    <title>Foxhole Forecast</title>
+  </head>
+  <body>
+    <header class="masthead">
+      <div class="masthead__eyebrow">LIVE-1 / ABLE · PROSPECTIVE MODEL EVAL</div>
+      <div class="masthead__body page-width">
+        <div>
+          <h1>Foxhole <span>Forecast</span></h1>
+          <p class="lede">Who is the smartest of them all?</p>
+          <p class="sublede">Models publish their calls before the front moves. The public War API settles every prediction.</p>
+        </div>
+        <div class="war-stamp" aria-live="polite">
+          <span class="pulse"></span>
+          <div><small>OBSERVING</small><strong id="war-number">Waiting for data</strong></div>
+        </div>
+      </div>
+    </header>
+
+    <nav class="section-nav" aria-label="Page sections">
+      <div class="page-width">
+        <a href="#scoreboard">Scoreboard</a>
+        <a href="#briefings">Briefings</a>
+        <a href="#outlook">Base outlook</a>
+        <a href="#predictions">Predictions</a>
+        <a href="#history">History</a>
+        <a href="#method">Method</a>
+      </div>
+    </nav>
+
+    <main class="page-width">
+      <section class="status-strip" aria-label="Collection status">
+        <div><small>LAST OBSERVATION</small><strong id="last-observation">—</strong></div>
+        <div><small>STRATEGIC BASES</small><strong id="base-count">—</strong></div>
+        <div><small>COLLECTOR POLLS</small><strong id="poll-count">—</strong></div>
+        <div><small>TIMING RESOLUTION</small><strong>≤ 15 min</strong></div>
+      </section>
+
+      <section id="scoreboard" class="section-block">
+        <div class="section-heading">
+          <div><p class="kicker">Current standings</p><h2>Forecast skill</h2></div>
+          <p>Brier skill versus always predicting “no change.” Positive beats the baseline; negative does worse.</p>
+        </div>
+        <div id="score-grid" class="score-grid" aria-live="polite"></div>
+      </section>
+
+      <section id="briefings" class="section-block">
+        <div class="section-heading">
+          <div><p class="kicker">What they think now</p><h2>Latest war briefings</h2></div>
+          <p>Short model-authored summaries. Private reasoning is never requested or displayed.</p>
+        </div>
+        <div id="briefing-list" class="briefing-list"></div>
+      </section>
+
+      <section id="outlook" class="section-block">
+        <div class="section-heading">
+          <div><p class="kicker">Probability by horizon</p><h2>Base-change outlook</h2></div>
+          <p>Each percentage is the model's chance that the named base changes ownership state by that horizon. The list is ordered by 24-hour risk.</p>
+        </div>
+        <div class="table-shell outlook-shell">
+          <table>
+            <thead><tr><th>Model</th><th>Base and evidence</th><th>Owner now</th><th>1 hour</th><th>6 hours</th><th>24 hours</th></tr></thead>
+            <tbody id="outlook-rows"></tbody>
+          </table>
+          <p id="outlook-empty" class="empty-state" hidden>No named base forecasts yet.</p>
+        </div>
+      </section>
+
+      <section id="predictions" class="section-block">
+        <div class="section-heading section-heading--controls">
+          <div><p class="kicker">Calls on the board</p><h2>Discrete predictions</h2></div>
+          <div class="segmented" role="group" aria-label="Prediction status">
+            <button class="active" data-bet-view="open">Open</button>
+            <button data-bet-view="resolved">Resolved</button>
+          </div>
+        </div>
+        <div class="table-shell">
+          <table>
+            <thead><tr><th>Model</th><th>Prediction</th><th>Confidence</th><th>ETA (UTC)</th><th>Status</th></tr></thead>
+            <tbody id="prediction-rows"></tbody>
+          </table>
+          <p id="prediction-empty" class="empty-state" hidden>No predictions in this view yet.</p>
+        </div>
+      </section>
+
+      <section id="history" class="section-block">
+        <div class="section-heading section-heading--controls">
+          <div><p class="kicker">Track the narrative</p><h2>Model history</h2></div>
+          <label class="select-label">Model <select id="history-model"></select></label>
+        </div>
+        <ol id="history-list" class="history-list"></ol>
+      </section>
+
+      <section id="method" class="section-block methodology">
+        <div><p class="kicker">How this works</p><h2>A forecast, not a hindsight test</h2></div>
+        <div class="method-grid">
+          <article><span>01</span><h3>Observe</h3><p>The official Foxhole War API is polled every 15 minutes. A tagged FoxholeStats snapshot backfills pre-launch history only; every prompt remains cutoff-safe.</p></article>
+          <article><span>02</span><h3>Forecast</h3><p>Each model scouts six regions, then publishes probabilities at 1, 6, and 24 hours plus exact state-change calls.</p></article>
+          <article><span>03</span><h3>Settle</h3><p>Omitted bases count as 0% change. Outcomes are scored with integrated Brier error and timing distance to the observed interval.</p></article>
+        </div>
+        <p class="fine-print">Foxhole Forecast is an independent, non-commercial experiment. Foxhole is developed by Siege Camp. Model summaries are predictions, not gameplay advice.</p>
+      </section>
+    </main>
+
+    <footer><div class="page-width"><strong>FOXHOLE FORECAST</strong><span id="generated-at">No dataset generated yet</span></div></footer>
+
+    <script>
+      // @ts-nocheck
+      const element = (tag, className, text) => {
+        const value = document.createElement(tag);
+        if (className) value.className = className;
+        if (text !== undefined) value.textContent = String(text);
+        return value;
+      };
+      const formatDate = (value) => value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value)) + " UTC" : "—";
+      const percent = (value) => `${Math.round(Number(value) * 100)}%`;
+      const eventLabel = (value) => String(value || "").replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+      let dashboard = null;
+      let betView = "open";
+
+      function renderScores(models) {
+        const grid = document.querySelector("#score-grid");
+        grid.replaceChildren();
+        if (!models.length) {
+          grid.append(element("p", "empty-state", "No model cohorts yet. Collection can begin as soon as provider keys are configured."));
+          return;
+        }
+        models.forEach((model, index) => {
+          const card = element("article", "score-card");
+          const rank = element("span", "rank", String(index + 1).padStart(2, "0"));
+          const title = element("h3", "", model.label || model.series_id);
+          const skill = model.brier_skill_score;
+          const score = element("strong", `score ${skill != null && skill < 0 ? "score--negative" : ""}`, skill == null ? "Collecting" : `${Number(skill).toFixed(1)}`);
+          const unit = element("small", "", skill == null ? "awaiting matured cohorts" : "Brier skill score");
+          const meta = element("div", "score-meta");
+          meta.append(
+            stat("Matured", model.complete_runs ?? 0),
+            stat("Hits", model.event_hits ?? 0),
+            stat("ETA median", model.median_eta_error_minutes == null ? "—" : `${model.median_eta_error_minutes}m`),
+          );
+          const identity = element("p", "model-id", `${model.gateway || "provider"} · ${model.returned_model || model.requested_model || model.series_id}`);
+          card.append(rank, title, score, unit, meta, identity);
+          grid.append(card);
+        });
+      }
+
+      function stat(label, value) {
+        const wrapper = element("div", "");
+        wrapper.append(element("small", "", label), element("strong", "", value));
+        return wrapper;
+      }
+
+      function renderBriefings(models) {
+        const list = document.querySelector("#briefing-list");
+        list.replaceChildren();
+        const available = models.filter((model) => model.latest?.war_summary);
+        if (!available.length) {
+          list.append(element("p", "empty-state", "The first model briefing will appear after a valid forecast cohort."));
+          return;
+        }
+        available.forEach((model) => {
+          const article = element("article", "briefing");
+          const header = element("div", "briefing__header");
+          header.append(element("h3", "", model.label), element("time", "", formatDate(model.latest.cutoff)));
+          const regions = element("p", "region-list", model.latest.selected_regions?.join(" · ") || "No selected regions");
+          article.append(header, element("p", "briefing__copy", model.latest.war_summary), regions);
+          list.append(article);
+        });
+      }
+
+      function renderPredictions() {
+        const rows = document.querySelector("#prediction-rows");
+        const empty = document.querySelector("#prediction-empty");
+        rows.replaceChildren();
+        const bets = betView === "open" ? dashboard.open_bets : dashboard.resolved_bets;
+        empty.hidden = bets.length > 0;
+        bets.slice(0, 100).forEach((bet) => {
+          const row = document.createElement("tr");
+          const prediction = `${eventLabel(bet.event_type)} — ${bet.base_name}, ${bet.map_name}`;
+          const status = bet.status === "hit" && bet.eta_error_minutes != null ? `Hit · ${bet.eta_error_minutes}m error` : eventLabel(bet.status);
+          const modelCell = element("td", "", bet.model_label);
+          const predictionCell = element("td", "prediction-cell");
+          predictionCell.append(element("strong", "", prediction));
+          const evidence = element("div", "evidence-list");
+          (bet.evidence || []).forEach((item) => {
+            evidence.append(element("span", "evidence-chip", `${item.metric_id} · ${item.relevance}/10`));
+          });
+          predictionCell.append(evidence);
+          row.append(
+            modelCell,
+            predictionCell,
+            element("td", "", percent(bet.confidence)),
+            element("td", "", formatDate(bet.eta_utc)),
+            element("td", `status status--${bet.status}`, status),
+          );
+          rows.append(row);
+        });
+      }
+
+      function renderOutlook() {
+        const rows = document.querySelector("#outlook-rows");
+        const empty = document.querySelector("#outlook-empty");
+        rows.replaceChildren();
+        const forecasts = dashboard.base_forecasts || [];
+        empty.hidden = forecasts.length > 0;
+        forecasts.slice(0, 100).forEach((forecast) => {
+          const row = document.createElement("tr");
+          const baseCell = element("td", "prediction-cell");
+          baseCell.append(element("strong", "", `${forecast.base_name}, ${forecast.map_name}`));
+          const evidence = element("div", "evidence-list");
+          (forecast.evidence || []).slice(0, 5).forEach((item) => {
+            evidence.append(element("span", "evidence-chip", `${item.metric_id} · ${item.relevance}/10`));
+          });
+          baseCell.append(evidence);
+          row.append(
+            element("td", "", forecast.model_label),
+            baseCell,
+            element("td", `faction faction--${String(forecast.current_team).toLowerCase()}`, eventLabel(forecast.current_team)),
+            element("td", "probability", percent(forecast.p_change_1h)),
+            element("td", "probability", percent(forecast.p_change_6h)),
+            element("td", "probability probability--primary", percent(forecast.p_change_24h)),
+          );
+          rows.append(row);
+        });
+      }
+
+      function setupHistory(models) {
+        const select = document.querySelector("#history-model");
+        select.replaceChildren();
+        models.forEach((model) => {
+          const option = element("option", "", model.label || model.series_id);
+          option.value = model.series_id;
+          select.append(option);
+        });
+        select.addEventListener("change", renderHistory);
+        renderHistory();
+      }
+
+      function renderHistory() {
+        const select = document.querySelector("#history-model");
+        const list = document.querySelector("#history-list");
+        list.replaceChildren();
+        const model = dashboard.models.find((item) => item.series_id === select.value) || dashboard.models[0];
+        if (!model?.history?.length) {
+          list.append(element("li", "empty-state", "No history for this model yet."));
+          return;
+        }
+        model.history.forEach((entry) => {
+          const item = element("li", "history-item");
+          const marker = element("span", `history-marker history-marker--${entry.settlement_status}`);
+          const body = element("div", "");
+          const top = element("div", "history-item__top");
+          top.append(element("time", "", formatDate(entry.cutoff)), element("strong", "", `${entry.forecast_count} bases · ${entry.settlement_status}`));
+          body.append(top, element("p", "", entry.war_summary || `Run ${entry.status}; no summary available.`));
+          item.append(marker, body);
+          list.append(item);
+        });
+      }
+
+      async function boot() {
+        try {
+          const base = import.meta.env.BASE_URL;
+          const response = await fetch(`${base}data/dashboard.json`, { cache: "no-store" });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          dashboard = await response.json();
+          document.querySelector("#war-number").textContent = dashboard.war ? `World Conquest ${dashboard.war.warNumber}` : "Waiting for data";
+          document.querySelector("#last-observation").textContent = formatDate(dashboard.last_collected_at);
+          document.querySelector("#base-count").textContent = dashboard.strategic_base_count ?? 0;
+          document.querySelector("#poll-count").textContent = dashboard.collector_runs ?? 0;
+          document.querySelector("#generated-at").textContent = dashboard.generated_at ? `Generated ${formatDate(dashboard.generated_at)}` : "No dataset generated yet";
+          renderScores(dashboard.models || []);
+          renderBriefings(dashboard.models || []);
+          renderOutlook();
+          renderPredictions();
+          setupHistory(dashboard.models || []);
+        } catch (error) {
+          document.querySelector("#score-grid").append(element("p", "empty-state", `Dashboard data could not be loaded: ${error.message}`));
+        }
+      }
+
+      document.querySelectorAll("[data-bet-view]").forEach((button) => button.addEventListener("click", () => {
+        betView = button.dataset.betView;
+        document.querySelectorAll("[data-bet-view]").forEach((item) => item.classList.toggle("active", item === button));
+        if (dashboard) renderPredictions();
+      }));
+      boot();
+    </script>
+  </body>
+</html>
