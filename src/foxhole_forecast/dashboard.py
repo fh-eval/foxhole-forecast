@@ -214,7 +214,10 @@ def build_dashboard_data() -> dict[str, Any]:
         "methodology": {
             "current_protocol": "event_outcome_v4",
             "predictions_per_round": 8,
-            "tranches": {"immediate": "0-6h", "extended": "6-24h"},
+            "tranches": {
+                "immediate": "ETA within 6 hours",
+                "extended": "ETA 6-24 hours",
+            },
             "partial_credit_window_minutes": 180,
             "neutral_alternative_state_credit": 0.75,
             "horizons_hours": [1, 6, 24],

@@ -1,0 +1,145 @@
+---
+import "../styles/global.css";
+
+const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content="How Foxhole Forecast settles and scores timed model predictions." />
+    <title>Scoring Method · Foxhole Forecast</title>
+  </head>
+  <body>
+    <header class="method-masthead">
+      <div class="masthead__eyebrow">EVENT OUTCOME PROTOCOL V4 · PUBLIC SCORING RULES</div>
+      <div class="method-hero page-width">
+        <div>
+          <p class="kicker">Methodology</p>
+          <h1>How forecasts<br /><span>earn credit</span></h1>
+          <p class="sublede">A prediction must name the base, what happens, an exact ETA, and a confidence before the event. The official War API supplies the result.</p>
+        </div>
+        <a class="method-back" href={basePath}>← Return to live scores</a>
+      </div>
+    </header>
+
+    <nav class="section-nav" aria-label="Scoring sections">
+      <div class="page-width">
+        <a href="#forecast">Forecast</a>
+        <a href="#settlement">Settlement</a>
+        <a href="#timing">Timing</a>
+        <a href="#outcome">Outcome</a>
+        <a href="#aggregation">Leaderboard</a>
+        <a href="#censoring">Censoring</a>
+        <a href="#rationale">Rationale</a>
+      </div>
+    </nav>
+
+    <main class="scoring-page page-width">
+      <section class="method-intro">
+        <p class="kicker">The short version</p>
+        <p>A correct event inside the API interval containing the predicted minute earns 100%. Credit declines in 15-minute steps as the event moves away from the ETA, reaching zero at three hours. Confusing a destruction with a completed capture earns 75% outcome credit; predicting a change when none occurs earns zero.</p>
+        <aside class="method-callout"><strong>Headline score</strong><span>Average outcome credit × timing credit across every scoreable prediction.</span></aside>
+      </section>
+
+      <section id="forecast" class="scoring-section">
+        <div class="scoring-section__heading"><p class="kicker">01</p><h2>What a model must forecast</h2></div>
+        <div class="rule-grid">
+          <article class="rule-card"><strong>8</strong><h3>Unique bases</h3><p>Every round contains exactly eight ranked predictions on eight different strategic bases.</p></article>
+          <article class="rule-card"><strong>4 + 4</strong><h3>Two ETA ranges</h3><p>Four ETAs must be after the cutoff and within six hours. Four must be more than six and no more than 24 hours after the cutoff.</p></article>
+          <article class="rule-card"><strong>2</strong><h3>Allowed events</h3><p><b>Captured</b> means ownership completes a change to the opposing faction. <b>Destroyed</b> means a faction-owned base becomes neutral—demolished and not yet rebuilt.</p></article>
+          <article class="rule-card"><strong>1–5</strong><h3>Evidence references</h3><p>Each call cites cutoff-safe metrics and rates their relevance from 1–10. Evidence ratings are shown for auditability, but are not judged or added to the score.</p></article>
+        </div>
+        <p class="method-note">A neutral base can only be forecast as captured. Each prediction also includes an exact UTC minute and confidence from 0% to 100%. Rank records the model’s priority, but does not change a prediction’s weight.</p>
+      </section>
+
+      <section id="settlement" class="scoring-section">
+        <div class="scoring-section__heading"><p class="kicker">02</p><h2>How a prediction resolves</h2></div>
+        <div class="rule-grid rule-grid--two">
+          <article class="rule-card"><h3>Finite deadline</h3><p>Each prediction remains open through <code>ETA + 3 hours</code>. We look for the first physical ownership transition for that base after the round cutoff and before that deadline.</p></article>
+          <article class="rule-card"><h3>Destruction before capture</h3><p>A faction-owned base normally becomes neutral before an enemy rebuild completes. If the model called a capture, we wait through the deadline for that follow-up. An enemy capture earns full outcome credit; destruction without a completed capture earns 75%.</p></article>
+        </div>
+        <p class="method-note">If no transition occurs by the deadline and observation coverage is adequate, the prediction is a miss. The forecast is never left open forever and is never assigned an infinite ETA error.</p>
+      </section>
+
+      <section id="timing" class="scoring-section">
+        <div class="scoring-section__heading"><p class="kicker">03</p><h2>Timing credit</h2></div>
+        <p>The public API does not reveal the exact event second. Polling tells us that a change happened between the last observation and the first observation showing it. We therefore treat that span as the event’s observed interval.</p>
+        <div class="formula-block">
+          <span>distance</span>
+          <strong>0 when the ETA is inside the observed interval; otherwise, minutes to its nearest edge</strong>
+          <span>timing component</span>
+          <strong>max(0, 1 − ceil(distance ÷ 15) ÷ 12)</strong>
+        </div>
+        <div class="credit-scale" aria-label="Timing credit examples">
+          <span><b>Inside interval</b><strong>100%</strong></span>
+          <span><b>15 min</b><strong>91.67%</strong></span>
+          <span><b>30 min</b><strong>83.33%</strong></span>
+          <span><b>1 hour</b><strong>66.67%</strong></span>
+          <span><b>90 min</b><strong>50%</strong></span>
+          <span><b>2 hours</b><strong>33.33%</strong></span>
+          <span><b>2h 30m</b><strong>16.67%</strong></span>
+          <span><b>3+ hours</b><strong>0%</strong></span>
+        </div>
+        <p class="method-caption">This is deliberately a 15-minute scale: asking for an exact minute makes the forecast concrete, but scoring does not pretend the API observed that minute exactly.</p>
+      </section>
+
+      <section id="outcome" class="scoring-section">
+        <div class="scoring-section__heading"><p class="kicker">04</p><h2>Outcome and combined credit</h2></div>
+        <div class="outcome-table" role="table" aria-label="Outcome credit table">
+          <div class="outcome-table__row outcome-table__head" role="row"><span>Prediction vs. observation</span><span>Outcome credit</span></div>
+          <div class="outcome-table__row" role="row"><span>Captured / Captured</span><strong class="score-value">100%</strong></div>
+          <div class="outcome-table__row" role="row"><span>Destroyed / Destroyed</span><strong class="score-value">100%</strong></div>
+          <div class="outcome-table__row" role="row"><span>Captured / Destroyed, or Destroyed / Captured</span><strong class="score-value">75%</strong></div>
+          <div class="outcome-table__row" role="row"><span>No qualifying transition by the deadline</span><strong class="score-value score-value--miss">0%</strong></div>
+        </div>
+        <div class="formula-block formula-block--compact"><span>prediction credit</span><strong>outcome credit × timing component</strong></div>
+        <div class="worked-example">
+          <p class="kicker">Worked example</p>
+          <h3>Correct capture, observed one hour late</h3>
+          <p><code>100% outcome × 66.67% timing = 66.67% prediction credit</code></p>
+        </div>
+      </section>
+
+      <section id="aggregation" class="scoring-section">
+        <div class="scoring-section__heading"><p class="kicker">05</p><h2>Leaderboard and confidence</h2></div>
+        <div class="rule-grid rule-grid--two">
+          <article class="rule-card"><h3>Headline forecast score</h3><p>The leaderboard is the arithmetic mean of prediction credit across all scoreable predictions for a model, multiplied by 100. Every prediction has equal weight. Open and censored predictions are excluded.</p></article>
+          <article class="rule-card"><h3>Confidence calibration</h3><p>We also retain a Brier-style squared error: <code>(confidence − prediction credit)²</code>. Lower is better. Because partial credit can be fractional rather than binary, this is an auxiliary calibration diagnostic—not the headline ranking score.</p></article>
+        </div>
+        <div class="worked-example">
+          <p class="kicker">Continuing the example</p>
+          <p>At 80% stated confidence and 66.67% prediction credit, the calibration error is <code>(0.80 − 0.6667)² ≈ 0.0178</code>.</p>
+        </div>
+      </section>
+
+      <section id="censoring" class="scoring-section">
+        <div class="scoring-section__heading"><p class="kicker">06</p><h2>When we decline to score</h2></div>
+        <p>A prediction is <b>censored</b> when the observations cannot support a fair result. Censored is a completed settlement state, but it contributes neither credit nor a miss to the model average.</p>
+        <ul class="rationale-list">
+          <li><strong>Missing coverage.</strong> A gap greater than two expected polling intervals—currently 30 minutes—means we may have missed or badly localized a transition.</li>
+          <li><strong>Ambiguous transition interval.</strong> For a coarse interval, we score only when every possible event time in that interval produces the same timing credit. Otherwise we censor it.</li>
+          <li><strong>Certain coarse miss.</strong> A wide interval can still receive zero when even its closest possible event time is outside the credit window.</li>
+        </ul>
+      </section>
+
+      <section id="rationale" class="scoring-section">
+        <div class="scoring-section__heading"><p class="kicker">07</p><h2>Why score it this way?</h2></div>
+        <ol class="rationale-list rationale-list--numbered">
+          <li><strong>Make every claim falsifiable.</strong> A named base, event, exact ETA, and confidence is more informative than “something may happen in 24 hours.”</li>
+          <li><strong>Force short- and longer-range judgment.</strong> The four-within-6h plus four-from-6–24h split prevents a model from filling a round only with safer, vague next-day bets.</li>
+          <li><strong>Match scoring precision to observation precision.</strong> Fifteen-minute steps respect the collection cadence while retaining a clear reward for being closer.</li>
+          <li><strong>Recognize the structure of Foxhole captures.</strong> Destroyed and captured are distinct outcomes, but both correctly anticipate loss of the current owner; the 75% rule captures that shared information.</li>
+          <li><strong>Close every fair bet.</strong> The three-hour grace window permits near misses while ensuring non-events eventually become zero rather than remaining unresolved indefinitely.</li>
+          <li><strong>Avoid subjective grading.</strong> Evidence and relevance ratings remain visible for human review, while numerical settlement depends only on prospective forecasts and official API observations.</li>
+        </ol>
+      </section>
+
+      <p class="method-version">Current protocol: <code>event_outcome_v4</code>. Historical rounds made under older probability-horizon protocols may remain in the archive, but do not enter the current frontend leaderboard.</p>
+    </main>
+
+    <footer><div class="page-width"><strong>FOXHOLE FORECAST</strong><a href={basePath}>Live dashboard</a></div></footer>
+  </body>
+</html>

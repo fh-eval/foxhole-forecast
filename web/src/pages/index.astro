@@ -1,5 +1,7 @@
 ---
 import "../styles/global.css";
+
+const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 ---
 
 <!doctype html>
@@ -35,6 +37,7 @@ import "../styles/global.css";
         <a href="#predictions">Predictions</a>
         <a href="#history">History</a>
         <a href="#method">Method</a>
+        <a href={`${basePath}scoring/`}>Scoring details</a>
       </div>
     </nav>
 
@@ -122,9 +125,10 @@ import "../styles/global.css";
         <div><p class="kicker">How this works</p><h2>A forecast, not a hindsight test</h2></div>
         <div class="method-grid">
           <article><span>01</span><h3>Observe</h3><p>The official Foxhole War API is polled every 15 minutes. A tagged FoxholeStats snapshot backfills pre-launch history only; every prompt remains cutoff-safe.</p></article>
-          <article><span>02</span><h3>Forecast</h3><p>Each model scouts six regions, then publishes eight ranked state-transition bets: four within six hours and four within the next 24 hours.</p></article>
+          <article><span>02</span><h3>Forecast</h3><p>Each model scouts six regions, then publishes eight ranked state-transition bets: four with ETAs within six hours and four with ETAs from six to 24 hours.</p></article>
           <article><span>03</span><h3>Settle</h3><p>Timing earns full credit inside the observed 15-minute interval and falls to zero three hours away. Neutralization and capture share partial state credit.</p></article>
         </div>
+        <a class="method-link" href={`${basePath}scoring/`}>Read the complete scoring method and rationale →</a>
         <p class="fine-print">Foxhole Forecast is an independent, non-commercial experiment. Foxhole is developed by Siege Camp. Model summaries are predictions, not gameplay advice.</p>
       </section>
     </main>
@@ -143,6 +147,11 @@ import "../styles/global.css";
       const percent = (value) => `${Math.round(Number(value) * 100)}%`;
       const number = (value) => new Intl.NumberFormat().format(Number(value) || 0);
       const eventLabel = (value) => String(value || "").replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+      const trancheLabel = (value) => value === "IMMEDIATE"
+        ? "ETA within 6 hours"
+        : value === "EXTENDED"
+          ? "ETA 6–24 hours"
+          : eventLabel(value);
       const teamLabel = (value) => value === "NONE" ? "Neutral / destroyed" : eventLabel(value);
       const regionLabel = (value) => String(value || "Unknown region").replace(/Hex$/, "").replace(/([a-z])([A-Z])/g, "$1 $2");
       const predictionTime = (value) => value ? new Intl.DateTimeFormat(undefined, {
@@ -197,7 +206,7 @@ import "../styles/global.css";
           const skill = model.brier_skill_score;
           const primary = timed ?? skill;
           const score = element("strong", `score ${primary != null && primary < 0 ? "score--negative" : ""}`, primary == null ? "Collecting" : `${Number(primary).toFixed(1)}`);
-          const unit = element("small", "", primary == null ? "awaiting resolved bets" : timed != null ? "timing credit / 100" : "legacy Brier skill");
+          const unit = element("small", "", primary == null ? "awaiting resolved bets" : timed != null ? "prediction credit / 100" : "legacy Brier skill");
           const meta = element("div", "score-meta");
           meta.append(
             stat("Matured", model.complete_runs ?? 0),
@@ -416,7 +425,7 @@ import "../styles/global.css";
             const row = element("article", "round-bet");
             const meta = element("div", "round-bet__meta");
             meta.append(
-              element("span", "", `#${bet.rank ?? "—"} · ${eventLabel(bet.tranche)} · ${regionLabel(bet.map_name)}`),
+              element("span", "", `#${bet.rank ?? "—"} · ${trancheLabel(bet.tranche)} · ${regionLabel(bet.map_name)}`),
               element("small", `status status--${bet.status}`, predictionStatus(bet)),
             );
             row.append(meta, predictionHeadline(bet), supportingEvidence(bet.evidence));
