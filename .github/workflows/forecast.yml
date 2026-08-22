@@ -1,9 +1,19 @@
-name: Collect observations
+name: Forecast cohort
 
 on:
   schedule:
-    - cron: "7,22,37,52 * * * *"
+    - cron: "17 */3 * * *"
   workflow_dispatch:
+    inputs:
+      force_forecast:
+        description: Run a forecast even if this three-hour slot already exists
+        required: false
+        default: false
+        type: boolean
+      series_id:
+        description: Optionally run only this model series
+        required: false
+        type: string
 
 permissions: {}
 
@@ -26,15 +36,28 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-      - name: Collect official data, settle bets, and publish
+      - name: Run the due three-hour forecast cohort
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          DEEPSEEK_KEY: ${{ secrets.DEEPSEEK_KEY }}
+          SERIES_ID: ${{ inputs.series_id }}
         run: |
-          PYTHONPATH=src python -m foxhole_forecast collect >/dev/null
+          series_args=()
+          if [[ -n "$SERIES_ID" ]]; then
+            series_args+=(--series "$SERIES_ID")
+          fi
+          if [[ "${{ inputs.force_forecast }}" == "true" ]]; then
+            PYTHONPATH=src python -m foxhole_forecast forecast --force "${series_args[@]}" >/dev/null
+          else
+            PYTHONPATH=src python -m foxhole_forecast forecast "${series_args[@]}" >/dev/null
+          fi
           PYTHONPATH=src python -m foxhole_forecast score >/dev/null
           PYTHONPATH=src python -m foxhole_forecast build-dashboard >/dev/null
       - name: Pass generated data to the persistence job
         uses: actions/upload-artifact@v7
         with:
-          name: foxhole-collection-data
+          name: foxhole-forecast-data
           path: |
             data
             web/public/data/dashboard.json
@@ -55,11 +78,11 @@ jobs:
       - name: Download generated data
         uses: actions/download-artifact@v8
         with:
-          name: foxhole-collection-data
+          name: foxhole-forecast-data
           path: .
       - name: Rebuild dashboard with the checked-out source
         run: PYTHONPATH=src python3 -m foxhole_forecast build-dashboard >/dev/null
-      - name: Commit new observations and results
+      - name: Commit new forecasts and scores
         run: |
           git config user.name "foxhole-forecast[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -67,7 +90,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No persisted changes"
           else
-            git commit -m "data: update observations and scores"
+            git commit -m "data: update forecasts and scores"
             git fetch origin main
             git rebase origin/main
             git push

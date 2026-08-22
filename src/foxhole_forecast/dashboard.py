@@ -104,9 +104,12 @@ def build_dashboard_data() -> dict[str, Any]:
                 ],
                 "status": bet["status"],
                 "eta_error_minutes": bet["eta_error_minutes"],
+                "eta_error_min_minutes": bet.get("eta_error_min_minutes"),
+                "eta_error_max_minutes": bet.get("eta_error_max_minutes"),
                 "brier": bet["brier"],
                 "state_credit": bet.get("state_credit"),
                 "timing_credit": bet.get("timing_credit"),
+                "settlement_reason": bet.get("settlement_reason"),
             }
             presented_round_bets.append(presented)
             (open_bets if bet["status"] == "open" else resolved_bets).append(presented)
@@ -196,7 +199,7 @@ def build_dashboard_data() -> dict[str, Any]:
     base_forecasts.sort(key=lambda row: (-row["p_change_24h"], row["model_label"], row["base_name"]))
     rounds.sort(key=lambda row: row["cutoff"], reverse=True)
     output = {
-        "schema_version": 4,
+        "schema_version": 5,
         "generated_at": isoformat(),
         "war": latest.get("war"),
         "last_collected_at": latest.get("observed_at"),

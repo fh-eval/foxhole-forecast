@@ -1,0 +1,19 @@
+{
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "foxhole-forecast-watchdog",
+  "main": "src/index.mjs",
+  "compatibility_date": "2026-08-22",
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "vars": {
+    "GITHUB_OWNER": "fh-eval",
+    "GITHUB_REPO": "foxhole-forecast",
+    "GITHUB_REF": "main",
+    "COLLECT_WORKFLOW": "pipeline.yml",
+    "FORECAST_WORKFLOW": "forecast.yml",
+    "LATEST_DATA_URL": "https://raw.githubusercontent.com/fh-eval/foxhole-forecast/main/data/raw/latest.json",
+    "STATE_DATA_URL": "https://raw.githubusercontent.com/fh-eval/foxhole-forecast/main/data/state.json",
+    "STALE_AFTER_MINUTES": "14"
+  }
+}

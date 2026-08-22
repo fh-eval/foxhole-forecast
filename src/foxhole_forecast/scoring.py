@@ -152,8 +152,11 @@ def _settle_timed_run(
         first = min(matching, key=lambda row: row["observed_to"]) if matching else None
         outcome: float | None
         eta_error: float | None = None
+        eta_error_min: float | None = None
+        eta_error_max: float | None = None
         timing_credit: float | None = None
         state_credit: float | None = None
+        settlement_reason: str | None = None
         matched = first
         if first and _transition_is_covered(
             first, collector_runs, run["war_id"], cutoff, settings
@@ -242,12 +245,47 @@ def _settle_timed_run(
                     status = "partial"
                 else:
                     status = "miss"
+                settlement_reason = "observed_transition"
         elif first:
-            status = "censored"
-            outcome = None
+            interval_result = _certain_interval_timing_credit(
+                eta,
+                parse_time(first["observed_from"]),
+                parse_time(first["observed_to"]),
+                cutoff,
+            )
+            if interval_result is None:
+                status = "censored"
+                outcome = None
+                settlement_reason = "ambiguous_transition_interval"
+            else:
+                interval_credit, eta_error_min, eta_error_max = interval_result
+                predicted_outcome = prediction.get("outcome")
+                if predicted_outcome:
+                    state_credit = _outcome_credit(
+                        prediction.get("current_team"),
+                        predicted_outcome,
+                        first.get("to_team"),
+                    )
+                else:
+                    state_credit = _state_credit(
+                        prediction.get("current_team"),
+                        prediction.get("destination_team"),
+                        first.get("to_team"),
+                    )
+                timing_credit = state_credit * interval_credit
+                outcome = timing_credit
+                status = (
+                    "hit"
+                    if timing_credit == 1
+                    else "partial"
+                    if timing_credit > 0
+                    else "miss"
+                )
+                settlement_reason = "interval_timing_credit_certain"
         elif now < bet_deadline:
             status = "open"
             outcome = None
+            settlement_reason = "awaiting_deadline"
         elif _coverage_status(
             collector_runs, run["war_id"], cutoff, bet_deadline, settings
         ):
@@ -255,9 +293,11 @@ def _settle_timed_run(
             outcome = 0.0
             state_credit = 0.0
             timing_credit = 0.0
+            settlement_reason = "no_transition_by_deadline"
         else:
             status = "censored"
             outcome = None
+            settlement_reason = "insufficient_observation_coverage"
         settled.append(
             {
                 **prediction,
@@ -274,12 +314,19 @@ def _settle_timed_run(
                 "eta_error_minutes": (
                     round(eta_error, 2) if eta_error is not None else None
                 ),
+                "eta_error_min_minutes": (
+                    round(eta_error_min, 2) if eta_error_min is not None else None
+                ),
+                "eta_error_max_minutes": (
+                    round(eta_error_max, 2) if eta_error_max is not None else None
+                ),
                 "timing_credit": (
                     round(timing_credit, 8) if timing_credit is not None else None
                 ),
                 "state_credit": (
                     round(state_credit, 8) if state_credit is not None else None
                 ),
+                "settlement_reason": settlement_reason,
                 "matched_transition": matched,
             }
         )
@@ -288,7 +335,7 @@ def _settle_timed_run(
     timing_values = [row["timing_credit"] for row in resolved]
     brier_values = [row["brier"] for row in resolved]
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "protocol": (
             "event_outcome_v4"
             if all("outcome" in row for row in run["forecast"]["predictions"])
@@ -349,6 +396,27 @@ def _transition_is_covered(
 def _timing_credit(distance_minutes: float) -> float:
     blocks = math.ceil(max(0.0, distance_minutes - 1e-9) / 15)
     return max(0.0, 1.0 - blocks / 12)
+
+
+def _certain_interval_timing_credit(
+    eta: datetime,
+    start: datetime,
+    end: datetime,
+    cutoff: datetime,
+) -> tuple[float, float, float] | None:
+    """Return timing credit only when every possible event time scores identically."""
+    if start < cutoff or end < start:
+        return None
+    minimum_error = _interval_distance_minutes(eta, start, end)
+    maximum_error = max(
+        abs((eta - start).total_seconds()),
+        abs((eta - end).total_seconds()),
+    ) / 60
+    best_credit = _timing_credit(minimum_error)
+    worst_credit = _timing_credit(maximum_error)
+    if not math.isclose(best_credit, worst_credit, abs_tol=1e-12):
+        return None
+    return best_credit, minimum_error, maximum_error
 
 
 def _state_credit(

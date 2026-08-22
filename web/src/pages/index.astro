@@ -370,6 +370,13 @@ import "../styles/global.css";
       }
 
       function predictionStatus(bet) {
+        if (bet.status === "censored" && bet.settlement_reason === "ambiguous_transition_interval") {
+          return "Not scored · transition time ambiguous";
+        }
+        if (bet.status === "censored") return "Not scored · missing observations";
+        if (bet.status === "miss" && bet.settlement_reason === "interval_timing_credit_certain") {
+          return "Miss · timing definitely outside ±3h";
+        }
         if (["hit", "partial"].includes(bet.status) && bet.eta_error_minutes != null) {
           const credit = bet.timing_credit == null ? "" : ` · ${percent(bet.timing_credit)} credit`;
           return `${eventLabel(bet.status)} · ${bet.eta_error_minutes}m error${credit}`;

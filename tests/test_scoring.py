@@ -9,6 +9,106 @@ from foxhole_forecast.storage import isoformat
 
 
 class ScoringTests(unittest.TestCase):
+    def _single_timed_run(
+        self, cutoff: datetime, eta: datetime, confidence: float = 0.55
+    ) -> dict:
+        return {
+            "run_id": "run-interval",
+            "cohort_id": "cohort-1",
+            "series_id": "model-interval",
+            "cutoff": isoformat(cutoff),
+            "war_id": "war-1",
+            "forecast": {
+                "predictions": [
+                    {
+                        "rank": 1,
+                        "tranche": "EXTENDED",
+                        "base_id": "base-1",
+                        "base_name": "Base One",
+                        "map_name": "TestHex",
+                        "current_team": "WARDENS",
+                        "outcome": "CAPTURED",
+                        "confidence": confidence,
+                        "eta_utc": isoformat(eta),
+                        "evidence": [],
+                    }
+                ]
+            },
+        }
+
+    def test_coarse_interval_is_scored_when_all_possible_times_are_misses(self) -> None:
+        settings = Settings.load()
+        cutoff = datetime(2026, 1, 1, tzinfo=UTC)
+        eta = cutoff + timedelta(hours=12)
+        run = self._single_timed_run(cutoff, eta)
+        transition = {
+            "war_id": "war-1",
+            "base_id": "base-1",
+            "base_name": "Base One",
+            "map_name": "TestHex",
+            "from_team": "WARDENS",
+            "to_team": "COLONIALS",
+            "event_type": "CAPTURED_BY_COLONIALS",
+            "actor": "COLONIALS",
+            "observed_from": isoformat(cutoff + timedelta(hours=3)),
+            "observed_to": isoformat(cutoff + timedelta(hours=4)),
+        }
+        collectors = [
+            {"war_id": "war-1", "observed_at": isoformat(cutoff)},
+            {
+                "war_id": "war-1",
+                "observed_at": isoformat(cutoff + timedelta(hours=4)),
+            },
+        ]
+
+        settlement = settle_run(
+            run,
+            {"strategic_base_ids": ["base-1"]},
+            [transition],
+            collectors,
+            settings,
+            cutoff + timedelta(hours=16),
+        )
+
+        bet = settlement["timed_predictions"][0]
+        self.assertEqual(bet["status"], "miss")
+        self.assertEqual(bet["settlement_reason"], "interval_timing_credit_certain")
+        self.assertEqual(bet["timing_credit"], 0)
+        self.assertEqual(bet["state_credit"], 1)
+        self.assertEqual(bet["eta_error_min_minutes"], 480)
+        self.assertEqual(bet["eta_error_max_minutes"], 540)
+        self.assertAlmostEqual(bet["brier"], 0.3025)
+
+    def test_coarse_interval_stays_censored_when_timing_credit_varies(self) -> None:
+        settings = Settings.load()
+        cutoff = datetime(2026, 1, 1, tzinfo=UTC)
+        eta = cutoff + timedelta(hours=3, minutes=30)
+        run = self._single_timed_run(cutoff, eta)
+        transition = {
+            "war_id": "war-1",
+            "base_id": "base-1",
+            "from_team": "WARDENS",
+            "to_team": "COLONIALS",
+            "event_type": "CAPTURED_BY_COLONIALS",
+            "actor": "COLONIALS",
+            "observed_from": isoformat(cutoff + timedelta(hours=3)),
+            "observed_to": isoformat(cutoff + timedelta(hours=4)),
+        }
+
+        settlement = settle_run(
+            run,
+            {"strategic_base_ids": ["base-1"]},
+            [transition],
+            [{"war_id": "war-1", "observed_at": isoformat(cutoff)}],
+            settings,
+            cutoff + timedelta(hours=7),
+        )
+
+        bet = settlement["timed_predictions"][0]
+        self.assertEqual(bet["status"], "censored")
+        self.assertEqual(bet["settlement_reason"], "ambiguous_transition_interval")
+        self.assertIsNone(bet["outcome"])
+
     def test_timed_prediction_gives_partial_credit_for_neutralization(self) -> None:
         settings = Settings.load()
         cutoff = datetime(2026, 1, 1, tzinfo=UTC)
