@@ -5,6 +5,7 @@ from datetime import timedelta
 from typing import Any
 
 from .config import DATA_DIR, Settings
+from .domain import strategic_base_type
 from .storage import parse_time, read_json, read_jsonl
 
 
@@ -359,6 +360,7 @@ def build_detail_packet(settings: Settings, selected_regions: list[str]) -> dict
                     else ["CAPTURED", "DESTROYED"]
                 ),
                 "icon_type": base.get("icon_type"),
+                "base_type": strategic_base_type(base.get("icon_type")),
                 "flags": base.get("flags", []),
                 "x": base.get("x"),
                 "y": base.get("y"),

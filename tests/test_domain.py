@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from foxhole_forecast.domain import base_id, transition_events
+from foxhole_forecast.domain import base_id, strategic_base_type, transition_events
 
 
 class DomainTests(unittest.TestCase):
@@ -14,6 +14,11 @@ class DomainTests(unittest.TestCase):
             "map_name": "DeadLandsHex",
             "team": "WARDENS",
         }
+
+    def test_strategic_base_type_uses_official_icon_mapping(self) -> None:
+        self.assertEqual(strategic_base_type(45), "Relic Base")
+        self.assertEqual(strategic_base_type(58), "Town Base III")
+        self.assertEqual(strategic_base_type(None), "Strategic Base")
 
     def test_loss_to_neutral_emits_two_semantic_events(self) -> None:
         current = {self.identifier: {**self.base, "team": "NONE"}}
@@ -56,4 +61,3 @@ class DomainTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

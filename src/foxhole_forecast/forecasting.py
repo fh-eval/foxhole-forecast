@@ -281,6 +281,8 @@ def _freeze_evidence(
         prediction["current_team"] = base.get("current_owner", base.get("team"))
         prediction["base_name"] = base.get("name")
         prediction["map_name"] = base.get("map_name")
+        prediction["icon_type"] = base.get("icon_type")
+        prediction["base_type"] = base.get("base_type")
         for evidence in prediction.get("evidence", []):
             metric = metrics.get(evidence.get("metric_id"))
             if metric:

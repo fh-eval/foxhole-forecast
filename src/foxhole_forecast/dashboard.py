@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 from .config import DATA_DIR, ROOT
+from .domain import strategic_base_type
 from .storage import isoformat, parse_time, read_json, read_jsonl, write_json
 
 
@@ -31,6 +32,7 @@ def build_dashboard_data() -> dict[str, Any]:
     for run in runs:
         series = run["series_id"]
         metric_lookup = _metric_lookup(run)
+        cutoff_bases = _base_lookup(run)
         if run.get("status") == "valid" and (
             series not in latest_valid_runs or run["cutoff"] > latest_valid_runs[series]["cutoff"]
         ):
@@ -62,6 +64,7 @@ def build_dashboard_data() -> dict[str, Any]:
         }
         for bet in settled_bets:
             base = bases.get(bet["base_id"], {})
+            cutoff_base = cutoff_bases.get(bet["base_id"], {})
             forecast_bet = forecast_lookup.get(
                 (bet.get("base_id"), bet.get("eta_utc"), bet.get("rank")), {}
             )
@@ -73,6 +76,17 @@ def build_dashboard_data() -> dict[str, Any]:
                 "cutoff": run["cutoff"],
                 "base_id": bet["base_id"],
                 "base_name": bet.get("base_name") or base.get("name", bet["base_id"]),
+                "base_type": (
+                    bet.get("base_type")
+                    or forecast_bet.get("base_type")
+                    or cutoff_base.get("base_type")
+                    or strategic_base_type(
+                        bet.get("icon_type")
+                        or forecast_bet.get("icon_type")
+                        or cutoff_base.get("icon_type")
+                        or base.get("icon_type")
+                    )
+                ),
                 "map_name": bet.get("map_name") or base.get("map_name", "Unknown region"),
                 "event_type": bet.get("event_type"),
                 "actor": bet.get("actor"),
@@ -181,7 +195,7 @@ def build_dashboard_data() -> dict[str, Any]:
     base_forecasts.sort(key=lambda row: (-row["p_change_24h"], row["model_label"], row["base_name"]))
     rounds.sort(key=lambda row: row["cutoff"], reverse=True)
     output = {
-        "schema_version": 2,
+        "schema_version": 3,
         "generated_at": isoformat(),
         "war": latest.get("war"),
         "last_collected_at": latest.get("observed_at"),
@@ -315,6 +329,21 @@ def _metric_lookup(run: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {
         metric["metric_id"]: metric
         for metric in packet.get("selected_metrics", [])
+    }
+
+
+def _base_lookup(run: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    path = (
+        DATA_DIR
+        / "raw"
+        / "cohorts"
+        / run["cohort_id"]
+        / f"{run['series_id']}-detail-packet.json"
+    )
+    packet = read_json(path, default={})
+    return {
+        base["base_id"]: base
+        for base in packet.get("strategic_bases", [])
     }
 
 

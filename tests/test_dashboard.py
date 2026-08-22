@@ -37,6 +37,8 @@ class DashboardTests(unittest.TestCase):
                     "name": "Test Base",
                     "map_name": "TestHex",
                     "current_owner": "WARDENS",
+                    "icon_type": 45,
+                    "base_type": "Relic Base",
                 }
             ],
             "selected_metrics": [
@@ -53,6 +55,8 @@ class DashboardTests(unittest.TestCase):
         prediction = frozen["predictions"][0]
         self.assertEqual(prediction["current_team"], "WARDENS")
         self.assertEqual(prediction["base_name"], "Test Base")
+        self.assertEqual(prediction["icon_type"], 45)
+        self.assertEqual(prediction["base_type"], "Relic Base")
         self.assertEqual(prediction["evidence"][0]["value"], 42)
 
     def test_war_api_snapshot_summarizes_current_official_inputs(self) -> None:

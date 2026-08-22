@@ -6,6 +6,23 @@ from typing import Any, Iterable
 
 
 TEAMS = {"NONE", "WARDENS", "COLONIALS"}
+STRATEGIC_BASE_TYPES = {
+    27: "Keep",
+    45: "Relic Base",
+    46: "Relic Base II",
+    47: "Relic Base III",
+    56: "Town Base I",
+    57: "Town Base II",
+    58: "Town Base III",
+}
+
+
+def strategic_base_type(icon_type: Any) -> str:
+    """Return the official War API structure class as a readable label."""
+    try:
+        return STRATEGIC_BASE_TYPES.get(int(icon_type), "Strategic Base")
+    except (TypeError, ValueError):
+        return "Strategic Base"
 
 
 def base_id(map_name: str, x: float, y: float) -> str:
