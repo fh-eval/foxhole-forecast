@@ -14,13 +14,14 @@
       "enabled": true
     },
     {
-      "series_id": "openrouter-google-gemini-3.7-flash",
+      "series_id": "openrouter-google-gemini-3.7-flash-json-v1",
       "label": "Gemini 3.7 Flash",
       "gateway": "openrouter",
       "model": "google/gemini-3.7-flash",
       "api_key_env": "OPENROUTER_API_KEY",
       "paid": true,
       "provider_only": ["google-vertex"],
+      "structured_outputs": false,
       "omit_temperature": true,
       "allow_fallbacks": false,
       "enabled": true
@@ -32,7 +33,8 @@
       "model": "z-ai/glm-5.2",
       "api_key_env": "NVIDIA_API_KEY",
       "paid": false,
-      "enabled": true
+      "enabled": false,
+      "disabled_reason": "NVIDIA retired this endpoint on 2026-08-21; retain the series definition for historical results only."
     },
     {
       "series_id": "nvidia-deepseek-v4-flash",
