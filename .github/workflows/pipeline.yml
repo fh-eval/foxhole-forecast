@@ -10,6 +10,10 @@ on:
         required: false
         default: false
         type: boolean
+      series_id:
+        description: Optionally run only this model series
+        required: false
+        type: string
 
 permissions: {}
 
@@ -36,11 +40,16 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
           DEEPSEEK_KEY: ${{ secrets.DEEPSEEK_KEY }}
+          SERIES_ID: ${{ inputs.series_id }}
         run: |
+          series_args=()
+          if [[ -n "$SERIES_ID" ]]; then
+            series_args+=(--series "$SERIES_ID")
+          fi
           if [[ "${{ inputs.force_forecast }}" == "true" ]]; then
-            PYTHONPATH=src python -m foxhole_forecast run --force-forecast
+            PYTHONPATH=src python -m foxhole_forecast run --force-forecast "${series_args[@]}"
           else
-            PYTHONPATH=src python -m foxhole_forecast run
+            PYTHONPATH=src python -m foxhole_forecast run "${series_args[@]}"
           fi
       - name: Pass generated data to the persistence job
         uses: actions/upload-artifact@v7

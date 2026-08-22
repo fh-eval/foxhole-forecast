@@ -1,12 +1,34 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from foxhole_forecast.config import Settings
-from foxhole_forecast.forecasting import CORRECTION_USER, FORECAST_SYSTEM, SCOUT_SYSTEM, _budget
+from foxhole_forecast.forecasting import (
+    CORRECTION_USER,
+    FORECAST_SYSTEM,
+    SCOUT_SYSTEM,
+    _budget,
+    run_forecast_cohort,
+)
 
 
 class ForecastBudgetTests(unittest.TestCase):
+    def test_unknown_series_filter_is_rejected(self) -> None:
+        with patch("foxhole_forecast.forecasting.forecast_due", return_value=(True, "slot")), patch(
+            "foxhole_forecast.forecasting.build_scout_packet",
+            return_value={
+                "cutoff": "2026-08-22T00:00:00Z",
+                "war": {"warId": "war", "warNumber": 1},
+                "history_hours_available": 0,
+                "strategic_bases": [],
+            },
+        ), patch("foxhole_forecast.forecasting.write_json"), patch(
+            "foxhole_forecast.forecasting.load_models", return_value=[]
+        ):
+            with self.assertRaisesRegex(ValueError, "Unknown model series"):
+                run_forecast_cohort(Settings.load(), force=True, series_id="missing")
+
     def test_editable_prompts_load_from_markdown(self) -> None:
         self.assertTrue(SCOUT_SYSTEM.startswith("You are the scouting stage"))
         self.assertTrue(FORECAST_SYSTEM.startswith("You are a military-state forecasting model"))

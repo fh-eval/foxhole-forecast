@@ -34,7 +34,11 @@ def forecast_due(state: dict[str, Any], settings: Settings, now: datetime | None
     return state.get("last_forecast_slot") != slot, slot
 
 
-def run_forecast_cohort(settings: Settings, force: bool = False) -> dict[str, Any]:
+def run_forecast_cohort(
+    settings: Settings,
+    force: bool = False,
+    series_id: str | None = None,
+) -> dict[str, Any]:
     state_path = DATA_DIR / "state.json"
     state = read_json(state_path, default={})
     due, slot = forecast_due(state, settings)
@@ -46,8 +50,13 @@ def run_forecast_cohort(settings: Settings, force: bool = False) -> dict[str, An
     cohort_id = _identifier(scout_packet["war"]["warId"], cutoff)
     cohort_dir = DATA_DIR / "raw" / "cohorts" / cohort_id
     write_json(cohort_dir / "scout-packet.json", scout_packet)
+    models = load_models()
+    if series_id and not any(model["series_id"] == series_id for model in models):
+        raise ValueError(f"Unknown model series: {series_id}")
     model_results: list[dict[str, Any]] = []
-    for model_config in load_models():
+    for model_config in models:
+        if series_id and model_config["series_id"] != series_id:
+            continue
         if model_config.get("enabled", True):
             result = _run_model(settings, model_config, scout_packet, cohort_id, cohort_dir, state)
             append_jsonl(DATA_DIR / "model_runs.jsonl", result)
