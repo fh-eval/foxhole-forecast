@@ -72,4 +72,4 @@ jobs:
         if: steps.deploy.outputs.deployment-url != ''
         env:
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
-        run: curl --fail --silent --show-error "$DEPLOYMENT_URL"
+        run: curl --fail --silent --show-error --retry 10 --retry-delay 2 --retry-all-errors "$DEPLOYMENT_URL"
