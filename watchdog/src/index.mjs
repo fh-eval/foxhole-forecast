@@ -84,20 +84,17 @@ export async function checkAndDispatch(env, fetchImpl = fetch, now = Date.now())
     Pragma: "no-cache",
     "User-Agent": "foxhole-forecast-watchdog",
   };
-  const [latestResponse, stateResponse] = await Promise.all([
-    fetchImpl(cacheBustedUrl(env.LATEST_DATA_URL, now), { headers: publicHeaders, cf: { cacheTtl: 0 } }),
-    fetchImpl(cacheBustedUrl(env.STATE_DATA_URL, now), { headers: publicHeaders, cf: { cacheTtl: 0 } }),
-  ]);
-  const [latest, state] = await Promise.all([
-    jsonResponse(latestResponse, "Latest observation request"),
-    jsonResponse(stateResponse, "Pipeline state request"),
-  ]);
+  const statusResponse = await fetchImpl(cacheBustedUrl(env.STATUS_DATA_URL, now), {
+    headers: publicHeaders,
+    cf: { cacheTtl: 0 },
+  });
+  const status = await jsonResponse(statusResponse, "Pipeline status request");
 
   const staleAfterMinutes = Number(env.STALE_AFTER_MINUTES || 14);
   const slot = forecastSlot(now);
-  const forecastDue = Date.parse(state.last_forecast_slot || "") !== slot.getTime();
-  const observationInSlot = Date.parse(latest.observed_at) >= slot.getTime();
-  const collectionNeeded = observationIsStale(latest.observed_at, now, staleAfterMinutes)
+  const forecastDue = Date.parse(status.last_forecast_slot || "") !== slot.getTime();
+  const observationInSlot = Date.parse(status.observed_at) >= slot.getTime();
+  const collectionNeeded = observationIsStale(status.observed_at, now, staleAfterMinutes)
     || (forecastDue && !observationInSlot);
   const actions = [];
 
@@ -116,7 +113,7 @@ export async function checkAndDispatch(env, fetchImpl = fetch, now = Date.now())
   }
   if (!actions.length) actions.push({ action: "fresh" });
   return {
-    observed_at: latest.observed_at,
+    observed_at: status.observed_at,
     forecast_slot: slot.toISOString(),
     actions,
   };

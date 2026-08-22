@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   cacheBustedUrl,
+  checkAndDispatch,
   forecastSlot,
   observationIsStale,
   successfulRunSince,
@@ -34,6 +35,29 @@ test("repository data URLs are cache-busted for each watchdog check", () => {
     cacheBustedUrl("https://example.test/latest.json?raw=1", now),
     `https://example.test/latest.json?raw=1&watchdog_time=${now}`,
   );
+});
+
+test("a fresh status document avoids large state downloads and dispatches", async () => {
+  const requests = [];
+  const result = await checkAndDispatch(
+    {
+      GITHUB_TOKEN: "test-token",
+      STATUS_DATA_URL: "https://example.test/watchdog.json",
+      STALE_AFTER_MINUTES: "14",
+    },
+    async (url) => {
+      requests.push(url);
+      return Response.json({
+        observed_at: "2026-08-22T11:47:00Z",
+        last_forecast_slot: "2026-08-22T12:00:00Z",
+      });
+    },
+    now,
+  );
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].startsWith("https://example.test/watchdog.json?"), true);
+  assert.deepEqual(result.actions, [{ action: "fresh" }]);
 });
 
 test("a successful run inside the guard window suppresses a duplicate", () => {

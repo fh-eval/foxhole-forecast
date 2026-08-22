@@ -114,7 +114,7 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertEqual(snapshot["casualties"], {"WARDENS": 110, "COLONIALS": 220})
         self.assertEqual(snapshot["active_regions"][0]["map_name"], "ActiveHex")
-        self.assertEqual(snapshot["active_regions"][0]["ownership_events_24h"], 1)
+        self.assertEqual(snapshot["active_regions"][0]["activity"]["events_24h"], 1)
         self.assertEqual(len(snapshot["recent_ownership_events"]), 1)
 
     def test_evidence_value_is_frozen_and_presented_readably(self) -> None:
@@ -151,6 +151,60 @@ class DashboardTests(unittest.TestCase):
             ),
             "Oarbreaker · Warden casualties rate change, last 1h vs prior 1h",
         )
+
+    def test_war_api_snapshot_reuses_the_exact_scout_region_metrics(self) -> None:
+        latest = {
+            "observed_at": "2026-08-22T03:00:00Z",
+            "maps": {
+                "TestHex": {
+                    "bases": {"a": {"team": "WARDENS"}},
+                    "report": {
+                        "dayOfWar": 83,
+                        "wardenCasualties": 100,
+                        "colonialCasualties": 200,
+                        "totalEnlistments": 300,
+                    },
+                }
+            },
+        }
+        scout_region = {
+            "map_name": "TestHex",
+            "strategic_base_count": 1,
+            "ownership": {"WARDENS": 1, "COLONIALS": 0, "NONE": 0},
+            "report": {"warden_casualties": 100, "colonial_casualties": 200},
+            "report_deltas": {"2h": {"warden_casualties": 20}},
+            "rate_trends": {
+                "1h_vs_prior_1h": {
+                    "warden_casualties": [12, 8, 4, "accelerating"]
+                }
+            },
+            "activity": {
+                "events_2h": 1,
+                "events_6h": 2,
+                "events_24h": 3,
+                "latest_event_at": "2026-08-22T02:30:00Z",
+            },
+        }
+
+        snapshot = _build_war_api_snapshot(
+            latest,
+            [],
+            {
+                "packet_version": 2,
+                "history_hours_available": 24,
+                "data_dictionary": {"total_enlistments": "activity proxy"},
+                "regions": [scout_region],
+            },
+        )
+
+        self.assertEqual(
+            snapshot["active_regions"][0]["activity"], scout_region["activity"]
+        )
+        self.assertEqual(
+            snapshot["active_regions"][0]["rate_trends"],
+            scout_region["rate_trends"],
+        )
+        self.assertEqual(snapshot["history_hours_available"], 24)
 
 
 if __name__ == "__main__":

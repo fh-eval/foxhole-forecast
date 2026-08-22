@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from .config import DATA_DIR, Settings
@@ -23,9 +23,24 @@ def _history_before(cutoff: str, war_id: str, hours: int) -> list[dict[str, Any]
     start = end - timedelta(hours=hours)
     return [
         row
-        for row in read_jsonl(DATA_DIR / "observations.jsonl")
+        for row in _observation_rows(start, end)
         if row.get("war_id") == war_id and start <= parse_time(row["observed_at"]) <= end
     ]
+
+
+def _observation_rows(
+    start: datetime | None = None, end: datetime | None = None
+) -> list[dict[str, Any]]:
+    rows = read_jsonl(DATA_DIR / "observations.jsonl")
+    partition_dir = DATA_DIR / "observations"
+    if partition_dir.exists():
+        for path in sorted(partition_dir.glob("*.jsonl")):
+            if start and path.stem < start.date().isoformat():
+                continue
+            if end and path.stem > end.date().isoformat():
+                continue
+            rows.extend(read_jsonl(path))
+    return rows
 
 
 def _events_before(cutoff: str, war_id: str, hours: int) -> list[dict[str, Any]]:

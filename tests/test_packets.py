@@ -29,6 +29,10 @@ class PacketTests(unittest.TestCase):
                 ],
             )
             append_jsonl(
+                data / "observations" / "2026-01-01.jsonl",
+                {"war_id": "war-1", "observed_at": "2026-01-01T22:00:00Z"},
+            )
+            append_jsonl(
                 data / "events.jsonl",
                 [
                     {"war_id": "war-1", "observed_to": "2026-01-01T23:30:00Z"},
@@ -38,7 +42,7 @@ class PacketTests(unittest.TestCase):
             with patch.object(packets, "DATA_DIR", data):
                 history = packets._history_before("2026-01-02T00:00:00Z", "war-1", 24)
                 events = packets._events_before("2026-01-02T00:00:00Z", "war-1", 24)
-            self.assertEqual(len(history), 1)
+            self.assertEqual(len(history), 2)
             self.assertEqual(len(events), 1)
 
     def test_rate_trends_compare_adjacent_windows(self) -> None:

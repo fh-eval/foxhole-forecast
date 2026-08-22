@@ -120,7 +120,10 @@ def collect_once(settings: Settings, now: datetime | None = None) -> dict[str, A
                 for identifier, base in state["maps"][name].get("bases", {}).items()
             },
         }
-        append_jsonl(DATA_DIR / "observations.jsonl", observation)
+        append_jsonl(
+            DATA_DIR / "observations" / f"{hour_key[:10]}.jsonl",
+            observation,
+        )
         state["last_hourly_sample"] = hour_key
 
     latest = {

@@ -34,7 +34,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <a href="#war-data">War data</a>
         <a href="#rounds">Rounds</a>
         <a href="#briefings">Briefings</a>
-        <a href="#predictions">Predictions</a>
+        <a href={`${basePath}predictions/`}>Prediction browser</a>
         <a href="#history">History</a>
         <a href="#method">Method</a>
         <a href={`${basePath}scoring/`}>Scoring details</a>
@@ -84,16 +84,16 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 
       <section id="war-data" class="section-block">
         <div class="section-heading">
-          <div><p class="kicker">What the models see</p><h2>Current war telemetry</h2></div>
-          <p>Cutoff-safe public data from the official War API. Model forecasts retain their own earlier cutoff, so the live snapshot can move after a prediction is published.</p>
+          <div><p class="kicker">The scout packet</p><h2>Current war telemetry</h2></div>
+          <p>This table is generated from the same all-region scout packet sent to every model: ownership, recent event activity, casualty pace, and new-to-region enlistment activity. Forecast rounds retain their earlier cutoff.</p>
         </div>
         <div id="telemetry-summary" class="telemetry-grid"></div>
         <div class="telemetry-layout">
           <div>
-            <div class="subheading"><h3>Most active regions</h3><span id="telemetry-cutoff">—</span></div>
-            <div class="table-shell">
+            <div class="subheading"><h3>All regions, ranked by recent activity</h3><span id="telemetry-cutoff">—</span></div>
+            <div class="table-shell telemetry-scroll">
               <table class="telemetry-table">
-                <thead><tr><th>Region</th><th>24h events</th><th>Warden bases</th><th>Colonial bases</th><th>Warden casualties</th><th>Colonial casualties</th><th>Enlistments</th></tr></thead>
+                <thead><tr><th>Region</th><th>Events<small>2h / 6h / 24h</small></th><th>Bases<small>W / C / neutral</small></th><th>Warden casualties<small>1h pace · total · 2h change</small></th><th>Colonial casualties<small>1h pace · total · 2h change</small></th><th>Enlistments<small>1h new-region pace · total · 2h change</small></th><th>Latest event</th></tr></thead>
                 <tbody id="telemetry-regions"></tbody>
               </table>
             </div>
@@ -119,23 +119,6 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <label class="select-label">Model <select id="briefing-model"></select></label>
         </div>
         <div id="briefing-list" class="briefing-list"></div>
-      </section>
-
-      <section id="predictions" class="section-block">
-        <div class="section-heading section-heading--controls">
-          <div><p class="kicker">Calls on the board</p><h2>Discrete predictions</h2></div>
-          <div class="segmented" role="group" aria-label="Prediction status">
-            <button class="active" data-bet-view="open">Open</button>
-            <button data-bet-view="resolved">Resolved</button>
-          </div>
-        </div>
-        <div class="table-shell">
-          <table>
-            <thead><tr><th>Model</th><th>Prediction and supporting evidence</th><th>Result / score</th></tr></thead>
-            <tbody id="prediction-rows"></tbody>
-          </table>
-          <p id="prediction-empty" class="empty-state" hidden>No predictions in this view yet.</p>
-        </div>
       </section>
 
       <section id="history" class="section-block">
@@ -194,7 +177,6 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         return chip;
       };
       let dashboard = null;
-      let betView = "open";
       let briefingFilter = "all";
       let visibleSeries = new Set();
 
@@ -327,17 +309,26 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           card.append(element("small", "", label), element("strong", "", value));
           summary.append(card);
         });
-        document.querySelector("#telemetry-cutoff").textContent = `Observed ${formatDate(snapshot.observed_at)}`;
+        document.querySelector("#telemetry-cutoff").textContent = `Packet v${snapshot.packet_version || "—"} · ${snapshot.history_hours_available ?? 0}h history · ${formatDate(snapshot.observed_at)}`;
         (snapshot.active_regions || []).forEach((region) => {
+          const activity = region.activity || {};
+          const ownership = region.ownership || {};
           const row = document.createElement("tr");
           row.append(
             element("td", "", regionLabel(region.map_name)),
-            element("td", region.ownership_events_24h ? "activity" : "", number(region.ownership_events_24h)),
-            element("td", "faction faction--wardens", number(region.ownership?.WARDENS)),
-            element("td", "faction faction--colonials", number(region.ownership?.COLONIALS)),
-            element("td", "", number(region.warden_casualties)),
-            element("td", "", number(region.colonial_casualties)),
-            element("td", "", number(region.total_enlistments)),
+            telemetryPair(
+              `${number(activity.events_2h)} / ${number(activity.events_6h)} / ${number(activity.events_24h)}`,
+              "ownership transitions",
+              activity.events_2h ? "activity" : "",
+            ),
+            telemetryPair(
+              `${number(ownership.WARDENS)} / ${number(ownership.COLONIALS)} / ${number(ownership.NONE)}`,
+              `${number(region.strategic_base_count)} strategic bases`,
+            ),
+            telemetryTrend(region, "warden_casualties"),
+            telemetryTrend(region, "colonial_casualties"),
+            telemetryTrend(region, "enlistments"),
+            telemetryPair(activity.latest_event_at ? predictionTime(activity.latest_event_at) : "—", "most recent transition"),
           );
           regions.append(row);
         });
@@ -355,6 +346,30 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             events.append(item);
           });
         }
+      }
+
+      function signed(value) {
+        if (value == null || !Number.isFinite(Number(value))) return "—";
+        return `${Number(value) > 0 ? "+" : ""}${number(value)}`;
+      }
+
+      function telemetryPair(primary, secondary, className = "") {
+        const cell = element("td", `telemetry-pair ${className}`.trim());
+        cell.append(element("strong", "", primary), element("small", "", secondary));
+        return cell;
+      }
+
+      function telemetryTrend(region, field) {
+        const trend = region.rate_trends?.["1h_vs_prior_1h"]?.[field];
+        const reportField = field === "enlistments" ? "total_enlistments" : field;
+        const raw = region.report?.[reportField];
+        const delta = region.report_deltas?.["2h"]?.[reportField];
+        const direction = trend?.[3];
+        const symbol = direction === "accelerating" ? "↑" : direction === "cooling" ? "↓" : direction === "steady" ? "→" : "";
+        const rate = trend ? `${number(trend[0])}/h ${symbol}`.trim() : "—";
+        const cell = telemetryPair(rate, `${number(raw)} total · ${signed(delta)} / 2h`, direction ? `trend trend--${direction}` : "");
+        if (trend) cell.title = `Previous 1h pace: ${number(trend[1])}/h; change: ${signed(trend[2])}/h; ${direction}`;
+        return cell;
       }
 
       function stat(label, value) {
@@ -541,29 +556,6 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         });
       }
 
-      function renderPredictions() {
-        const rows = document.querySelector("#prediction-rows");
-        const empty = document.querySelector("#prediction-empty");
-        rows.replaceChildren();
-        const source = betView === "open" ? dashboard.open_bets : dashboard.resolved_bets;
-        const bets = (source || []).filter((bet) => visibleSeries.has(bet.series_id) && bet.predicted_outcome);
-        empty.hidden = bets.length > 0;
-        bets.slice(0, 100).forEach((bet) => {
-          const row = document.createElement("tr");
-          const modelCell = element("td", "", bet.model_label);
-          const predictionCell = element("td", "prediction-cell");
-          const resultCell = element("td", "result-cell");
-          predictionCell.append(predictionHeadline(bet), supportingEvidence(bet.evidence));
-          resultCell.append(predictionResult(bet));
-          row.append(
-            modelCell,
-            predictionCell,
-            resultCell,
-          );
-          rows.append(row);
-        });
-      }
-
       function setupHistory(models) {
         const select = document.querySelector("#history-model");
         select.replaceChildren();
@@ -617,7 +609,6 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           renderRounds(currentRounds);
           setupBriefingFilter(currentModels);
           renderBriefings(currentModels);
-          renderPredictions();
           setupHistory(currentModels);
         } catch (error) {
           const empty = document.querySelector("#score-empty");
@@ -626,11 +617,6 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         }
       }
 
-      document.querySelectorAll("[data-bet-view]").forEach((button) => button.addEventListener("click", () => {
-        betView = button.dataset.betView;
-        document.querySelectorAll("[data-bet-view]").forEach((item) => item.classList.toggle("active", item === button));
-        if (dashboard) renderPredictions();
-      }));
       boot();
     </script>
   </body>

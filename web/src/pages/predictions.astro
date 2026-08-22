@@ -1,0 +1,225 @@
+---
+import "../styles/global.css";
+
+const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content="Browse open and resolved Foxhole Forecast model predictions." />
+    <title>Prediction Browser · Foxhole Forecast</title>
+  </head>
+  <body>
+    <header class="method-masthead">
+      <div class="masthead__eyebrow">CURRENT PROTOCOL · OPEN AND RESOLVED BETS</div>
+      <div class="method-hero prediction-hero page-width">
+        <div>
+          <p class="kicker">Prediction browser</p>
+          <h1>Every call<br /><span>on the board</span></h1>
+          <p class="sublede">Filter the current evaluation by settlement state and model. The table scrolls independently so the archive can grow without taking over the main dashboard.</p>
+        </div>
+        <a class="method-back" href={basePath}>← Return to dashboard</a>
+      </div>
+    </header>
+
+    <nav class="section-nav" aria-label="Prediction navigation">
+      <div class="page-width">
+        <a href={basePath}>Live dashboard</a>
+        <a href={`${basePath}#rounds`}>Prediction rounds</a>
+        <a href={`${basePath}scoring/`}>Scoring details</a>
+      </div>
+    </nav>
+
+    <main class="prediction-page page-width">
+      <section class="section-block prediction-browser-section">
+        <div class="section-heading section-heading--controls">
+          <div><p class="kicker">Current event-outcome protocol</p><h2>Discrete predictions</h2></div>
+          <div class="prediction-controls">
+            <div class="segmented" role="group" aria-label="Prediction status">
+              <button class="active" data-bet-view="open">Open</button>
+              <button data-bet-view="resolved">Resolved</button>
+            </div>
+            <label class="select-label">Model <select id="prediction-model"><option value="all">All models</option></select></label>
+          </div>
+        </div>
+        <p class="prediction-browser__summary" id="prediction-summary">Loading predictions…</p>
+        <div class="table-shell prediction-browser">
+          <table>
+            <thead><tr><th>Model</th><th>Prediction and supporting evidence</th><th>Result / score</th></tr></thead>
+            <tbody id="prediction-rows"></tbody>
+          </table>
+          <p id="prediction-empty" class="empty-state" hidden>No predictions in this view yet.</p>
+        </div>
+        <p class="method-version">Predictions are read from the same canonical eight-bet rounds used by the leaderboard. The static dataset currently retains the 500 most recent rounds.</p>
+      </section>
+    </main>
+
+    <footer><div class="page-width"><strong>FOXHOLE FORECAST</strong><span id="generated-at">No dataset generated yet</span></div></footer>
+
+    <script>
+      // @ts-nocheck
+      const element = (tag, className, text) => {
+        const value = document.createElement(tag);
+        if (className) value.className = className;
+        if (text !== undefined) value.textContent = String(text);
+        return value;
+      };
+      const decimal = (value) => value == null || !Number.isFinite(Number(value)) ? "—" : Number(value).toFixed(2);
+      const number = (value) => new Intl.NumberFormat().format(Number(value) || 0);
+      const eventLabel = (value) => String(value || "").replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+      const teamLabel = (value) => value === "NONE" ? "Neutral / destroyed" : eventLabel(value);
+      const regionLabel = (value) => String(value || "Unknown region").replace(/Hex$/, "").replace(/([a-z])([A-Z])/g, "$1 $2");
+      const predictionTime = (value) => value ? new Intl.DateTimeFormat(undefined, {
+        month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC",
+      }).format(new Date(value)) + " UTC" : "an unknown time";
+      const formatDate = (value) => value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value)) + " UTC" : "—";
+      const evidenceValue = (item) => {
+        if (item.value == null) return "value unavailable";
+        if (String(item.metric_id).includes("ratio_")) return `${Number(item.value).toFixed(2)}×`;
+        const formatted = number(item.value);
+        return String(item.metric_id).includes(".delta_") && Number(item.value) > 0 ? `+${formatted}` : formatted;
+      };
+      const evidenceChip = (item) => {
+        const chip = element("span", "evidence-chip", `${item.label || item.metric_id}: ${evidenceValue(item)} · relevance ${item.relevance}/10`);
+        if (item.observed_at) chip.title = `Metric observed ${formatDate(item.observed_at)}`;
+        return chip;
+      };
+      const factionName = (team) => element("span", `faction-name faction-name--${String(team || "none").toLowerCase()}`, teamLabel(team));
+      const baseIdentity = (bet) => element(
+        "strong",
+        `base-identity base-identity--${String(bet.current_team || "none").toLowerCase()}`,
+        `${bet.base_type || "Strategic Base"} ${bet.base_name || "Unknown base"}`,
+      );
+
+      function predictionHeadline(bet) {
+        const line = element("p", "prediction-headline");
+        const confidence = element("strong", "prediction-headline__confidence", `${decimal(bet.confidence)} confidence`);
+        line.append(confidence, document.createTextNode(": "), baseIdentity(bet));
+        if (bet.predicted_outcome === "DESTROYED") {
+          line.append(document.createTextNode(" will be destroyed at "));
+        } else {
+          line.append(document.createTextNode(" will be captured by "));
+          if (bet.current_team === "WARDENS") line.append(factionName("COLONIALS"));
+          else if (bet.current_team === "COLONIALS") line.append(factionName("WARDENS"));
+          else line.append(factionName("WARDENS"), document.createTextNode(" or "), factionName("COLONIALS"));
+          line.append(document.createTextNode(" at "));
+        }
+        line.append(element("time", "prediction-headline__time", predictionTime(bet.eta_utc)), document.createTextNode("."));
+        return line;
+      }
+
+      function supportingEvidence(items) {
+        const wrapper = element("div", "supporting-evidence");
+        wrapper.append(element("small", "supporting-evidence__label", "Supporting evidence"));
+        const evidence = element("div", "evidence-list");
+        (items || []).forEach((item) => evidence.append(evidenceChip(item)));
+        if (!items?.length) evidence.append(element("span", "evidence-empty", "No supporting evidence retained."));
+        wrapper.append(evidence);
+        return wrapper;
+      }
+
+      function predictionStatus(bet) {
+        if (bet.status === "censored" && bet.settlement_reason === "ambiguous_transition_interval") return "Not scored · transition time ambiguous";
+        if (bet.status === "censored") return "Not scored · missing observations";
+        if (bet.status === "miss" && bet.settlement_reason === "interval_timing_credit_certain") return "Miss · timing definitely outside ±3h";
+        if (["hit", "partial"].includes(bet.status) && bet.eta_error_minutes != null) return `${eventLabel(bet.status)} · ${bet.eta_error_minutes}m error`;
+        return eventLabel(bet.status);
+      }
+
+      function predictionResult(bet) {
+        const result = element("div", "prediction-result");
+        result.append(element("small", `status status--${bet.status}`, predictionStatus(bet)));
+        if (["hit", "partial", "miss"].includes(bet.status) && bet.timing_credit != null) {
+          const badge = element("span", `prediction-score prediction-score--${bet.status}`);
+          badge.append(element("span", "prediction-score__label", "Score"), element("strong", "", decimal(bet.timing_credit)));
+          result.append(badge);
+        }
+        return result;
+      }
+
+      let dashboard = null;
+      let betView = "open";
+      let modelFilter = "all";
+      let visibleSeries = new Set();
+
+      function isCompleteCurrentRound(round) {
+        const expected = dashboard?.methodology?.predictions_per_round ?? 8;
+        return round.protocol === dashboard?.methodology?.current_protocol
+          && round.predictions?.length === expected
+          && round.predictions.every((bet) =>
+            ["CAPTURED", "DESTROYED"].includes(bet.predicted_outcome)
+            && bet.base_name
+            && bet.base_type
+            && bet.current_team
+            && bet.confidence != null
+            && bet.eta_utc
+            && Array.isArray(bet.evidence)
+            && bet.evidence.length > 0
+          );
+      }
+
+      function renderPredictions() {
+        const rows = document.querySelector("#prediction-rows");
+        const empty = document.querySelector("#prediction-empty");
+        const summary = document.querySelector("#prediction-summary");
+        rows.replaceChildren();
+        const allBets = (dashboard.rounds || []).filter(isCompleteCurrentRound).flatMap((round) => round.predictions || []);
+        const bets = allBets.filter((bet) =>
+          visibleSeries.has(bet.series_id)
+          && bet.predicted_outcome
+          && (betView === "open" ? bet.status === "open" : bet.status !== "open")
+          && (modelFilter === "all" || bet.series_id === modelFilter)
+        );
+        empty.hidden = bets.length > 0;
+        summary.textContent = `${number(bets.length)} ${betView} predictions · generated ${formatDate(dashboard.generated_at)}`;
+        bets.forEach((bet) => {
+          const row = document.createElement("tr");
+          const modelCell = element("td", "prediction-browser__model");
+          modelCell.append(element("strong", "", bet.model_label), element("small", "", `${regionLabel(bet.map_name)} · ${formatDate(bet.cutoff)}`));
+          const predictionCell = element("td", "prediction-cell");
+          predictionCell.append(predictionHeadline(bet), supportingEvidence(bet.evidence));
+          const resultCell = element("td", "result-cell");
+          resultCell.append(predictionResult(bet));
+          row.append(modelCell, predictionCell, resultCell);
+          rows.append(row);
+        });
+      }
+
+      async function boot() {
+        try {
+          const base = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+          const response = await fetch(`${base}data/dashboard.json`, { cache: "no-store" });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          dashboard = await response.json();
+          const currentRounds = (dashboard.rounds || []).filter(isCompleteCurrentRound);
+          visibleSeries = new Set(currentRounds.map((round) => round.series_id));
+          const models = (dashboard.models || []).filter((model) => visibleSeries.has(model.series_id));
+          const select = document.querySelector("#prediction-model");
+          models.forEach((model) => {
+            const option = element("option", "", model.label || model.series_id);
+            option.value = model.series_id;
+            select.append(option);
+          });
+          select.addEventListener("change", () => { modelFilter = select.value; renderPredictions(); });
+          document.querySelector("#generated-at").textContent = `Generated ${formatDate(dashboard.generated_at)}`;
+          renderPredictions();
+        } catch (error) {
+          const empty = document.querySelector("#prediction-empty");
+          empty.textContent = `Prediction data could not be loaded: ${error.message}`;
+          empty.hidden = false;
+          document.querySelector("#prediction-summary").textContent = "Dataset unavailable";
+        }
+      }
+
+      document.querySelectorAll("[data-bet-view]").forEach((button) => button.addEventListener("click", () => {
+        betView = button.dataset.betView;
+        document.querySelectorAll("[data-bet-view]").forEach((item) => item.classList.toggle("active", item === button));
+        if (dashboard) renderPredictions();
+      }));
+      boot();
+    </script>
+  </body>
+</html>

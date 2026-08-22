@@ -5,13 +5,16 @@ from datetime import timedelta
 import re
 from typing import Any
 
-from .config import DATA_DIR, ROOT
+from .config import DATA_DIR, ROOT, Settings
 from .domain import strategic_base_type
+from .packets import build_scout_packet
 from .storage import isoformat, parse_time, read_json, read_jsonl, write_json
 
 
-def build_dashboard_data() -> dict[str, Any]:
+def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
+    current_settings = settings or Settings.load()
     latest = read_json(DATA_DIR / "raw" / "latest.json", default={})
+    pipeline_state = read_json(DATA_DIR / "state.json", default={})
     scores = read_json(DATA_DIR / "scores.json", default={"models": []})
     runs = read_jsonl(DATA_DIR / "model_runs.jsonl")
     settlements = read_json(DATA_DIR / "settlements.json", default={})
@@ -25,8 +28,6 @@ def build_dashboard_data() -> dict[str, Any]:
     }
     by_series: dict[str, list[dict[str, Any]]] = defaultdict(list)
     latest_valid_runs: dict[str, dict[str, Any]] = {}
-    open_bets: list[dict[str, Any]] = []
-    resolved_bets: list[dict[str, Any]] = []
     rounds: list[dict[str, Any]] = []
     round_counts: dict[str, int] = defaultdict(int)
     for run in runs:
@@ -112,7 +113,6 @@ def build_dashboard_data() -> dict[str, Any]:
                 "settlement_reason": bet.get("settlement_reason"),
             }
             presented_round_bets.append(presented)
-            (open_bets if bet["status"] == "open" else resolved_bets).append(presented)
         if run.get("status") == "valid":
             round_counts[series] += 1
             rounds.append(
@@ -164,8 +164,6 @@ def build_dashboard_data() -> dict[str, Any]:
             ),
         )
     )
-    open_bets.sort(key=lambda row: row["eta_utc"])
-    resolved_bets.sort(key=lambda row: row["cutoff"], reverse=True)
     base_forecasts: list[dict[str, Any]] = []
     for run in latest_valid_runs.values():
         metric_lookup = _metric_lookup(run)
@@ -199,18 +197,20 @@ def build_dashboard_data() -> dict[str, Any]:
     base_forecasts.sort(key=lambda row: (-row["p_change_24h"], row["model_label"], row["base_name"]))
     rounds.sort(key=lambda row: row["cutoff"], reverse=True)
     output = {
-        "schema_version": 5,
+        "schema_version": 6,
         "generated_at": isoformat(),
         "war": latest.get("war"),
         "last_collected_at": latest.get("observed_at"),
         "collector_runs": len(collector_runs),
         "strategic_base_count": len(bases),
-        "war_api_snapshot": _build_war_api_snapshot(latest, official_events),
+        "war_api_snapshot": _build_war_api_snapshot(
+            latest,
+            official_events,
+            build_scout_packet(current_settings) if latest else None,
+        ),
         "models": models,
         "rounds": rounds[:500],
         "base_forecasts": base_forecasts[:500],
-        "open_bets": open_bets[:500],
-        "resolved_bets": resolved_bets[:500],
         "methodology": {
             "current_protocol": "event_outcome_v4",
             "predictions_per_round": 8,
@@ -227,6 +227,14 @@ def build_dashboard_data() -> dict[str, Any]:
             "settlement_source": "Official Foxhole War API only",
         },
     }
+    write_json(
+        DATA_DIR / "watchdog.json",
+        {
+            "schema_version": 1,
+            "observed_at": latest.get("observed_at"),
+            "last_forecast_slot": pipeline_state.get("last_forecast_slot"),
+        },
+    )
     write_json(ROOT / "web" / "public" / "data" / "dashboard.json", output)
     return output
 
@@ -245,7 +253,9 @@ def _predicted_outcome(
 
 
 def _build_war_api_snapshot(
-    latest: dict[str, Any], official_events: list[dict[str, Any]]
+    latest: dict[str, Any],
+    official_events: list[dict[str, Any]],
+    scout_packet: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     observed_at = latest.get("observed_at")
     cutoff = parse_time(observed_at) if observed_at else None
@@ -262,13 +272,18 @@ def _build_war_api_snapshot(
     for event in recent_events:
         event_counts[event.get("map_name", "")] += 1
 
+    scout_regions = {
+        region["map_name"]: region
+        for region in (scout_packet or {}).get("regions", [])
+    }
     owner_totals = {team: 0 for team in ("WARDENS", "COLONIALS", "NONE")}
     casualty_totals = {team: 0 for team in ("WARDENS", "COLONIALS")}
     regions: list[dict[str, Any]] = []
     days: list[int] = []
     for map_name, map_state in latest.get("maps", {}).items():
         bases = list(map_state.get("bases", {}).values())
-        ownership = {
+        scout_region = scout_regions.get(map_name, {})
+        ownership = scout_region.get("ownership") or {
             team: sum(1 for base in bases if base.get("team") == team)
             for team in owner_totals
         }
@@ -282,22 +297,41 @@ def _build_war_api_snapshot(
         casualty_totals["WARDENS"] += warden_casualties
         if isinstance(report.get("dayOfWar"), int):
             days.append(report["dayOfWar"])
+        activity = scout_region.get("activity") or {
+            "events_2h": 0,
+            "events_6h": 0,
+            "events_24h": event_counts.get(map_name, 0),
+            "event_types_24h": {},
+            "most_active_bases_24h": [],
+            "latest_event_at": None,
+        }
         regions.append(
             {
                 "map_name": map_name,
-                "strategic_base_count": len(bases),
+                "strategic_base_count": scout_region.get(
+                    "strategic_base_count", len(bases)
+                ),
                 "ownership": ownership,
-                "colonial_casualties": colonial_casualties,
-                "warden_casualties": warden_casualties,
-                "total_enlistments": int(report.get("totalEnlistments", 0) or 0),
-                "ownership_events_24h": event_counts.get(map_name, 0),
+                "report": scout_region.get("report", {}),
+                "report_deltas": scout_region.get("report_deltas", {}),
+                "rate_trends": scout_region.get("rate_trends", {}),
+                "activity": activity,
             }
         )
 
     regions.sort(
         key=lambda region: (
-            -region["ownership_events_24h"],
-            -(region["colonial_casualties"] + region["warden_casualties"]),
+            -region["activity"].get("events_2h", 0),
+            -region["activity"].get("events_6h", 0),
+            -region["activity"].get("events_24h", 0),
+            -(
+                region["report_deltas"].get("2h", {}).get(
+                    "colonial_casualties", 0
+                )
+                + region["report_deltas"].get("2h", {}).get(
+                    "warden_casualties", 0
+                )
+            ),
             region["map_name"],
         )
     )
@@ -305,11 +339,16 @@ def _build_war_api_snapshot(
     return {
         "source": "Official Foxhole War API",
         "observed_at": observed_at,
+        "packet_version": (scout_packet or {}).get("packet_version"),
+        "history_hours_available": (scout_packet or {}).get(
+            "history_hours_available"
+        ),
+        "data_dictionary": (scout_packet or {}).get("data_dictionary", {}),
         "day_of_war": max(days) if days else None,
         "region_count": len(regions),
         "strategic_base_ownership": owner_totals,
         "casualties": casualty_totals,
-        "active_regions": regions[:16],
+        "active_regions": regions,
         "recent_ownership_events": [
             {
                 "observed_at": event["observed_to"],
