@@ -20,7 +20,6 @@ class ValidationTests(unittest.TestCase):
             "selected_metrics": [{"metric_id": "region.DeadLandsHex.wardenCasualties.delta_2h"}],
         }
         self.valid = {
-            "war_summary": "The central front is active, but the forecast remains uncertain.",
             "base_forecasts": [
                 {
                     "base_id": "base-1",
@@ -43,7 +42,20 @@ class ValidationTests(unittest.TestCase):
         }
 
     def test_valid_contract(self) -> None:
-        self.assertEqual(validate_scout({"selected_regions": ["DeadLandsHex"]}, self.scout, self.settings), ["DeadLandsHex"])
+        overview = {
+            "war_summary": "The central front is active, but the situation remains uncertain.",
+            "selected_regions": ["DeadLandsHex"],
+        }
+        self.assertEqual(validate_scout(overview, self.scout, self.settings), overview)
+        validate_forecast(self.valid, self.packet, self.settings)
+
+    def test_war_summary_belongs_to_overview(self) -> None:
+        with self.assertRaisesRegex(ValidationError, "war_summary"):
+            validate_scout(
+                {"selected_regions": ["DeadLandsHex"]},
+                self.scout,
+                self.settings,
+            )
         validate_forecast(self.valid, self.packet, self.settings)
 
     def test_omitted_bases_are_allowed(self) -> None:
@@ -64,4 +76,3 @@ class ValidationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

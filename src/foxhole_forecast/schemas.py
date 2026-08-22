@@ -17,8 +17,9 @@ def scout_schema(settings: Settings) -> dict[str, Any]:
     return {
         "type": "object",
         "additionalProperties": False,
-        "required": ["selected_regions"],
+        "required": ["war_summary", "selected_regions"],
         "properties": {
+            "war_summary": {"type": "string"},
             "selected_regions": {
                 "type": "array",
                 "minItems": 1,
@@ -77,9 +78,8 @@ def forecast_schema(settings: Settings) -> dict[str, Any]:
     return {
         "type": "object",
         "additionalProperties": False,
-        "required": ["war_summary", "base_forecasts"],
+        "required": ["base_forecasts"],
         "properties": {
-            "war_summary": {"type": "string"},
             "base_forecasts": {
                 "type": "array",
                 "maxItems": settings.forecast_base_limit,

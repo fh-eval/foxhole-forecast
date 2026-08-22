@@ -9,6 +9,7 @@ from foxhole_forecast.forecasting import (
     FORECAST_SYSTEM,
     SCOUT_SYSTEM,
     _budget,
+    _messages,
     run_forecast_cohort,
 )
 
@@ -30,9 +31,19 @@ class ForecastBudgetTests(unittest.TestCase):
                 run_forecast_cohort(Settings.load(), force=True, series_id="missing")
 
     def test_editable_prompts_load_from_markdown(self) -> None:
-        self.assertTrue(SCOUT_SYSTEM.startswith("You are the scouting stage"))
-        self.assertTrue(FORECAST_SYSTEM.startswith("You are a military-state forecasting model"))
+        self.assertTrue(SCOUT_SYSTEM.startswith("You are the war-overview stage"))
+        self.assertTrue(FORECAST_SYSTEM.startswith("You are the forecasting stage"))
         self.assertIn("{error}", CORRECTION_USER)
+
+    def test_json_schema_is_visible_in_model_prompt(self) -> None:
+        messages = _messages(
+            "System",
+            {"packet": True},
+            {"type": "object", "required": ["war_summary"]},
+        )
+
+        self.assertIn("OUTPUT JSON SCHEMA", messages[1]["content"])
+        self.assertIn('"required":["war_summary"]', messages[1]["content"])
 
     def test_existing_paid_models_keep_shared_legacy_ledger(self) -> None:
         state = {"daily_costs": {"2026-08-22": 0.2}}

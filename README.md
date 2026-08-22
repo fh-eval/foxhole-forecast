@@ -8,7 +8,7 @@ The implementation deliberately starts with the [official Foxhole War API](https
 
 Each model run has two fixed calls:
 
-1. A scout call selects up to six regions from a compact whole-map packet.
+1. A war-overview call describes what the model sees across a compact whole-map packet and selects up to six of the most active regions.
 2. A forecast call receives detailed history for exactly those regions and returns base-level probabilities, exact event bets, ETAs, and evidence references.
 
 Every model sees data with the same UTC cutoff. Local validation rejects malformed output, unknown bases or evidence IDs, non-monotonic probabilities, invalid actors, and ETAs outside the 24-hour window. One correction attempt is allowed. A model may omit bases, but every omitted strategic base is scored as a 0% prediction. This prevents selective coverage from inflating the result.

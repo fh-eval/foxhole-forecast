@@ -38,7 +38,7 @@ def build_dashboard_data() -> dict[str, Any]:
             "run_id": run["run_id"],
             "cutoff": run["cutoff"],
             "status": run["status"],
-            "war_summary": run.get("forecast", {}).get("war_summary"),
+            "war_summary": run.get("war_summary", run.get("forecast", {}).get("war_summary")),
             "selected_regions": run.get("selected_regions", []),
             "brier_skill_score": settlement.get("brier_skill_score"),
             "integrated_brier": settlement.get("integrated_brier"),

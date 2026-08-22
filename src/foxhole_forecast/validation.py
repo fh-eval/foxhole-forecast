@@ -12,7 +12,12 @@ class ValidationError(ValueError):
     pass
 
 
-def validate_scout(value: dict[str, Any], packet: dict[str, Any], settings: Settings) -> list[str]:
+def validate_scout(
+    value: dict[str, Any], packet: dict[str, Any], settings: Settings
+) -> dict[str, Any]:
+    summary = value.get("war_summary")
+    if not isinstance(summary, str) or not summary.strip() or len(summary.split()) > 350:
+        raise ValidationError("war_summary must contain 1-350 words")
     selected = value.get("selected_regions")
     if not isinstance(selected, list) or not selected:
         raise ValidationError("selected_regions must be a non-empty array")
@@ -21,14 +26,11 @@ def validate_scout(value: dict[str, Any], packet: dict[str, Any], settings: Sett
     allowed = {region["map_name"] for region in packet["regions"]}
     if any(not isinstance(name, str) or name not in allowed for name in selected):
         raise ValidationError("selected_regions contains an unknown region")
-    return selected
+    return {"war_summary": summary.strip(), "selected_regions": selected}
 
 
 def validate_forecast(value: dict[str, Any], packet: dict[str, Any], settings: Settings) -> None:
-    summary = value.get("war_summary")
     rows = value.get("base_forecasts")
-    if not isinstance(summary, str) or not summary.strip() or len(summary.split()) > 350:
-        raise ValidationError("war_summary must contain 1-350 words")
     if not isinstance(rows, list):
         raise ValidationError("base_forecasts must be an array")
     if len(rows) > settings.forecast_base_limit:
