@@ -1,0 +1,75 @@
+name: Deploy watchdog
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "watchdog/**"
+      - ".github/workflows/watchdog.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-watchdog
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      WATCHDOG_GITHUB_TOKEN: ${{ secrets.WATCHDOG_GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Find the Cloudflare account
+        id: cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          identity="$(npx --yes wrangler@4 whoami --json)"
+          account_count="$(jq '.accounts | length' <<<"$identity")"
+          if [[ "$account_count" != "1" ]]; then
+            echo "Expected the token to expose exactly one Cloudflare account; found $account_count." >&2
+            echo "Add CLOUDFLARE_ACCOUNT_ID as a repository secret if this token intentionally covers multiple accounts." >&2
+            exit 1
+          fi
+          account_id="$(jq -r '.accounts[0].id // .accounts[0].accountId // empty' <<<"$identity")"
+          if [[ -z "$account_id" ]]; then
+            echo "Wrangler did not return a Cloudflare account ID." >&2
+            exit 1
+          fi
+          echo "::add-mask::$account_id"
+          echo "account_id=$account_id" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy the watchdog Worker and cron trigger
+        id: deploy
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ steps.cloudflare.outputs.account_id }}
+          workingDirectory: watchdog
+          command: deploy
+
+      - name: Bind the watchdog's GitHub credential
+        if: env.WATCHDOG_GITHUB_TOKEN != ''
+        working-directory: watchdog
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ steps.cloudflare.outputs.account_id }}
+        run: printf '%s' "$WATCHDOG_GITHUB_TOKEN" | npx --yes wrangler@4 secret put GITHUB_TOKEN
+
+      - name: Report missing runtime credential
+        if: env.WATCHDOG_GITHUB_TOKEN == ''
+        run: echo "::warning::Worker deployed, but WATCHDOG_GITHUB_TOKEN is not configured; scheduled dispatches will fail until it is added."
+
+      - name: Check the deployed health endpoint
+        if: steps.deploy.outputs.deployment-url != ''
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
+        run: curl --fail --silent --show-error "$DEPLOYMENT_URL"
