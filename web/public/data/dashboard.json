@@ -1149,9 +1149,9 @@
       "series_id": "deepseek-v4-flash-direct-json-war-overview-v2"
     }
   ],
-  "collector_runs": 35,
-  "generated_at": "2026-08-22T13:47:49.730794Z",
-  "last_collected_at": "2026-08-22T13:47:37.543882Z",
+  "collector_runs": 36,
+  "generated_at": "2026-08-22T13:51:10.378306Z",
+  "last_collected_at": "2026-08-22T13:50:58.560558Z",
   "methodology": {
     "current_protocol": "event_outcome_v4",
     "data_source": "Official Foxhole War API, with a provenance-tagged one-time FoxholeStats history backfill",
@@ -1402,7 +1402,7 @@
     {
       "baseline_integrated_brier": null,
       "brier_skill_score": null,
-      "censored_event_bets": 1,
+      "censored_event_bets": 2,
       "complete_runs": 0,
       "event_brier": 0.141325,
       "event_hits": 0,
@@ -1491,7 +1491,7 @@
         "war_summary": "War 139, day 93, no winner yet (32 victory towns required). The map is heavily polarized: many regions are fully owned by one side with near-zero current combat (e.g., Acrithia, Dead Lands, Heartlands for Colonials; Reaching Trail, Viper Pit, Weathered Expanse for Wardens), indicating stable rear areas. Active fighting is concentrated in a handful of contested regions: Oarbreaker (37 base events in 24h, ongoing flips at Posterus/Grisly Refuge), Clahstra (14 events, heavy accelerating casualties ~1,700/6h with Warden edge), Mooring County (18 events but quiet in last 6h), Stlican Shelf (17 events, casualties surging from near-zero to ~1,100/6h), Endless Shore (11 events, cooling from a spike), and Olavis Wake/Onyx (high casualty rates, recent activity). Callahan's Passage shows the highest raw casualty rates (~6,200/6h) but no recorded base events. Uncertainty: event feeds show zero events in the last 2h across all regions despite high casualty rates, suggesting either lull or reporting lag; history covers only ~11 hours, so trend durability is unverified; several hot regions' latest events are 10+ hours old."
       },
       "median_eta_error_minutes": 603.87,
-      "open_event_bets": 19,
+      "open_event_bets": 18,
       "requested_model": "stealth/ox-alpha",
       "returned_model": "stealth/ox-alpha",
       "series_id": "openrouter-stealth-ox-alpha-event-v4",
@@ -4801,57 +4801,6 @@
       "status": "open",
       "timing_credit": null,
       "tranche": null
-    },
-    {
-      "actor": null,
-      "base_id": "ClahstraHex:e0ff3a1894",
-      "base_name": "Weephome",
-      "base_type": "Relic Base",
-      "brier": null,
-      "confidence": 0.5,
-      "current_team": "WARDENS",
-      "cutoff": "2026-08-22T07:20:27.218442Z",
-      "destination_team": null,
-      "eta_error_max_minutes": null,
-      "eta_error_min_minutes": null,
-      "eta_error_minutes": null,
-      "eta_utc": "2026-08-22T10:50:00Z",
-      "event_type": null,
-      "evidence": [
-        {
-          "label": "Clahstra · Colonial casualties rate, last 2h (per hour)",
-          "metric_id": "region.ClahstraHex.colonialCasualties.rate_2h_per_hour",
-          "observed_at": "2026-08-22T07:20:27.218442Z",
-          "relevance": 9,
-          "value": 231.5
-        },
-        {
-          "label": "Clahstra · Warden casualties rate, last 2h (per hour)",
-          "metric_id": "region.ClahstraHex.wardenCasualties.rate_2h_per_hour",
-          "observed_at": "2026-08-22T07:20:27.218442Z",
-          "relevance": 8,
-          "value": 240.0
-        },
-        {
-          "label": "Clahstra · Enlistments, 2h change",
-          "metric_id": "region.ClahstraHex.totalEnlistments.delta_2h",
-          "observed_at": "2026-08-22T07:20:27.218442Z",
-          "relevance": 5,
-          "value": 51
-        }
-      ],
-      "map_name": "ClahstraHex",
-      "model_label": "Ox Alpha",
-      "predicted_outcome": "CAPTURED",
-      "rank": 2,
-      "run_id": "2026-08-22-89bebfdcd916:openrouter-stealth-ox-alpha-event-v4",
-      "series_id": "openrouter-stealth-ox-alpha-event-v4",
-      "settlement_outcome": null,
-      "settlement_reason": "awaiting_deadline",
-      "state_credit": null,
-      "status": "open",
-      "timing_credit": null,
-      "tranche": "IMMEDIATE"
     },
     {
       "actor": "COLONIALS",
@@ -9338,6 +9287,57 @@
       "model_label": "Ox Alpha",
       "predicted_outcome": "CAPTURED",
       "rank": 1,
+      "run_id": "2026-08-22-89bebfdcd916:openrouter-stealth-ox-alpha-event-v4",
+      "series_id": "openrouter-stealth-ox-alpha-event-v4",
+      "settlement_outcome": null,
+      "settlement_reason": "insufficient_observation_coverage",
+      "state_credit": null,
+      "status": "censored",
+      "timing_credit": null,
+      "tranche": "IMMEDIATE"
+    },
+    {
+      "actor": null,
+      "base_id": "ClahstraHex:e0ff3a1894",
+      "base_name": "Weephome",
+      "base_type": "Relic Base",
+      "brier": null,
+      "confidence": 0.5,
+      "current_team": "WARDENS",
+      "cutoff": "2026-08-22T07:20:27.218442Z",
+      "destination_team": null,
+      "eta_error_max_minutes": null,
+      "eta_error_min_minutes": null,
+      "eta_error_minutes": null,
+      "eta_utc": "2026-08-22T10:50:00Z",
+      "event_type": null,
+      "evidence": [
+        {
+          "label": "Clahstra · Colonial casualties rate, last 2h (per hour)",
+          "metric_id": "region.ClahstraHex.colonialCasualties.rate_2h_per_hour",
+          "observed_at": "2026-08-22T07:20:27.218442Z",
+          "relevance": 9,
+          "value": 231.5
+        },
+        {
+          "label": "Clahstra · Warden casualties rate, last 2h (per hour)",
+          "metric_id": "region.ClahstraHex.wardenCasualties.rate_2h_per_hour",
+          "observed_at": "2026-08-22T07:20:27.218442Z",
+          "relevance": 8,
+          "value": 240.0
+        },
+        {
+          "label": "Clahstra · Enlistments, 2h change",
+          "metric_id": "region.ClahstraHex.totalEnlistments.delta_2h",
+          "observed_at": "2026-08-22T07:20:27.218442Z",
+          "relevance": 5,
+          "value": 51
+        }
+      ],
+      "map_name": "ClahstraHex",
+      "model_label": "Ox Alpha",
+      "predicted_outcome": "CAPTURED",
+      "rank": 2,
       "run_id": "2026-08-22-89bebfdcd916:openrouter-stealth-ox-alpha-event-v4",
       "series_id": "openrouter-stealth-ox-alpha-event-v4",
       "settlement_outcome": null,
@@ -14183,9 +14183,9 @@
           "run_id": "2026-08-22-89bebfdcd916:openrouter-stealth-ox-alpha-event-v4",
           "series_id": "openrouter-stealth-ox-alpha-event-v4",
           "settlement_outcome": null,
-          "settlement_reason": "awaiting_deadline",
+          "settlement_reason": "insufficient_observation_coverage",
           "state_credit": null,
-          "status": "open",
+          "status": "censored",
           "timing_credit": null,
           "tranche": "IMMEDIATE"
         },
@@ -19357,7 +19357,7 @@
         "warden_casualties": 47244
       },
       {
-        "colonial_casualties": 15052,
+        "colonial_casualties": 15140,
         "map_name": "ClahstraHex",
         "ownership": {
           "COLONIALS": 2,
@@ -19366,8 +19366,8 @@
         },
         "ownership_events_24h": 2,
         "strategic_base_count": 8,
-        "total_enlistments": 3876,
-        "warden_casualties": 16128
+        "total_enlistments": 3893,
+        "warden_casualties": 16260
       },
       {
         "colonial_casualties": 9045,
@@ -19488,11 +19488,11 @@
       }
     ],
     "casualties": {
-      "COLONIALS": 277643,
-      "WARDENS": 288879
+      "COLONIALS": 277731,
+      "WARDENS": 289012
     },
     "day_of_war": 94,
-    "observed_at": "2026-08-22T13:47:37.543882Z",
+    "observed_at": "2026-08-22T13:50:58.560558Z",
     "recent_ownership_events": [
       {
         "actor": "WARDENS",
