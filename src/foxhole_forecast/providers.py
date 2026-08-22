@@ -94,13 +94,13 @@ class ModelProvider:
             },
         )
         raw = self._request_with_retry(request)
+        usage = raw.get("usage", {})
+        cost = _cost(self.config["model"], usage)
+        self.accumulated_cost += cost
         content = raw["choices"][0]["message"]["content"]
         if isinstance(content, list):
             content = "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
         parsed = _parse_json_content(str(content))
-        usage = raw.get("usage", {})
-        cost = _cost(self.config["model"], usage)
-        self.accumulated_cost += cost
         return ProviderResponse(
             parsed=parsed,
             raw=raw,

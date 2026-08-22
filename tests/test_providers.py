@@ -25,6 +25,23 @@ class _Response:
         ).encode()
 
 
+class _MalformedPaidResponse:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def read(self) -> bytes:
+        return json.dumps(
+            {
+                "choices": [{"message": {"content": "{\"unfinished\":"}}],
+                "model": "deepseek-v4-flash",
+                "usage": {"prompt_tokens": 1_000_000, "completion_tokens": 1_000_000},
+            }
+        ).encode()
+
+
 class ProviderTests(unittest.TestCase):
     def test_deepseek_cost_uses_cache_specific_rates(self) -> None:
         cost = _cost(
@@ -112,6 +129,25 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(captured["url"], "https://api.deepseek.com/chat/completions")
         self.assertEqual(captured["body"]["response_format"], {"type": "json_object"})
         self.assertEqual(captured["body"]["thinking"], {"type": "disabled"})
+
+    def test_malformed_paid_response_still_counts_toward_budget(self) -> None:
+        config = {
+            "gateway": "deepseek",
+            "model": "deepseek-v4-flash",
+            "api_key_env": "TEST_DEEPSEEK_KEY",
+        }
+        with patch.dict("os.environ", {"TEST_DEEPSEEK_KEY": "secret"}), patch(
+            "urllib.request.urlopen", return_value=_MalformedPaidResponse()
+        ):
+            provider = ModelProvider(config, Settings.load())
+            with self.assertRaises(json.JSONDecodeError):
+                provider.complete_json(
+                    [{"role": "user", "content": "Return JSON"}],
+                    "test",
+                    {"type": "object"},
+                )
+
+        self.assertEqual(provider.accumulated_cost, 0.42)
 
 
 if __name__ == "__main__":
