@@ -9,25 +9,10 @@ from .storage import parse_time, read_json, read_jsonl
 
 
 DATA_DICTIONARY = {
-    "observed_fields": {
-        "ownership": "Current strategic-base team at cutoff: WARDENS, COLONIALS, or NONE.",
-        "colonial_casualties": "Official per-region counter of Colonial casualties suffered; unit is casualties.",
-        "warden_casualties": "Official per-region counter of Warden casualties suffered; unit is casualties.",
-        "total_enlistments": "Official per-region enlistment counter. It is not concurrent population, unique players, or a faction split.",
-        "day_of_war": "Official in-game war day reported for the region.",
-        "recent_events": "Cutoff-safe ownership event records. A single direct flip may appear as a loss event plus a capture event.",
-    },
-    "derived_fields": {
-        "report_deltas": "Current counter minus the latest sampled counter at or before cutoff minus 2h, 6h, or 24h.",
-        "rate_trends": "Adjacent equal-window comparison derived from official counters. Array order is [recent_per_hour, previous_per_hour, change_per_hour, direction].",
-        "activity": "Counts cutoff-safe semantic ownership event records by region and time window.",
-        "selected_metrics": "Evidence citation records. Each metric_id names the region, source field, and transform; value and observed_at are frozen at prediction time.",
-    },
-    "limitations": [
-        "The official War API does not expose live regional population or faction population.",
-        "Enlistment change is an activity proxy only and must not be described as population change.",
-        "Trend direction is unavailable until two complete adjacent sampled windows exist.",
-    ],
+    "total_enlistments": "Cumulative unique players who have deployed to this region during the war. A player can count in multiple regions. This is not current population or a faction split; its change is only a new-to-that-region activity proxy.",
+    "rate_trends": "Adjacent equal-window comparison. Array order is [recent_per_hour, previous_per_hour, change_per_hour, direction].",
+    "recent_events": "A direct ownership flip can produce a loss row plus a capture row for the same state transition.",
+    "selected_metrics": "Evidence citation keys whose values and observation times are frozen at prediction time.",
 }
 
 
