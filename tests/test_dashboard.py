@@ -7,11 +7,18 @@ from foxhole_forecast.dashboard import (
     _metric_label,
     _predicted_outcome,
     _present_evidence,
+    _round_slot,
 )
 from foxhole_forecast.forecasting import _freeze_evidence
 
 
 class DashboardTests(unittest.TestCase):
+    def test_round_slot_is_shared_across_a_three_hour_block(self) -> None:
+        self.assertEqual(
+            _round_slot("2026-08-22T07:59:59Z", 3),
+            "2026-08-22T06:00:00Z",
+        )
+
     def test_predicted_outcome_is_recovered_from_archived_forecast(self) -> None:
         settled_bet = {"outcome": None}
         forecast_bet = {"outcome": "CAPTURED"}

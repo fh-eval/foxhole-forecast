@@ -11,12 +11,21 @@ from .packets import build_scout_packet
 from .storage import isoformat, parse_time, read_json, read_jsonl, write_json
 
 
+def _round_slot(cutoff: str, interval_hours: int) -> str:
+    timestamp = parse_time(cutoff)
+    slot_hour = timestamp.hour - timestamp.hour % interval_hours
+    return isoformat(timestamp.replace(hour=slot_hour, minute=0, second=0, microsecond=0))
+
+
 def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
     current_settings = settings or Settings.load()
     latest = read_json(DATA_DIR / "raw" / "latest.json", default={})
     pipeline_state = read_json(DATA_DIR / "state.json", default={})
     scores = read_json(DATA_DIR / "scores.json", default={"models": []})
     runs = read_jsonl(DATA_DIR / "model_runs.jsonl")
+    cohorts = {
+        row["cohort_id"]: row for row in read_jsonl(DATA_DIR / "cohorts.jsonl")
+    }
     settlements = read_json(DATA_DIR / "settlements.json", default={})
     collector_runs = read_jsonl(DATA_DIR / "collector_runs.jsonl")
     official_events = read_jsonl(DATA_DIR / "events.jsonl")
@@ -28,8 +37,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
     }
     by_series: dict[str, list[dict[str, Any]]] = defaultdict(list)
     latest_valid_runs: dict[str, dict[str, Any]] = {}
-    rounds: list[dict[str, Any]] = []
-    round_counts: dict[str, int] = defaultdict(int)
+    rounds_by_participant: dict[tuple[str, str, str], dict[str, Any]] = {}
     for run in runs:
         series = run["series_id"]
         metric_lookup = _metric_lookup(run)
@@ -114,23 +122,36 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
             }
             presented_round_bets.append(presented)
         if run.get("status") == "valid":
-            round_counts[series] += 1
-            rounds.append(
-                {
-                    "run_id": run["run_id"],
-                    "series_id": series,
-                    "model_label": run.get("label", series),
-                    "round_number": round_counts[series],
-                    "cutoff": run["cutoff"],
-                    "war_summary": run.get("war_summary"),
-                    "selected_regions": run.get("selected_regions", []),
-                    "protocol": settlement.get("protocol"),
-                    "settlement_status": settlement.get("status", "not_available"),
-                    "timing_score_pct": settlement.get("timing_score_pct"),
-                    "event_brier": settlement.get("event_brier"),
-                    "predictions": presented_round_bets,
-                }
+            cohort = cohorts.get(run["cohort_id"], {})
+            round_slot = cohort.get("slot") or _round_slot(
+                run["cutoff"], current_settings.forecast_interval_hours
             )
+            war_id = run.get("war_id") or cohort.get("war_id", "unknown-war")
+            round_record = {
+                "round_id": f"{war_id}:{round_slot}",
+                "round_slot": round_slot,
+                "round_end": isoformat(
+                    parse_time(round_slot)
+                    + timedelta(hours=current_settings.forecast_interval_hours)
+                ),
+                "war_id": war_id,
+                "war_number": cohort.get("war_number") or run.get("war_number"),
+                "run_id": run["run_id"],
+                "series_id": series,
+                "model_label": run.get("label", series),
+                "cutoff": run["cutoff"],
+                "war_summary": run.get("war_summary"),
+                "selected_regions": run.get("selected_regions", []),
+                "protocol": settlement.get("protocol"),
+                "settlement_status": settlement.get("status", "not_available"),
+                "timing_score_pct": settlement.get("timing_score_pct"),
+                "event_brier": settlement.get("event_brier"),
+                "predictions": presented_round_bets,
+            }
+            participant_key = (war_id, round_slot, series)
+            previous = rounds_by_participant.get(participant_key)
+            if not previous or run["cutoff"] > previous["cutoff"]:
+                rounds_by_participant[participant_key] = round_record
 
     models: list[dict[str, Any]] = []
     score_lookup = {row["series_id"]: row for row in scores.get("models", [])}
@@ -195,9 +216,13 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                 }
             )
     base_forecasts.sort(key=lambda row: (-row["p_change_24h"], row["model_label"], row["base_name"]))
-    rounds.sort(key=lambda row: row["cutoff"], reverse=True)
+    rounds = sorted(
+        rounds_by_participant.values(),
+        key=lambda row: (row["round_slot"], row["cutoff"]),
+        reverse=True,
+    )
     output = {
-        "schema_version": 6,
+        "schema_version": 7,
         "generated_at": isoformat(),
         "war": latest.get("war"),
         "last_collected_at": latest.get("observed_at"),

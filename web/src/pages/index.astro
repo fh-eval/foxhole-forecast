@@ -62,7 +62,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
                 <th>Model</th>
                 <th>Forecast score<small>Mean earned credit ↑</small></th>
                 <th>Confidence<small>Mean stated</small></th>
-                <th>Typical target<small>Median after cutoff</small></th>
+                <th>Typical 0–6h target<small>Median after cutoff</small></th>
+                <th>Typical 6–24h target<small>Median after cutoff</small></th>
                 <th>ETA error<small>Median matched event ↓</small></th>
                 <th>Calibration<small>Mean squared gap ↓</small></th>
                 <th>Results<small>Hit / partial / miss</small></th>
@@ -75,7 +76,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <dl id="score-guide" class="score-guide">
           <div><dt>Forecast score</dt><dd>Average outcome × timing credit for scoreable bets. 1.00 is perfect.</dd></div>
           <div><dt>Confidence</dt><dd>The model’s average stated confidence across all published bets, including open bets.</dd></div>
-          <div><dt>Typical target</dt><dd>How far after the round cutoff the model usually places its exact ETA.</dd></div>
+          <div><dt>Typical targets</dt><dd>Median ETA lead is reported separately inside the required 0–6h and 6–24h tranches, so the imposed timeline does not blur model behavior.</dd></div>
           <div><dt>ETA error</dt><dd>Median distance from the ETA to a matched transition interval; no-event misses are not measurable here.</dd></div>
           <div><dt>Calibration</dt><dd>Average squared gap between confidence and earned credit. Lower means confidence better matches results.</dd></div>
           <div><dt>Censored</dt><dd>Settled without a score because observation coverage could not support a fair result.</dd></div>
@@ -108,7 +109,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       <section id="rounds" class="section-block">
         <div class="section-heading">
           <div><p class="kicker">Dated sets of bets</p><h2>Prediction rounds</h2></div>
-          <p>Open a round to see its cutoff-time war briefing, selected regions, and all eight ranked predictions together.</p>
+          <p>Each round is one shared three-hour UTC block. Open it to compare every participating model’s cutoff-time briefing and eight ranked predictions.</p>
         </div>
         <div id="round-list" class="round-list"></div>
       </section>
@@ -214,7 +215,10 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const bets = rounds.filter((round) => round.series_id === model.series_id).flatMap((round) => round.predictions || []);
         const scoreable = bets.filter((bet) => predictionScoreValue(bet) != null);
         const confidences = bets.map((bet) => Number(bet.confidence)).filter(Number.isFinite);
-        const leadMinutes = bets.map((bet) => (new Date(bet.eta_utc) - new Date(bet.cutoff || rounds.find((round) => round.run_id === bet.run_id)?.cutoff)) / 60000).filter((value) => Number.isFinite(value) && value >= 0);
+        const leadMinutes = (tranche) => bets
+          .filter((bet) => bet.tranche === tranche)
+          .map((bet) => (new Date(bet.eta_utc) - new Date(bet.cutoff || rounds.find((round) => round.run_id === bet.run_id)?.cutoff)) / 60000)
+          .filter((value) => Number.isFinite(value) && value >= 0);
         const etaErrors = scoreable.filter((bet) => bet.eta_error_minutes != null).map((bet) => Number(bet.eta_error_minutes)).filter(Number.isFinite);
         const credits = scoreable.map((bet) => Number(bet.timing_credit));
         const calibrationErrors = scoreable
@@ -227,7 +231,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           scoreable,
           score: mean(credits),
           confidence: mean(confidences),
-          leadMinutes: median(leadMinutes),
+          immediateLeadMinutes: median(leadMinutes("IMMEDIATE")),
+          extendedLeadMinutes: median(leadMinutes("EXTENDED")),
           etaErrorMinutes: median(etaErrors),
           matched: etaErrors.length,
           calibration: mean(calibrationErrors),
@@ -276,7 +281,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             modelCell,
             metricCell(decimal(behavior.score), `${behavior.scoreable.length} scoreable bets`, "score-table__primary"),
             metricCell(decimal(behavior.confidence), `${behavior.bets.length} published bets`),
-            metricCell(duration(behavior.leadMinutes), "cutoff → ETA"),
+            metricCell(duration(behavior.immediateLeadMinutes), "within required tranche"),
+            metricCell(duration(behavior.extendedLeadMinutes), "within required tranche"),
             metricCell(duration(behavior.etaErrorMinutes), `${behavior.matched} matched transitions`),
             metricCell(decimal(behavior.calibration), "lower is better"),
             resultsCell,
@@ -518,6 +524,44 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         return `${resolved}/${expected} Predictions Resolved`;
       }
 
+      function groupedRounds(rounds) {
+        const groups = new Map();
+        rounds.forEach((round) => {
+          const slot = round.round_slot || round.cutoff;
+          const key = round.round_id || `${round.war_id || "war"}:${slot}`;
+          if (!groups.has(key)) {
+            groups.set(key, {
+              key,
+              slot,
+              end: round.round_end,
+              warNumber: round.war_number,
+              participants: [],
+            });
+          }
+          groups.get(key).participants.push(round);
+        });
+        return [...groups.values()]
+          .map((group) => ({
+            ...group,
+            participants: group.participants.sort((a, b) => String(a.model_label).localeCompare(String(b.model_label))),
+          }))
+          .sort((a, b) => new Date(b.slot) - new Date(a.slot));
+      }
+
+      function roundWindow(group) {
+        const start = new Date(group.slot);
+        const end = group.end ? new Date(group.end) : new Date(start.getTime() + 3 * 60 * 60 * 1000);
+        const day = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", timeZone: "UTC" }).format(start);
+        const time = (value) => new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC" }).format(value);
+        return `${day} · ${time(start)}–${time(end)} UTC`;
+      }
+
+      function groupResolutionLabel(group) {
+        const expected = (dashboard?.methodology?.predictions_per_round ?? 8) * group.participants.length;
+        const resolved = group.participants.flatMap((round) => round.predictions || []).filter((bet) => bet.status && bet.status !== "open").length;
+        return `${resolved}/${expected} Predictions Resolved`;
+      }
+
       function renderRounds(rounds) {
         const list = document.querySelector("#round-list");
         list.replaceChildren();
@@ -525,32 +569,44 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           list.append(element("p", "empty-state", "The first valid timed prediction round has not landed yet."));
           return;
         }
-        rounds.forEach((round, index) => {
+        groupedRounds(rounds).forEach((group, index) => {
           const details = element("details", "round");
           if (index === 0) details.open = true;
           const summary = element("summary", "round__summary");
           summary.append(
-            element("strong", "", `${round.model_label}, Round ${round.round_number}`),
-            element("time", "", formatDate(round.cutoff)),
-            element("span", `status status--${round.settlement_status}`, roundResolutionLabel(round)),
+            element("strong", "", `${group.warNumber ? `War ${group.warNumber} · ` : ""}${roundWindow(group)}`),
+            element("time", "", `${group.participants.length} participating model${group.participants.length === 1 ? "" : "s"}`),
+            element("span", `status status--${group.participants.some((round) => round.settlement_status === "open") ? "open" : "complete"}`, groupResolutionLabel(group)),
           );
           const body = element("div", "round__body");
-          body.append(
-            element("p", "briefing__copy", round.war_summary || "No briefing was retained for this round."),
-            element("p", "region-list", (round.selected_regions || []).join(" · ")),
-          );
-          const bets = element("div", "round__bets");
-          (round.predictions || []).forEach((bet) => {
-            const row = element("article", "round-bet");
-            const meta = element("div", "round-bet__meta");
-            meta.append(
-              element("span", "", `#${bet.rank ?? "—"} · ${trancheLabel(bet.tranche)} · ${regionLabel(bet.map_name)}`),
-              predictionResult(bet),
+          group.participants.forEach((round) => {
+            const participant = element("details", "round-model");
+            const participantSummary = element("summary", "round-model__summary");
+            participantSummary.append(
+              element("strong", "", round.model_label),
+              element("time", "", `Data cutoff ${formatDate(round.cutoff)}`),
+              element("span", `status status--${round.settlement_status}`, roundResolutionLabel(round)),
             );
-            row.append(meta, predictionHeadline(bet), supportingEvidence(bet.evidence));
-            bets.append(row);
+            const participantBody = element("div", "round-model__body");
+            participantBody.append(
+              element("p", "briefing__copy", round.war_summary || "No briefing was retained for this round."),
+              element("p", "region-list", (round.selected_regions || []).join(" · ")),
+            );
+            const bets = element("div", "round__bets");
+            (round.predictions || []).forEach((bet) => {
+              const row = element("article", "round-bet");
+              const meta = element("div", "round-bet__meta");
+              meta.append(
+                element("span", "", `#${bet.rank ?? "—"} · ${trancheLabel(bet.tranche)} · ${regionLabel(bet.map_name)}`),
+                predictionResult(bet),
+              );
+              row.append(meta, predictionHeadline(bet), supportingEvidence(bet.evidence));
+              bets.append(row);
+            });
+            participantBody.append(bets);
+            participant.append(participantSummary, participantBody);
+            body.append(participant);
           });
-          body.append(bets);
           details.append(summary, body);
           list.append(details);
         });
