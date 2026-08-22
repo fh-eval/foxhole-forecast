@@ -11,7 +11,7 @@ from .config import DATA_DIR, ROOT, Settings, load_models
 from .packets import build_detail_packet, build_scout_packet, current_strategic_base_ids
 from .providers import MissingApiKey, ModelProvider, ProviderResponse
 from .schemas import forecast_schema, scout_schema
-from .storage import append_jsonl, isoformat, read_json, write_json
+from .storage import append_jsonl, isoformat, parse_time, read_json, read_jsonl, write_json
 from .validation import ValidationError, validate_forecast, validate_scout
 from .war_lifecycle import war_ended_at, war_is_active
 
@@ -144,7 +144,17 @@ def _run_model(
     selected: list[str] = []
     try:
         scout_contract = scout_schema(settings)
-        scout_messages = _messages(SCOUT_SYSTEM, scout_packet, scout_contract)
+        model_scout_packet = copy.deepcopy(scout_packet)
+        previous_summary = _previous_model_summary(
+            config["series_id"], scout_packet["war"]["warId"], scout_packet["cutoff"]
+        )
+        if previous_summary:
+            model_scout_packet["previous_model_summary"] = previous_summary
+        write_json(
+            cohort_dir / f"{config['series_id']}-scout-packet.json",
+            model_scout_packet,
+        )
+        scout_messages = _messages(SCOUT_SYSTEM, model_scout_packet, scout_contract)
         scout_response, overview = _call_validated(
             provider,
             scout_messages,
@@ -204,6 +214,43 @@ def _run_model(
             "calls": calls,
             "cost_usd": round(total_cost, 8),
         }
+
+
+def _previous_model_summary(
+    series_id: str, war_id: str, cutoff: str
+) -> dict[str, str] | None:
+    """Return the latest valid same-model summary before this cohort cutoff."""
+    try:
+        current_cutoff = parse_time(cutoff)
+    except (TypeError, ValueError):
+        return None
+
+    candidates: list[tuple[datetime, dict[str, Any]]] = []
+    for run in read_jsonl(DATA_DIR / "model_runs.jsonl"):
+        if (
+            run.get("status") != "valid"
+            or run.get("series_id") != series_id
+            or run.get("war_id") != war_id
+        ):
+            continue
+        summary = run.get("war_summary")
+        if not isinstance(summary, str) or not summary.strip():
+            continue
+        try:
+            run_cutoff = parse_time(run["cutoff"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if run_cutoff >= current_cutoff:
+            continue
+        candidates.append((run_cutoff, run))
+
+    if not candidates:
+        return None
+    _, previous = max(candidates, key=lambda item: item[0])
+    return {
+        "cutoff": previous["cutoff"],
+        "war_summary": previous["war_summary"].strip(),
+    }
 
 
 def _budget(

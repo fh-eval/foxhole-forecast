@@ -10,6 +10,7 @@ from foxhole_forecast.forecasting import (
     SCOUT_SYSTEM,
     _budget,
     _messages,
+    _previous_model_summary,
     run_forecast_cohort,
 )
 
@@ -93,6 +94,61 @@ class ForecastBudgetTests(unittest.TestCase):
 
         self.assertIn("OUTPUT JSON SCHEMA", messages[1]["content"])
         self.assertIn('"required":["war_summary"]', messages[1]["content"])
+
+    @patch("foxhole_forecast.forecasting.read_jsonl")
+    def test_previous_summary_is_latest_valid_same_model_and_war(
+        self, read_jsonl_mock
+    ) -> None:
+        read_jsonl_mock.return_value = [
+            {
+                "status": "valid",
+                "series_id": "nemotron",
+                "war_id": "war-1",
+                "cutoff": "2026-08-22T03:00:00Z",
+                "war_summary": "Older summary.",
+            },
+            {
+                "status": "invalid",
+                "series_id": "nemotron",
+                "war_id": "war-1",
+                "cutoff": "2026-08-22T06:00:00Z",
+                "war_summary": "Do not use this.",
+            },
+            {
+                "status": "valid",
+                "series_id": "nemotron",
+                "war_id": "war-1",
+                "cutoff": "2026-08-22T09:00:00Z",
+                "war_summary": "Latest summary.",
+            },
+            {
+                "status": "valid",
+                "series_id": "inkling",
+                "war_id": "war-1",
+                "cutoff": "2026-08-22T10:00:00Z",
+                "war_summary": "Wrong model.",
+            },
+            {
+                "status": "valid",
+                "series_id": "nemotron",
+                "war_id": "war-2",
+                "cutoff": "2026-08-22T11:00:00Z",
+                "war_summary": "Wrong war.",
+            },
+        ]
+
+        self.assertEqual(
+            _previous_model_summary(
+                "nemotron", "war-1", "2026-08-22T12:00:00Z"
+            ),
+            {"cutoff": "2026-08-22T09:00:00Z", "war_summary": "Latest summary."},
+        )
+
+    @patch("foxhole_forecast.forecasting.read_jsonl", return_value=[])
+    def test_previous_summary_is_optional(self, _read_jsonl_mock) -> None:
+        self.assertIsNone(
+            _previous_model_summary("nemotron", "war-1", "2026-08-22T12:00:00Z")
+        )
 
     def test_existing_paid_models_keep_shared_legacy_ledger(self) -> None:
         state = {"daily_costs": {"2026-08-22": 0.2}}
