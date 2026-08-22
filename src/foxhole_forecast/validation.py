@@ -29,8 +29,13 @@ def validate_forecast(value: dict[str, Any], packet: dict[str, Any], settings: S
     rows = value.get("base_forecasts")
     if not isinstance(summary, str) or not summary.strip() or len(summary.split()) > 350:
         raise ValidationError("war_summary must contain 1-350 words")
-    if not isinstance(rows, list) or len(rows) > settings.forecast_base_limit:
-        raise ValidationError("base_forecasts must be an array within the configured limit")
+    if not isinstance(rows, list):
+        raise ValidationError("base_forecasts must be an array")
+    if len(rows) > settings.forecast_base_limit:
+        raise ValidationError(
+            f"base_forecasts has {len(rows)} entries; keep only the "
+            f"{settings.forecast_base_limit} highest-probability bases"
+        )
 
     bases = {base["base_id"]: base for base in packet["all_strategic_bases"]}
     metrics = {metric["metric_id"] for metric in packet["selected_metrics"]}
@@ -96,4 +101,3 @@ def _validate_event(
         relevance = item.get("relevance")
         if not isinstance(relevance, int) or isinstance(relevance, bool) or not 1 <= relevance <= 10:
             raise ValidationError("Evidence relevance must be an integer from 1 to 10")
-

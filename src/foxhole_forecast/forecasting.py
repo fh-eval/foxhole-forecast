@@ -118,7 +118,7 @@ def _run_model(
         return {**base, "status": "skipped_missing_key", "error": str(error), "cost_usd": 0.0}
 
     total_cost = 0.0
-    calls: list[dict[str, Any]] = []
+    calls = provider.attempts
     try:
         scout_messages = _messages(SCOUT_SYSTEM, scout_packet)
         scout_response, selected = _call_validated(
@@ -128,8 +128,6 @@ def _run_model(
             scout_schema(settings),
             lambda value: validate_scout(value, scout_packet, settings),
         )
-        calls.append(_call_record("scout", scout_messages, scout_response))
-
         detail_packet = build_detail_packet(settings, selected)
         write_json(cohort_dir / f"{config['series_id']}-detail-packet.json", detail_packet)
         forecast_messages = _messages(FORECAST_SYSTEM, detail_packet)
@@ -140,7 +138,6 @@ def _run_model(
             forecast_schema(settings),
             lambda value: validate_forecast(value, detail_packet, settings),
         )
-        calls.append(_call_record("forecast", forecast_messages, forecast_response))
         frozen_forecast = _freeze_evidence(forecast_response.parsed, detail_packet)
         total_cost = provider.accumulated_cost
         ledger[ledger_key] = round(spent + total_cost, 8)
@@ -208,6 +205,10 @@ def _call_validated(
             return response, validated
         except (ValidationError, ValueError, KeyError, json.JSONDecodeError) as error:
             last_error = error
+            if provider.attempts:
+                provider.attempts[-1].setdefault(
+                    "error", f"{type(error).__name__}: {error}"
+                )
             if attempt == 0:
                 active_messages = [
                     *messages,
@@ -228,20 +229,6 @@ def _messages(system: str, packet: dict[str, Any]) -> list[dict[str, str]]:
             "content": "DATA PACKET (JSON):\n" + json.dumps(packet, separators=(",", ":"), ensure_ascii=False),
         },
     ]
-
-
-def _call_record(stage: str, messages: list[dict[str, str]], response: ProviderResponse) -> dict[str, Any]:
-    prompt = json.dumps(messages, separators=(",", ":"), ensure_ascii=False)
-    return {
-        "stage": stage,
-        "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
-        "requested_model": response.requested_model,
-        "returned_model": response.returned_model,
-        "upstream_provider": response.upstream_provider,
-        "usage": response.usage,
-        "cost_usd": response.cost_usd,
-        "raw_response": response.raw,
-    }
 
 
 def _identifier(war_id: str, cutoff: str) -> str:

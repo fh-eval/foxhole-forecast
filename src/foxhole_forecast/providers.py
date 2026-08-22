@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import time
@@ -31,6 +32,7 @@ class ModelProvider:
         self.config = model_config
         self.settings = settings
         self.accumulated_cost = 0.0
+        self.attempts: list[dict[str, Any]] = []
         self.api_key = os.environ.get(model_config["api_key_env"])
         if not self.api_key:
             raise MissingApiKey(f"Missing {model_config['api_key_env']}")
@@ -97,10 +99,26 @@ class ModelProvider:
         usage = raw.get("usage", {})
         cost = _cost(self.config["model"], usage)
         self.accumulated_cost += cost
+        prompt = json.dumps(messages, separators=(",", ":"), ensure_ascii=False)
+        attempt = {
+            "stage": schema_name.removeprefix("foxhole_"),
+            "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
+            "requested_model": self.config["model"],
+            "returned_model": raw.get("model"),
+            "upstream_provider": raw.get("provider"),
+            "usage": usage,
+            "cost_usd": cost,
+            "raw_response": raw,
+        }
+        self.attempts.append(attempt)
         content = raw["choices"][0]["message"]["content"]
         if isinstance(content, list):
             content = "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
-        parsed = _parse_json_content(str(content))
+        try:
+            parsed = _parse_json_content(str(content))
+        except Exception as error:
+            attempt["error"] = f"{type(error).__name__}: {error}"
+            raise
         return ProviderResponse(
             parsed=parsed,
             raw=raw,

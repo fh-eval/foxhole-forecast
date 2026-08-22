@@ -148,6 +148,12 @@ class ProviderTests(unittest.TestCase):
                 )
 
         self.assertEqual(provider.accumulated_cost, 0.42)
+        self.assertEqual(len(provider.attempts), 1)
+        self.assertEqual(
+            provider.attempts[0]["raw_response"]["choices"][0]["message"]["content"],
+            '{"unfinished":',
+        )
+        self.assertIn("JSONDecodeError", provider.attempts[0]["error"])
 
 
 if __name__ == "__main__":
