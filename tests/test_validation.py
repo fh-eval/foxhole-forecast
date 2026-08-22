@@ -11,33 +11,36 @@ class ValidationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.settings = Settings.load()
         self.scout = {"regions": [{"map_name": "DeadLandsHex"}, {"map_name": "UmbralWildwoodHex"}]}
+        metric_id = "region.DeadLandsHex.wardenCasualties.delta_2h"
         self.packet = {
             "cutoff": "2026-01-01T00:00:00Z",
             "strategic_bases": [
-                {"base_id": "base-1", "team": "WARDENS"},
-                {"base_id": "base-2", "team": "COLONIALS"},
+                {
+                    "base_id": f"base-{index}",
+                    "team": "WARDENS" if index % 2 else "COLONIALS",
+                }
+                for index in range(1, 9)
             ],
-            "selected_metrics": [{"metric_id": "region.DeadLandsHex.wardenCasualties.delta_2h"}],
+            "selected_metrics": [{"metric_id": metric_id}],
         }
         self.valid = {
-            "base_forecasts": [
+            "predictions": [
                 {
-                    "base_id": "base-1",
-                    "p_change_1h": 0.1,
-                    "p_change_6h": 0.4,
-                    "p_change_24h": 0.7,
-                    "events": [
-                        {
-                            "event_type": "OWNER_LOSES",
-                            "actor": "WARDENS",
-                            "confidence": 0.6,
-                            "eta_utc": "2026-01-01T05:30:00Z",
-                            "evidence": [
-                                {"metric_id": "region.DeadLandsHex.wardenCasualties.delta_2h", "relevance": 8}
-                            ],
-                        }
+                    "rank": index,
+                    "tranche": "IMMEDIATE" if index <= 4 else "EXTENDED",
+                    "base_id": f"base-{index}",
+                    "destination_team": "NONE",
+                    "confidence": 0.6,
+                    "eta_utc": (
+                        f"2026-01-01T0{index}:00:00Z"
+                        if index <= 4
+                        else f"2026-01-01T{index + 2:02}:00:00Z"
+                    ),
+                    "evidence": [
+                        {"metric_id": metric_id, "relevance": 8}
                     ],
                 }
+                for index in range(1, 9)
             ],
         }
 
@@ -58,18 +61,29 @@ class ValidationTests(unittest.TestCase):
             )
         validate_forecast(self.valid, self.packet, self.settings)
 
-    def test_omitted_bases_are_allowed(self) -> None:
-        validate_forecast({**self.valid, "base_forecasts": []}, self.packet, self.settings)
+    def test_exactly_eight_predictions_are_required(self) -> None:
+        with self.assertRaisesRegex(ValidationError, "exactly 8"):
+            validate_forecast(
+                {"predictions": self.valid["predictions"][:-1]},
+                self.packet,
+                self.settings,
+            )
 
-    def test_probabilities_must_be_monotonic(self) -> None:
+    def test_destination_must_change_current_state(self) -> None:
         value = copy.deepcopy(self.valid)
-        value["base_forecasts"][0]["p_change_6h"] = 0.05
-        with self.assertRaises(ValidationError):
+        value["predictions"][0]["destination_team"] = "WARDENS"
+        with self.assertRaisesRegex(ValidationError, "differ from current owner"):
+            validate_forecast(value, self.packet, self.settings)
+
+    def test_tranche_must_match_eta(self) -> None:
+        value = copy.deepcopy(self.valid)
+        value["predictions"][0]["tranche"] = "EXTENDED"
+        with self.assertRaisesRegex(ValidationError, "tranche does not match"):
             validate_forecast(value, self.packet, self.settings)
 
     def test_evidence_must_exist_in_packet(self) -> None:
         value = copy.deepcopy(self.valid)
-        value["base_forecasts"][0]["events"][0]["evidence"][0]["metric_id"] = "invented.metric"
+        value["predictions"][0]["evidence"][0]["metric_id"] = "invented.metric"
         with self.assertRaises(ValidationError):
             validate_forecast(value, self.packet, self.settings)
 

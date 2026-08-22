@@ -272,6 +272,19 @@ def _freeze_evidence(
         metric["metric_id"]: metric
         for metric in detail_packet.get("selected_metrics", [])
     }
+    bases = {
+        base["base_id"]: base for base in detail_packet.get("strategic_bases", [])
+    }
+    for prediction in frozen.get("predictions", []):
+        base = bases.get(prediction.get("base_id"), {})
+        prediction["current_team"] = base.get("team")
+        prediction["base_name"] = base.get("name")
+        prediction["map_name"] = base.get("map_name")
+        for evidence in prediction.get("evidence", []):
+            metric = metrics.get(evidence.get("metric_id"))
+            if metric:
+                evidence["value"] = metric.get("value")
+                evidence["observed_at"] = metric.get("observed_at")
     for base in frozen.get("base_forecasts", []):
         for event in base.get("events", []):
             for evidence in event.get("evidence", []):

@@ -11,6 +11,41 @@ from foxhole_forecast.forecasting import _freeze_evidence
 
 
 class DashboardTests(unittest.TestCase):
+    def test_timed_prediction_freezes_base_state_and_evidence(self) -> None:
+        metric_id = "region.TestHex.totalEnlistments.rate_1h_per_hour"
+        forecast = {
+            "predictions": [
+                {
+                    "base_id": "base-1",
+                    "evidence": [{"metric_id": metric_id, "relevance": 6}],
+                }
+            ]
+        }
+        packet = {
+            "strategic_bases": [
+                {
+                    "base_id": "base-1",
+                    "name": "Test Base",
+                    "map_name": "TestHex",
+                    "team": "WARDENS",
+                }
+            ],
+            "selected_metrics": [
+                {
+                    "metric_id": metric_id,
+                    "value": 42,
+                    "observed_at": "2026-08-22T03:00:00Z",
+                }
+            ],
+        }
+
+        frozen = _freeze_evidence(forecast, packet)
+
+        prediction = frozen["predictions"][0]
+        self.assertEqual(prediction["current_team"], "WARDENS")
+        self.assertEqual(prediction["base_name"], "Test Base")
+        self.assertEqual(prediction["evidence"][0]["value"], 42)
+
     def test_war_api_snapshot_summarizes_current_official_inputs(self) -> None:
         latest = {
             "observed_at": "2026-08-22T03:00:00Z",

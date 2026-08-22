@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import statistics
+import math
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -42,6 +43,9 @@ def settle_run(
     settings: Settings,
     now: datetime,
 ) -> dict[str, Any]:
+    if "predictions" in run.get("forecast", {}):
+        return _settle_timed_run(run, events, collector_runs, settings, now)
+
     cutoff = parse_time(run["cutoff"])
     war_id = run["war_id"]
     universe = cohort["strategic_base_ids"]
@@ -112,6 +116,230 @@ def settle_run(
         "brier_skill_score": round(skill, 4) if skill is not None else None,
         "event_bets": event_bets,
     }
+
+
+def _settle_timed_run(
+    run: dict[str, Any],
+    events: list[dict[str, Any]],
+    collector_runs: list[dict[str, Any]],
+    settings: Settings,
+    now: datetime,
+) -> dict[str, Any]:
+    cutoff = parse_time(run["cutoff"])
+    deadline = max(
+        parse_time(prediction["eta_utc"]) + timedelta(hours=3)
+        for prediction in run["forecast"]["predictions"]
+    )
+    transitions = _physical_transitions(
+        [
+            event
+            for event in events
+            if event.get("war_id") == run["war_id"]
+            and parse_time(event["observed_to"]) > cutoff
+            and parse_time(event["observed_to"]) <= deadline
+        ]
+    )
+    settled: list[dict[str, Any]] = []
+    for prediction in run["forecast"]["predictions"]:
+        eta = parse_time(prediction["eta_utc"])
+        bet_deadline = eta + timedelta(hours=3)
+        matching = [
+            event
+            for event in transitions
+            if event.get("base_id") == prediction["base_id"]
+            and parse_time(event["observed_to"]) <= bet_deadline
+        ]
+        first = min(matching, key=lambda row: row["observed_to"]) if matching else None
+        outcome: float | None
+        eta_error: float | None = None
+        timing_credit: float | None = None
+        state_credit: float | None = None
+        matched = first
+        if first and _transition_is_covered(
+            first, collector_runs, run["war_id"], cutoff, settings
+        ):
+            current_team = prediction.get("current_team")
+            destination = prediction["destination_team"]
+            if (
+                current_team in {"WARDENS", "COLONIALS"}
+                and destination in {"WARDENS", "COLONIALS"}
+                and destination != current_team
+                and first.get("to_team") == "NONE"
+            ):
+                followup = min(
+                    (
+                        event
+                        for event in matching
+                        if parse_time(event["observed_to"])
+                        > parse_time(first["observed_to"])
+                    ),
+                    key=lambda row: row["observed_to"],
+                    default=None,
+                )
+                if followup and followup.get("to_team") == destination:
+                    matched = followup
+                    if _transition_is_covered(
+                        followup,
+                        collector_runs,
+                        run["war_id"],
+                        cutoff,
+                        settings,
+                    ):
+                        state_credit = 1.0
+                    else:
+                        status = "censored"
+                        outcome = None
+                elif followup:
+                    state_credit = 0.75
+                elif now < bet_deadline:
+                    status = "open"
+                    outcome = None
+                elif _coverage_status(
+                    collector_runs,
+                    run["war_id"],
+                    cutoff,
+                    bet_deadline,
+                    settings,
+                ):
+                    state_credit = 0.75
+                else:
+                    status = "censored"
+                    outcome = None
+            else:
+                state_credit = _state_credit(
+                    current_team, destination, first.get("to_team")
+                )
+
+            if state_credit is not None:
+                assert matched is not None
+                eta_error = _interval_distance_minutes(
+                    eta,
+                    parse_time(matched["observed_from"]),
+                    parse_time(matched["observed_to"]),
+                )
+                timing_credit = state_credit * _timing_credit(eta_error)
+                outcome = timing_credit
+                if timing_credit == 1:
+                    status = "hit"
+                elif timing_credit > 0:
+                    status = "partial"
+                else:
+                    status = "miss"
+        elif first:
+            status = "censored"
+            outcome = None
+        elif now < bet_deadline:
+            status = "open"
+            outcome = None
+        elif _coverage_status(
+            collector_runs, run["war_id"], cutoff, bet_deadline, settings
+        ):
+            status = "miss"
+            outcome = 0.0
+            state_credit = 0.0
+            timing_credit = 0.0
+        else:
+            status = "censored"
+            outcome = None
+        settled.append(
+            {
+                **prediction,
+                "status": status,
+                "outcome": outcome,
+                "brier": (
+                    round((prediction["confidence"] - outcome) ** 2, 8)
+                    if outcome is not None
+                    else None
+                ),
+                "eta_error_minutes": (
+                    round(eta_error, 2) if eta_error is not None else None
+                ),
+                "timing_credit": (
+                    round(timing_credit, 8) if timing_credit is not None else None
+                ),
+                "state_credit": (
+                    round(state_credit, 8) if state_credit is not None else None
+                ),
+                "matched_transition": matched,
+            }
+        )
+
+    resolved = [row for row in settled if row["outcome"] is not None]
+    timing_values = [row["timing_credit"] for row in resolved]
+    brier_values = [row["brier"] for row in resolved]
+    return {
+        "schema_version": 2,
+        "protocol": "timed_transition_v3",
+        "run_id": run["run_id"],
+        "series_id": run["series_id"],
+        "cohort_id": run["cohort_id"],
+        "cutoff": run["cutoff"],
+        "deadline": isoformat(deadline),
+        "updated_at": isoformat(now),
+        "status": "complete" if not any(row["status"] == "open" for row in settled) else "open",
+        "resolved": len(resolved),
+        "censored": sum(row["status"] == "censored" for row in settled),
+        "timing_score": (
+            round(statistics.fmean(timing_values), 8) if timing_values else None
+        ),
+        "timing_score_pct": (
+            round(100 * statistics.fmean(timing_values), 2)
+            if timing_values
+            else None
+        ),
+        "event_brier": (
+            round(statistics.fmean(brier_values), 8) if brier_values else None
+        ),
+        "timed_predictions": settled,
+    }
+
+
+def _physical_transitions(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    unique: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for event in events:
+        key = (
+            event.get("base_id"),
+            event.get("from_team"),
+            event.get("to_team"),
+            event.get("observed_from"),
+            event.get("observed_to"),
+        )
+        unique.setdefault(key, event)
+    return sorted(unique.values(), key=lambda row: row["observed_to"])
+
+
+def _transition_is_covered(
+    event: dict[str, Any],
+    collector_runs: list[dict[str, Any]],
+    war_id: str,
+    cutoff: datetime,
+    settings: Settings,
+) -> bool:
+    start = parse_time(event["observed_from"])
+    end = parse_time(event["observed_to"])
+    if start < cutoff or end - start > timedelta(minutes=settings.poll_minutes * 2):
+        return False
+    return _coverage_status(collector_runs, war_id, cutoff, end, settings)
+
+
+def _timing_credit(distance_minutes: float) -> float:
+    blocks = math.ceil(max(0.0, distance_minutes - 1e-9) / 15)
+    return max(0.0, 1.0 - blocks / 12)
+
+
+def _state_credit(
+    current_team: str | None, predicted_team: str, observed_team: str | None
+) -> float:
+    if predicted_team == observed_team:
+        return 1.0
+    if (
+        current_team in {"WARDENS", "COLONIALS"}
+        and predicted_team != current_team
+        and observed_team != current_team
+        and "NONE" in {predicted_team, observed_team}
+    ):
+        return 0.75
+    return 0.0
 
 
 def _coverage_status(
@@ -226,9 +454,10 @@ def aggregate_scores(
         horizon_values: list[tuple[float, int, float, int]] = []
         eta_errors: list[float] = []
         event_briers: list[float] = []
-        hits = misses = open_bets = 0
+        timing_credits: list[float] = []
+        hits = partials = misses = open_bets = censored_bets = 0
         for row in complete:
-            for horizon in row["horizons"].values():
+            for horizon in row.get("horizons", {}).values():
                 if horizon["evaluated"] and horizon["brier"] is not None:
                     horizon_values.append(
                         (
@@ -239,14 +468,19 @@ def aggregate_scores(
                         )
                     )
         for row in groups[series]:
-            for bet in row["event_bets"]:
+            bets = row.get("timed_predictions", row.get("event_bets", []))
+            for bet in bets:
                 hits += bet["status"] == "hit"
+                partials += bet["status"] == "partial"
                 misses += bet["status"] == "miss"
                 open_bets += bet["status"] == "open"
+                censored_bets += bet["status"] == "censored"
                 if bet["eta_error_minutes"] is not None:
                     eta_errors.append(bet["eta_error_minutes"])
                 if bet["brier"] is not None:
                     event_briers.append(bet["brier"])
+                if bet.get("timing_credit") is not None:
+                    timing_credits.append(bet["timing_credit"])
         total_n = sum(value[1] for value in horizon_values)
         ibs = sum(value[0] * value[1] for value in horizon_values) / total_n if total_n else None
         baseline = sum(value[2] * value[3] for value in horizon_values) / total_n if total_n else None
@@ -267,9 +501,16 @@ def aggregate_scores(
                 "baseline_integrated_brier": round(baseline, 8) if baseline is not None else None,
                 "brier_skill_score": round(skill, 4) if skill is not None else None,
                 "event_hits": hits,
+                "event_partials": partials,
                 "event_misses": misses,
                 "open_event_bets": open_bets,
+                "censored_event_bets": censored_bets,
                 "event_brier": round(statistics.fmean(event_briers), 8) if event_briers else None,
+                "timing_score_pct": (
+                    round(100 * statistics.fmean(timing_credits), 2)
+                    if timing_credits
+                    else None
+                ),
                 "median_eta_error_minutes": round(statistics.median(eta_errors), 2) if eta_errors else None,
                 "within_15m_pct": _within(eta_errors, 15),
                 "within_30m_pct": _within(eta_errors, 30),
@@ -279,8 +520,12 @@ def aggregate_scores(
         )
     models.sort(
         key=lambda row: (
-            row["brier_skill_score"] is None,
-            -(row["brier_skill_score"] if row["brier_skill_score"] is not None else 0.0),
+            row["timing_score_pct"] is None and row["brier_skill_score"] is None,
+            -(
+                row["timing_score_pct"]
+                if row["timing_score_pct"] is not None
+                else row["brier_skill_score"] or 0.0
+            ),
         )
     )
     return {"schema_version": 1, "generated_at": isoformat(now), "models": models}

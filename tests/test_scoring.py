@@ -4,11 +4,80 @@ import unittest
 from datetime import UTC, datetime, timedelta
 
 from foxhole_forecast.config import Settings
-from foxhole_forecast.scoring import settle_run
+from foxhole_forecast.scoring import _state_credit, _timing_credit, settle_run
 from foxhole_forecast.storage import isoformat
 
 
 class ScoringTests(unittest.TestCase):
+    def test_timed_prediction_gives_partial_credit_for_neutralization(self) -> None:
+        settings = Settings.load()
+        cutoff = datetime(2026, 1, 1, tzinfo=UTC)
+        eta = cutoff + timedelta(hours=2)
+        run = {
+            "run_id": "run-timed",
+            "cohort_id": "cohort-1",
+            "series_id": "model-timed",
+            "cutoff": isoformat(cutoff),
+            "war_id": "war-1",
+            "forecast": {
+                "predictions": [
+                    {
+                        "rank": 1,
+                        "tranche": "IMMEDIATE",
+                        "base_id": "base-1",
+                        "base_name": "Base One",
+                        "map_name": "TestHex",
+                        "current_team": "WARDENS",
+                        "destination_team": "COLONIALS",
+                        "confidence": 0.8,
+                        "eta_utc": isoformat(eta),
+                        "evidence": [],
+                    }
+                ]
+            },
+        }
+        transition = {
+            "war_id": "war-1",
+            "base_id": "base-1",
+            "from_team": "WARDENS",
+            "to_team": "NONE",
+            "observed_from": isoformat(eta - timedelta(minutes=15)),
+            "observed_to": isoformat(eta),
+        }
+        events = [
+            {**transition, "event_type": "OWNER_LOSES", "actor": "WARDENS"},
+            {**transition, "event_type": "BECOMES_NEUTRAL", "actor": "NONE"},
+        ]
+        collectors = [
+            {
+                "war_id": "war-1",
+                "observed_at": isoformat(cutoff + timedelta(minutes=15 * index)),
+            }
+            for index in range(0, 25)
+        ]
+
+        settlement = settle_run(
+            run,
+            {"strategic_base_ids": ["base-1"]},
+            events,
+            collectors,
+            settings,
+            cutoff + timedelta(hours=6),
+        )
+
+        bet = settlement["timed_predictions"][0]
+        self.assertEqual(bet["status"], "partial")
+        self.assertEqual(bet["state_credit"], 0.75)
+        self.assertEqual(bet["timing_credit"], 0.75)
+        self.assertAlmostEqual(bet["brier"], 0.0025)
+
+    def test_timing_curve_and_state_equivalence(self) -> None:
+        self.assertEqual(_timing_credit(0), 1)
+        self.assertAlmostEqual(_timing_credit(15), 11 / 12)
+        self.assertEqual(_timing_credit(180), 0)
+        self.assertEqual(_state_credit("WARDENS", "COLONIALS", "NONE"), 0.75)
+        self.assertEqual(_state_credit("NONE", "COLONIALS", "WARDENS"), 0)
+
     def test_integrated_brier_and_interval_eta(self) -> None:
         settings = Settings.load()
         cutoff = datetime(2026, 1, 1, tzinfo=UTC)
@@ -87,4 +156,3 @@ class ScoringTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

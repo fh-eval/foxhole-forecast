@@ -9,6 +9,7 @@ from .storage import parse_time, read_json, read_jsonl
 
 
 DATA_DICTIONARY = {
+    "none_state": "NONE means the strategic base is destroyed or demolished and has not been rebuilt by either faction; it is effectively no-man's-land.",
     "total_enlistments": "Cumulative unique players who have deployed to this region during the war. A player can count in multiple regions. This is not current population or a faction split; its change is only a new-to-that-region activity proxy.",
     "rate_trends": "Adjacent equal-window comparison. Array order is [recent_per_hour, previous_per_hour, change_per_hour, direction].",
     "recent_events": "A direct ownership flip can produce a loss row plus a capture row for the same state transition.",

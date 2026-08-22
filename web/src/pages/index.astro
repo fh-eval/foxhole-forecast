@@ -30,6 +30,7 @@ import "../styles/global.css";
       <div class="page-width">
         <a href="#scoreboard">Scoreboard</a>
         <a href="#war-data">War data</a>
+        <a href="#rounds">Rounds</a>
         <a href="#briefings">Briefings</a>
         <a href="#outlook">Base outlook</a>
         <a href="#predictions">Predictions</a>
@@ -44,6 +45,14 @@ import "../styles/global.css";
         <div><small>STRATEGIC BASES</small><strong id="base-count">—</strong></div>
         <div><small>COLLECTOR POLLS</small><strong id="poll-count">—</strong></div>
         <div><small>TIMING RESOLUTION</small><strong>≤ 15 min</strong></div>
+      </section>
+
+      <section id="scoreboard" class="section-block">
+        <div class="section-heading">
+          <div><p class="kicker">Current standings</p><h2>Forecast scores</h2></div>
+          <p>Timed rounds earn full credit inside the observed 15-minute interval, then lose one-twelfth per 15-minute block. A neutralized base earns partial state credit when an enemy capture was predicted.</p>
+        </div>
+        <div id="score-grid" class="score-grid" aria-live="polite"></div>
       </section>
 
       <section id="war-data" class="section-block">
@@ -69,26 +78,26 @@ import "../styles/global.css";
         </div>
       </section>
 
-      <section id="scoreboard" class="section-block">
+      <section id="rounds" class="section-block">
         <div class="section-heading">
-          <div><p class="kicker">Current standings</p><h2>Forecast skill</h2></div>
-          <p>Brier skill versus always predicting “no change.” Positive beats the baseline; negative does worse.</p>
+          <div><p class="kicker">Dated sets of bets</p><h2>Prediction rounds</h2></div>
+          <p>Open a round to see its cutoff-time war briefing, selected regions, and all eight ranked predictions together.</p>
         </div>
-        <div id="score-grid" class="score-grid" aria-live="polite"></div>
+        <div id="round-list" class="round-list"></div>
       </section>
 
       <section id="briefings" class="section-block">
-        <div class="section-heading">
+        <div class="section-heading section-heading--controls">
           <div><p class="kicker">What they think now</p><h2>Latest war briefings</h2></div>
-          <p>Short model-authored summaries. Private reasoning is never requested or displayed.</p>
+          <label class="select-label">Model <select id="briefing-model"></select></label>
         </div>
         <div id="briefing-list" class="briefing-list"></div>
       </section>
 
       <section id="outlook" class="section-block">
         <div class="section-heading">
-          <div><p class="kicker">Probability by horizon</p><h2>Base-change outlook</h2></div>
-          <p>Each percentage is the model's chance that the named base changes ownership state by that horizon. The list is ordered by 24-hour risk.</p>
+          <div><p class="kicker">Archived protocol</p><h2>Legacy horizon outlook</h2></div>
+          <p>Historical 1h/6h/24h probability forecasts remain visible, but new cohorts use ranked exact-ETA rounds.</p>
         </div>
         <div class="table-shell outlook-shell">
           <table>
@@ -128,8 +137,8 @@ import "../styles/global.css";
         <div><p class="kicker">How this works</p><h2>A forecast, not a hindsight test</h2></div>
         <div class="method-grid">
           <article><span>01</span><h3>Observe</h3><p>The official Foxhole War API is polled every 15 minutes. A tagged FoxholeStats snapshot backfills pre-launch history only; every prompt remains cutoff-safe.</p></article>
-          <article><span>02</span><h3>Forecast</h3><p>Each model scouts six regions, then publishes probabilities at 1, 6, and 24 hours plus exact state-change calls.</p></article>
-          <article><span>03</span><h3>Settle</h3><p>Omitted bases count as 0% change. Outcomes are scored with integrated Brier error and timing distance to the observed interval.</p></article>
+          <article><span>02</span><h3>Forecast</h3><p>Each model scouts six regions, then publishes eight ranked state-transition bets: four within six hours and four within the next 24 hours.</p></article>
+          <article><span>03</span><h3>Settle</h3><p>Timing earns full credit inside the observed 15-minute interval and falls to zero three hours away. Neutralization and capture share partial state credit.</p></article>
         </div>
         <p class="fine-print">Foxhole Forecast is an independent, non-commercial experiment. Foxhole is developed by Siege Camp. Model summaries are predictions, not gameplay advice.</p>
       </section>
@@ -149,6 +158,7 @@ import "../styles/global.css";
       const percent = (value) => `${Math.round(Number(value) * 100)}%`;
       const number = (value) => new Intl.NumberFormat().format(Number(value) || 0);
       const eventLabel = (value) => String(value || "").replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+      const teamLabel = (value) => value === "NONE" ? "Neutral / destroyed" : eventLabel(value);
       const regionLabel = (value) => String(value || "Unknown region").replace(/Hex$/, "").replace(/([a-z])([A-Z])/g, "$1 $2");
       const evidenceValue = (item) => {
         if (item.value == null) return "value unavailable";
@@ -163,6 +173,7 @@ import "../styles/global.css";
       };
       let dashboard = null;
       let betView = "open";
+      let briefingFilter = "all";
 
       function renderScores(models) {
         const grid = document.querySelector("#score-grid");
@@ -175,13 +186,15 @@ import "../styles/global.css";
           const card = element("article", "score-card");
           const rank = element("span", "rank", String(index + 1).padStart(2, "0"));
           const title = element("h3", "", model.label || model.series_id);
+          const timed = model.timing_score_pct;
           const skill = model.brier_skill_score;
-          const score = element("strong", `score ${skill != null && skill < 0 ? "score--negative" : ""}`, skill == null ? "Collecting" : `${Number(skill).toFixed(1)}`);
-          const unit = element("small", "", skill == null ? "awaiting matured cohorts" : "Brier skill score");
+          const primary = timed ?? skill;
+          const score = element("strong", `score ${primary != null && primary < 0 ? "score--negative" : ""}`, primary == null ? "Collecting" : `${Number(primary).toFixed(1)}`);
+          const unit = element("small", "", primary == null ? "awaiting resolved bets" : timed != null ? "timing credit / 100" : "legacy Brier skill");
           const meta = element("div", "score-meta");
           meta.append(
             stat("Matured", model.complete_runs ?? 0),
-            stat("Hits", model.event_hits ?? 0),
+            stat("Hit / partial", `${model.event_hits ?? 0} / ${model.event_partials ?? 0}`),
             stat("ETA median", model.median_eta_error_minutes == null ? "—" : `${model.median_eta_error_minutes}m`),
           );
           const identity = element("p", "model-id", `${model.gateway || "provider"} · ${model.returned_model || model.requested_model || model.series_id}`);
@@ -253,7 +266,7 @@ import "../styles/global.css";
       function renderBriefings(models) {
         const list = document.querySelector("#briefing-list");
         list.replaceChildren();
-        const available = models.filter((model) => model.latest?.war_summary);
+        const available = models.filter((model) => model.latest?.war_summary && (briefingFilter === "all" || model.series_id === briefingFilter));
         if (!available.length) {
           list.append(element("p", "empty-state", "The first model briefing will appear after a valid forecast cohort."));
           return;
@@ -268,6 +281,78 @@ import "../styles/global.css";
         });
       }
 
+      function setupBriefingFilter(models) {
+        const select = document.querySelector("#briefing-model");
+        select.replaceChildren();
+        const all = element("option", "", "All models");
+        all.value = "all";
+        select.append(all);
+        models.filter((model) => model.latest?.war_summary).forEach((model) => {
+          const option = element("option", "", model.label || model.series_id);
+          option.value = model.series_id;
+          select.append(option);
+        });
+        select.addEventListener("change", () => {
+          briefingFilter = select.value;
+          renderBriefings(dashboard.models || []);
+        });
+      }
+
+      function predictionText(bet) {
+        if (bet.destination_team) {
+          return `${teamLabel(bet.current_team)} → ${teamLabel(bet.destination_team)} — ${bet.base_name}, ${regionLabel(bet.map_name)}`;
+        }
+        return `${eventLabel(bet.event_type)} — ${bet.base_name}, ${regionLabel(bet.map_name)}`;
+      }
+
+      function predictionStatus(bet) {
+        if (["hit", "partial"].includes(bet.status) && bet.eta_error_minutes != null) {
+          const credit = bet.timing_credit == null ? "" : ` · ${percent(bet.timing_credit)} credit`;
+          return `${eventLabel(bet.status)} · ${bet.eta_error_minutes}m error${credit}`;
+        }
+        return eventLabel(bet.status);
+      }
+
+      function renderRounds(rounds) {
+        const list = document.querySelector("#round-list");
+        list.replaceChildren();
+        if (!rounds.length) {
+          list.append(element("p", "empty-state", "The first valid timed prediction round has not landed yet."));
+          return;
+        }
+        rounds.forEach((round, index) => {
+          const details = element("details", "round");
+          if (index === 0) details.open = true;
+          const summary = element("summary", "round__summary");
+          summary.append(
+            element("strong", "", `${round.model_label}, Round ${round.round_number}`),
+            element("time", "", formatDate(round.cutoff)),
+            element("span", `status status--${round.settlement_status}`, eventLabel(round.settlement_status)),
+          );
+          const body = element("div", "round__body");
+          body.append(
+            element("p", "briefing__copy", round.war_summary || "No briefing was retained for this round."),
+            element("p", "region-list", (round.selected_regions || []).join(" · ")),
+          );
+          const bets = element("div", "round__bets");
+          (round.predictions || []).forEach((bet) => {
+            const row = element("article", "round-bet");
+            const heading = element("div", "round-bet__heading");
+            heading.append(
+              element("strong", "", `#${bet.rank ?? "—"} ${predictionText(bet)}`),
+              element("span", "", `${percent(bet.confidence)} · ${formatDate(bet.eta_utc)}`),
+            );
+            const evidence = element("div", "evidence-list");
+            (bet.evidence || []).forEach((item) => evidence.append(evidenceChip(item)));
+            row.append(heading, element("small", `status status--${bet.status}`, predictionStatus(bet)), evidence);
+            bets.append(row);
+          });
+          body.append(bets);
+          details.append(summary, body);
+          list.append(details);
+        });
+      }
+
       function renderPredictions() {
         const rows = document.querySelector("#prediction-rows");
         const empty = document.querySelector("#prediction-empty");
@@ -276,8 +361,8 @@ import "../styles/global.css";
         empty.hidden = bets.length > 0;
         bets.slice(0, 100).forEach((bet) => {
           const row = document.createElement("tr");
-          const prediction = `${eventLabel(bet.event_type)} — ${bet.base_name}, ${bet.map_name}`;
-          const status = bet.status === "hit" && bet.eta_error_minutes != null ? `Hit · ${bet.eta_error_minutes}m error` : eventLabel(bet.status);
+          const prediction = predictionText(bet);
+          const status = predictionStatus(bet);
           const modelCell = element("td", "", bet.model_label);
           const predictionCell = element("td", "prediction-cell");
           predictionCell.append(element("strong", "", prediction));
@@ -370,6 +455,8 @@ import "../styles/global.css";
           document.querySelector("#generated-at").textContent = dashboard.generated_at ? `Generated ${formatDate(dashboard.generated_at)}` : "No dataset generated yet";
           renderWarData(dashboard.war_api_snapshot);
           renderScores(dashboard.models || []);
+          renderRounds(dashboard.rounds || []);
+          setupBriefingFilter(dashboard.models || []);
           renderBriefings(dashboard.models || []);
           renderOutlook();
           renderPredictions();

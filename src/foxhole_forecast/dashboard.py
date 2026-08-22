@@ -26,6 +26,8 @@ def build_dashboard_data() -> dict[str, Any]:
     latest_valid_runs: dict[str, dict[str, Any]] = {}
     open_bets: list[dict[str, Any]] = []
     resolved_bets: list[dict[str, Any]] = []
+    rounds: list[dict[str, Any]] = []
+    round_counts: dict[str, int] = defaultdict(int)
     for run in runs:
         series = run["series_id"]
         metric_lookup = _metric_lookup(run)
@@ -34,6 +36,9 @@ def build_dashboard_data() -> dict[str, Any]:
         ):
             latest_valid_runs[series] = run
         settlement = settlements.get(run["run_id"], {})
+        forecast_rows = run.get("forecast", {}).get(
+            "predictions", run.get("forecast", {}).get("base_forecasts", [])
+        )
         history = {
             "run_id": run["run_id"],
             "cutoff": run["cutoff"],
@@ -43,11 +48,15 @@ def build_dashboard_data() -> dict[str, Any]:
             "brier_skill_score": settlement.get("brier_skill_score"),
             "integrated_brier": settlement.get("integrated_brier"),
             "settlement_status": settlement.get("status", "not_available"),
-            "forecast_count": len(run.get("forecast", {}).get("base_forecasts", [])),
+            "forecast_count": len(forecast_rows),
             "cost_usd": run.get("cost_usd", 0),
         }
         by_series[series].append(history)
-        for bet in settlement.get("event_bets", []):
+        presented_round_bets: list[dict[str, Any]] = []
+        settled_bets = settlement.get(
+            "timed_predictions", settlement.get("event_bets", [])
+        )
+        for bet in settled_bets:
             base = bases.get(bet["base_id"], {})
             presented = {
                 "run_id": run["run_id"],
@@ -55,10 +64,14 @@ def build_dashboard_data() -> dict[str, Any]:
                 "model_label": run.get("label", series),
                 "cutoff": run["cutoff"],
                 "base_id": bet["base_id"],
-                "base_name": base.get("name", bet["base_id"]),
-                "map_name": base.get("map_name", "Unknown region"),
-                "event_type": bet["event_type"],
-                "actor": bet["actor"],
+                "base_name": bet.get("base_name") or base.get("name", bet["base_id"]),
+                "map_name": bet.get("map_name") or base.get("map_name", "Unknown region"),
+                "event_type": bet.get("event_type"),
+                "actor": bet.get("actor"),
+                "rank": bet.get("rank"),
+                "tranche": bet.get("tranche"),
+                "current_team": bet.get("current_team"),
+                "destination_team": bet.get("destination_team"),
                 "confidence": bet["confidence"],
                 "eta_utc": bet["eta_utc"],
                 "evidence": [
@@ -68,8 +81,28 @@ def build_dashboard_data() -> dict[str, Any]:
                 "status": bet["status"],
                 "eta_error_minutes": bet["eta_error_minutes"],
                 "brier": bet["brier"],
+                "state_credit": bet.get("state_credit"),
+                "timing_credit": bet.get("timing_credit"),
             }
+            presented_round_bets.append(presented)
             (open_bets if bet["status"] == "open" else resolved_bets).append(presented)
+        if run.get("status") == "valid":
+            round_counts[series] += 1
+            rounds.append(
+                {
+                    "run_id": run["run_id"],
+                    "series_id": series,
+                    "model_label": run.get("label", series),
+                    "round_number": round_counts[series],
+                    "cutoff": run["cutoff"],
+                    "war_summary": run.get("war_summary"),
+                    "selected_regions": run.get("selected_regions", []),
+                    "settlement_status": settlement.get("status", "not_available"),
+                    "timing_score_pct": settlement.get("timing_score_pct"),
+                    "event_brier": settlement.get("event_brier"),
+                    "predictions": presented_round_bets,
+                }
+            )
 
     models: list[dict[str, Any]] = []
     score_lookup = {row["series_id"]: row for row in scores.get("models", [])}
@@ -94,8 +127,13 @@ def build_dashboard_data() -> dict[str, Any]:
             models.append(score)
     models.sort(
         key=lambda row: (
-            row.get("brier_skill_score") is None,
-            -(row.get("brier_skill_score") if row.get("brier_skill_score") is not None else -10**9),
+            row.get("timing_score_pct") is None
+            and row.get("brier_skill_score") is None,
+            -(
+                row.get("timing_score_pct")
+                if row.get("timing_score_pct") is not None
+                else row.get("brier_skill_score") or -10**9
+            ),
         )
     )
     open_bets.sort(key=lambda row: row["eta_utc"])
@@ -103,7 +141,7 @@ def build_dashboard_data() -> dict[str, Any]:
     base_forecasts: list[dict[str, Any]] = []
     for run in latest_valid_runs.values():
         metric_lookup = _metric_lookup(run)
-        for forecast in run["forecast"]["base_forecasts"]:
+        for forecast in run["forecast"].get("base_forecasts", []):
             base = bases.get(forecast["base_id"], {})
             evidence: dict[str, dict[str, Any]] = {}
             for event in forecast["events"]:
@@ -131,6 +169,7 @@ def build_dashboard_data() -> dict[str, Any]:
                 }
             )
     base_forecasts.sort(key=lambda row: (-row["p_change_24h"], row["model_label"], row["base_name"]))
+    rounds.sort(key=lambda row: row["cutoff"], reverse=True)
     output = {
         "schema_version": 1,
         "generated_at": isoformat(),
@@ -140,10 +179,16 @@ def build_dashboard_data() -> dict[str, Any]:
         "strategic_base_count": len(bases),
         "war_api_snapshot": _build_war_api_snapshot(latest, official_events),
         "models": models,
+        "rounds": rounds[:500],
         "base_forecasts": base_forecasts[:500],
         "open_bets": open_bets[:500],
         "resolved_bets": resolved_bets[:500],
         "methodology": {
+            "current_protocol": "timed_transition_v3",
+            "predictions_per_round": 8,
+            "tranches": {"immediate": "0-6h", "extended": "6-24h"},
+            "partial_credit_window_minutes": 180,
+            "neutral_alternative_state_credit": 0.75,
             "horizons_hours": [1, 6, 24],
             "omitted_probability": 0,
             "timing_precision_minutes": 15,

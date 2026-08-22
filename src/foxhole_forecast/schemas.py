@@ -5,14 +5,6 @@ from typing import Any
 from .config import Settings
 
 
-EVENT_TYPES = [
-    "OWNER_LOSES",
-    "BECOMES_NEUTRAL",
-    "CAPTURED_BY_WARDENS",
-    "CAPTURED_BY_COLONIALS",
-]
-
-
 def scout_schema(settings: Settings) -> dict[str, Any]:
     return {
         "type": "object",
@@ -40,13 +32,30 @@ def forecast_schema(settings: Settings) -> dict[str, Any]:
             "relevance": {"type": "integer", "minimum": 1, "maximum": 10},
         },
     }
-    event = {
+    prediction = {
         "type": "object",
         "additionalProperties": False,
-        "required": ["event_type", "actor", "confidence", "eta_utc", "evidence"],
+        "required": [
+            "rank",
+            "tranche",
+            "base_id",
+            "destination_team",
+            "confidence",
+            "eta_utc",
+            "evidence",
+        ],
         "properties": {
-            "event_type": {"type": "string", "enum": EVENT_TYPES},
-            "actor": {"type": "string", "enum": ["WARDENS", "COLONIALS", "NONE"]},
+            "rank": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": settings.forecast_base_limit,
+            },
+            "tranche": {"type": "string", "enum": ["IMMEDIATE", "EXTENDED"]},
+            "base_id": {"type": "string"},
+            "destination_team": {
+                "type": "string",
+                "enum": ["WARDENS", "COLONIALS", "NONE"],
+            },
             "confidence": {"type": "number", "minimum": 0, "maximum": 1},
             "eta_utc": {"type": "string"},
             "evidence": {
@@ -57,33 +66,16 @@ def forecast_schema(settings: Settings) -> dict[str, Any]:
             },
         },
     }
-    base_forecast = {
-        "type": "object",
-        "additionalProperties": False,
-        "required": [
-            "base_id",
-            "p_change_1h",
-            "p_change_6h",
-            "p_change_24h",
-            "events",
-        ],
-        "properties": {
-            "base_id": {"type": "string"},
-            "p_change_1h": {"type": "number", "minimum": 0, "maximum": 1},
-            "p_change_6h": {"type": "number", "minimum": 0, "maximum": 1},
-            "p_change_24h": {"type": "number", "minimum": 0, "maximum": 1},
-            "events": {"type": "array", "minItems": 1, "maxItems": 3, "items": event},
-        },
-    }
     return {
         "type": "object",
         "additionalProperties": False,
-        "required": ["base_forecasts"],
+        "required": ["predictions"],
         "properties": {
-            "base_forecasts": {
+            "predictions": {
                 "type": "array",
+                "minItems": settings.forecast_base_limit,
                 "maxItems": settings.forecast_base_limit,
-                "items": base_forecast,
+                "items": prediction,
             },
         },
     }
