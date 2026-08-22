@@ -1149,9 +1149,9 @@
       "series_id": "deepseek-v4-flash-direct-json-war-overview-v2"
     }
   ],
-  "collector_runs": 42,
-  "generated_at": "2026-08-22T14:59:31.292960Z",
-  "last_collected_at": "2026-08-22T14:59:20.348200Z",
+  "collector_runs": 43,
+  "generated_at": "2026-08-22T15:01:50.214723Z",
+  "last_collected_at": "2026-08-22T15:01:39.358762Z",
   "methodology": {
     "current_protocol": "event_outcome_v4",
     "data_source": "Official Foxhole War API, with a provenance-tagged one-time FoxholeStats history backfill",
@@ -1506,7 +1506,7 @@
     {
       "baseline_integrated_brier": null,
       "brier_skill_score": null,
-      "censored_event_bets": 12,
+      "censored_event_bets": 13,
       "complete_runs": 0,
       "event_brier": 0.3039875,
       "event_hits": 0,
@@ -1614,7 +1614,7 @@
         "war_summary": "War 139 is on day 93 with no winner yet. Colonials hold a majority of strategic bases across the map, but Wardens control several key regions. The heaviest fighting is concentrated in a few active fronts: Callahans Passage, Clahstra, Oarbreaker, Stlican Shelf, and Olavis Wake show very high and accelerating casualty rates on both sides, indicating intense, sustained combat. Godcrofts, Endless Shore, Mooring County, Dead Lands, and Tempest Island have recent ownership changes (captures/neutral events) within the last 24 hours, signaling fluid frontlines. Most other regions are quiet with zero recent events and low casualties, suggesting stable rear areas or stalled sectors. The next 24 hours will likely see continued base flips in the active contested zones, while the broader strategic picture remains uncertain due to the high velocity of fighting on multiple fronts simultaneously."
       },
       "median_eta_error_minutes": 1268.42,
-      "open_event_bets": 12,
+      "open_event_bets": 11,
       "requested_model": "nvidia/nemotron-3-ultra-550b-a55b",
       "returned_model": "nvidia/nemotron-3-ultra-550b-a55b",
       "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
@@ -4590,57 +4590,6 @@
       "status": "open",
       "timing_credit": null,
       "tranche": null
-    },
-    {
-      "actor": null,
-      "base_id": "ClahstraHex:b391413115",
-      "base_name": "Transept",
-      "base_type": "Relic Base",
-      "brier": null,
-      "confidence": 0.6,
-      "current_team": "COLONIALS",
-      "cutoff": "2026-08-22T09:03:16.123324Z",
-      "destination_team": null,
-      "eta_error_max_minutes": null,
-      "eta_error_min_minutes": null,
-      "eta_error_minutes": null,
-      "eta_utc": "2026-08-22T12:00:00Z",
-      "event_type": null,
-      "evidence": [
-        {
-          "label": "Clahstra · Warden casualties rate, last 2h (per hour)",
-          "metric_id": "region.ClahstraHex.wardenCasualties.rate_2h_per_hour",
-          "observed_at": "2026-08-22T09:03:16.123324Z",
-          "relevance": 8,
-          "value": 425.5
-        },
-        {
-          "label": "Clahstra · Enlistments rate, last 2h (per hour)",
-          "metric_id": "region.ClahstraHex.totalEnlistments.rate_2h_per_hour",
-          "observed_at": "2026-08-22T09:03:16.123324Z",
-          "relevance": 7,
-          "value": 40.0
-        },
-        {
-          "label": "Clahstra · Warden casualties rate change, last 2h vs prior 2h",
-          "metric_id": "region.ClahstraHex.wardenCasualties.rate_change_2h_vs_previous",
-          "observed_at": "2026-08-22T09:03:16.123324Z",
-          "relevance": 6,
-          "value": 320.5
-        }
-      ],
-      "map_name": "ClahstraHex",
-      "model_label": "Nemotron 3 Ultra 550B A55B",
-      "predicted_outcome": "CAPTURED",
-      "rank": 4,
-      "run_id": "2026-08-22-f910bf94ee26:nvidia-nemotron-3-ultra-550b-a55b-event-v4",
-      "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
-      "settlement_outcome": null,
-      "settlement_reason": "awaiting_deadline",
-      "state_credit": null,
-      "status": "open",
-      "timing_credit": null,
-      "tranche": "IMMEDIATE"
     },
     {
       "actor": null,
@@ -7745,6 +7694,57 @@
       "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
       "settlement_outcome": null,
       "settlement_reason": "ambiguous_transition_interval",
+      "state_credit": null,
+      "status": "censored",
+      "timing_credit": null,
+      "tranche": "IMMEDIATE"
+    },
+    {
+      "actor": null,
+      "base_id": "ClahstraHex:b391413115",
+      "base_name": "Transept",
+      "base_type": "Relic Base",
+      "brier": null,
+      "confidence": 0.6,
+      "current_team": "COLONIALS",
+      "cutoff": "2026-08-22T09:03:16.123324Z",
+      "destination_team": null,
+      "eta_error_max_minutes": null,
+      "eta_error_min_minutes": null,
+      "eta_error_minutes": null,
+      "eta_utc": "2026-08-22T12:00:00Z",
+      "event_type": null,
+      "evidence": [
+        {
+          "label": "Clahstra · Warden casualties rate, last 2h (per hour)",
+          "metric_id": "region.ClahstraHex.wardenCasualties.rate_2h_per_hour",
+          "observed_at": "2026-08-22T09:03:16.123324Z",
+          "relevance": 8,
+          "value": 425.5
+        },
+        {
+          "label": "Clahstra · Enlistments rate, last 2h (per hour)",
+          "metric_id": "region.ClahstraHex.totalEnlistments.rate_2h_per_hour",
+          "observed_at": "2026-08-22T09:03:16.123324Z",
+          "relevance": 7,
+          "value": 40.0
+        },
+        {
+          "label": "Clahstra · Warden casualties rate change, last 2h vs prior 2h",
+          "metric_id": "region.ClahstraHex.wardenCasualties.rate_change_2h_vs_previous",
+          "observed_at": "2026-08-22T09:03:16.123324Z",
+          "relevance": 6,
+          "value": 320.5
+        }
+      ],
+      "map_name": "ClahstraHex",
+      "model_label": "Nemotron 3 Ultra 550B A55B",
+      "predicted_outcome": "CAPTURED",
+      "rank": 4,
+      "run_id": "2026-08-22-f910bf94ee26:nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+      "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+      "settlement_outcome": null,
+      "settlement_reason": "insufficient_observation_coverage",
       "state_credit": null,
       "status": "censored",
       "timing_credit": null,
@@ -12614,9 +12614,9 @@
           "run_id": "2026-08-22-f910bf94ee26:nvidia-nemotron-3-ultra-550b-a55b-event-v4",
           "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
           "settlement_outcome": null,
-          "settlement_reason": "awaiting_deadline",
+          "settlement_reason": "insufficient_observation_coverage",
           "state_credit": null,
-          "status": "open",
+          "status": "censored",
           "timing_credit": null,
           "tranche": "IMMEDIATE"
         },
@@ -19292,7 +19292,7 @@
         "warden_casualties": 1850
       },
       {
-        "colonial_casualties": 20211,
+        "colonial_casualties": 20277,
         "map_name": "OnyxHex",
         "ownership": {
           "COLONIALS": 3,
@@ -19301,8 +19301,8 @@
         },
         "ownership_events_24h": 9,
         "strategic_base_count": 6,
-        "total_enlistments": 3004,
-        "warden_casualties": 20246
+        "total_enlistments": 3016,
+        "warden_casualties": 20283
       },
       {
         "colonial_casualties": 14513,
@@ -19318,7 +19318,7 @@
         "warden_casualties": 14085
       },
       {
-        "colonial_casualties": 3026,
+        "colonial_casualties": 3028,
         "map_name": "GodcroftsHex",
         "ownership": {
           "COLONIALS": 6,
@@ -19328,7 +19328,7 @@
         "ownership_events_24h": 8,
         "strategic_base_count": 9,
         "total_enlistments": 1371,
-        "warden_casualties": 2894
+        "warden_casualties": 2895
       },
       {
         "colonial_casualties": 7488,
@@ -19357,7 +19357,7 @@
         "warden_casualties": 9652
       },
       {
-        "colonial_casualties": 15578,
+        "colonial_casualties": 15610,
         "map_name": "ClahstraHex",
         "ownership": {
           "COLONIALS": 3,
@@ -19366,8 +19366,8 @@
         },
         "ownership_events_24h": 4,
         "strategic_base_count": 8,
-        "total_enlistments": 3940,
-        "warden_casualties": 16791
+        "total_enlistments": 3956,
+        "warden_casualties": 16871
       },
       {
         "colonial_casualties": 3102,
@@ -19422,7 +19422,7 @@
         "warden_casualties": 23039
       },
       {
-        "colonial_casualties": 17977,
+        "colonial_casualties": 18052,
         "map_name": "SpeakingWoodsHex",
         "ownership": {
           "COLONIALS": 1,
@@ -19431,8 +19431,8 @@
         },
         "ownership_events_24h": 0,
         "strategic_base_count": 8,
-        "total_enlistments": 4958,
-        "warden_casualties": 17261
+        "total_enlistments": 4980,
+        "warden_casualties": 17342
       },
       {
         "colonial_casualties": 16423,
@@ -19488,11 +19488,11 @@
       }
     ],
     "casualties": {
-      "COLONIALS": 280500,
-      "WARDENS": 292422
+      "COLONIALS": 280679,
+      "WARDENS": 292622
     },
     "day_of_war": 95,
-    "observed_at": "2026-08-22T14:59:20.348200Z",
+    "observed_at": "2026-08-22T15:01:39.358762Z",
     "recent_ownership_events": [
       {
         "actor": "WARDENS",
