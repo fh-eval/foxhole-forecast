@@ -39,7 +39,7 @@ def validate_forecast(value: dict[str, Any], packet: dict[str, Any], settings: S
             f"{settings.forecast_base_limit} highest-probability bases"
         )
 
-    bases = {base["base_id"]: base for base in packet["all_strategic_bases"]}
+    bases = {base["base_id"]: base for base in packet["strategic_bases"]}
     metrics = {metric["metric_id"] for metric in packet["selected_metrics"]}
     seen: set[str] = set()
     total_events = 0

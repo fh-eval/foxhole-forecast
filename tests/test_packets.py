@@ -41,7 +41,45 @@ class PacketTests(unittest.TestCase):
             self.assertEqual(len(history), 1)
             self.assertEqual(len(events), 1)
 
+    def test_rate_trends_compare_adjacent_windows(self) -> None:
+        history = [
+            {
+                "observed_at": "2026-01-01T00:00:00Z",
+                "reports": {
+                    "TestHex": {
+                        "colonialCasualties": 100,
+                        "wardenCasualties": 100,
+                        "totalEnlistments": 100,
+                    }
+                },
+            },
+            {
+                "observed_at": "2026-01-01T01:00:00Z",
+                "reports": {
+                    "TestHex": {
+                        "colonialCasualties": 120,
+                        "wardenCasualties": 150,
+                        "totalEnlistments": 140,
+                    }
+                },
+            },
+        ]
+        current = {
+            "colonialCasualties": 160,
+            "wardenCasualties": 180,
+            "totalEnlistments": 180,
+        }
+
+        trends = packets._rate_trends(
+            current, history, "TestHex", "2026-01-01T02:00:00Z"
+        )
+
+        one_hour = trends["1h_vs_prior_1h"]
+        self.assertEqual(one_hour["colonial_casualties"]["direction"], "accelerating")
+        self.assertEqual(one_hour["colonial_casualties"]["change_per_hour"], 20)
+        self.assertEqual(one_hour["warden_casualties"]["direction"], "cooling")
+        self.assertEqual(one_hour["enlistments"]["direction"], "steady")
+
 
 if __name__ == "__main__":
     unittest.main()
-

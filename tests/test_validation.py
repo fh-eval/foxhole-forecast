@@ -13,7 +13,7 @@ class ValidationTests(unittest.TestCase):
         self.scout = {"regions": [{"map_name": "DeadLandsHex"}, {"map_name": "UmbralWildwoodHex"}]}
         self.packet = {
             "cutoff": "2026-01-01T00:00:00Z",
-            "all_strategic_bases": [
+            "strategic_bases": [
                 {"base_id": "base-1", "team": "WARDENS"},
                 {"base_id": "base-2", "team": "COLONIALS"},
             ],

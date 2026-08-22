@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .config import DATA_DIR, ROOT, Settings, load_models
-from .packets import build_detail_packet, build_scout_packet
+from .packets import build_detail_packet, build_scout_packet, current_strategic_base_ids
 from .providers import MissingApiKey, ModelProvider, ProviderResponse
 from .schemas import forecast_schema, scout_schema
 from .storage import append_jsonl, isoformat, read_json, write_json
@@ -76,7 +76,7 @@ def run_forecast_cohort(
         "war_id": scout_packet["war"]["warId"],
         "war_number": scout_packet["war"].get("warNumber"),
         "history_hours_available": scout_packet["history_hours_available"],
-        "strategic_base_ids": [base["base_id"] for base in scout_packet["strategic_bases"]],
+        "strategic_base_ids": current_strategic_base_ids(),
         "models": model_results,
     }
     append_jsonl(DATA_DIR / "cohorts.jsonl", cohort)

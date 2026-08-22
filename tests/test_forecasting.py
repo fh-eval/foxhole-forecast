@@ -26,6 +26,8 @@ class ForecastBudgetTests(unittest.TestCase):
             },
         ), patch("foxhole_forecast.forecasting.write_json"), patch(
             "foxhole_forecast.forecasting.load_models", return_value=[]
+        ), patch(
+            "foxhole_forecast.forecasting.current_strategic_base_ids", return_value=[]
         ):
             with self.assertRaisesRegex(ValueError, "Unknown model series"):
                 run_forecast_cohort(Settings.load(), force=True, series_id="missing")

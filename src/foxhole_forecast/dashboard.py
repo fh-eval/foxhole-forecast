@@ -277,7 +277,11 @@ def _metric_label(metric_id: str) -> str:
     if field == "casualties.ratio_colonial_to_warden":
         description = "Colonial/Warden casualty ratio"
     else:
-        match = re.fullmatch(r"(colonialCasualties|wardenCasualties|totalEnlistments|dayOfWar)\.(raw|delta_(\d+)h)", field)
+        match = re.fullmatch(
+            r"(colonialCasualties|wardenCasualties|totalEnlistments|dayOfWar)\."
+            r"(raw|delta_(\d+)h|rate_(\d+)h_per_hour|rate_change_(\d+)h_vs_previous)",
+            field,
+        )
         if not match:
             description = field.replace(".", " ").replace("_", " ")
         else:
@@ -289,4 +293,11 @@ def _metric_label(metric_id: str) -> str:
             }[match.group(1)]
             if match.group(3):
                 description += f", {match.group(3)}h change"
+            elif match.group(4):
+                description += f" rate, last {match.group(4)}h (per hour)"
+            elif match.group(5):
+                description += (
+                    f" rate change, last {match.group(5)}h vs prior "
+                    f"{match.group(5)}h"
+                )
     return f"{region} · {description}"

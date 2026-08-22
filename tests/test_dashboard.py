@@ -97,6 +97,12 @@ class DashboardTests(unittest.TestCase):
             _metric_label(metric_id),
             "Oarbreaker · Colonial/Warden casualty ratio",
         )
+        self.assertEqual(
+            _metric_label(
+                "region.OarbreakerHex.wardenCasualties.rate_change_1h_vs_previous"
+            ),
+            "Oarbreaker · Warden casualties rate change, last 1h vs prior 1h",
+        )
 
 
 if __name__ == "__main__":
