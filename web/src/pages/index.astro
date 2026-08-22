@@ -106,7 +106,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         </div>
         <div class="table-shell">
           <table>
-            <thead><tr><th>Model</th><th>Prediction and supporting evidence</th><th>Status</th></tr></thead>
+            <thead><tr><th>Model</th><th>Prediction and supporting evidence</th><th>Result / score</th></tr></thead>
             <tbody id="prediction-rows"></tbody>
           </table>
           <p id="prediction-empty" class="empty-state" hidden>No predictions in this view yet.</p>
@@ -387,10 +387,31 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           return "Miss · timing definitely outside ±3h";
         }
         if (["hit", "partial"].includes(bet.status) && bet.eta_error_minutes != null) {
-          const credit = bet.timing_credit == null ? "" : ` · ${percent(bet.timing_credit)} credit`;
-          return `${eventLabel(bet.status)} · ${bet.eta_error_minutes}m error${credit}`;
+          return `${eventLabel(bet.status)} · ${bet.eta_error_minutes}m error`;
         }
         return eventLabel(bet.status);
+      }
+
+      function predictionScoreValue(bet) {
+        if (!["hit", "partial", "miss"].includes(bet.status) || bet.timing_credit == null) return null;
+        const value = Number(bet.timing_credit) * 100;
+        return Number.isFinite(value) ? value : null;
+      }
+
+      function predictionResult(bet) {
+        const result = element("div", "prediction-result");
+        result.append(element("small", `status status--${bet.status}`, predictionStatus(bet)));
+        const score = predictionScoreValue(bet);
+        if (score != null) {
+          const badge = element("span", `prediction-score prediction-score--${bet.status}`);
+          badge.append(
+            element("span", "prediction-score__label", "Score"),
+            element("strong", "", score.toFixed(2)),
+            element("span", "prediction-score__denominator", "/ 100"),
+          );
+          result.append(badge);
+        }
+        return result;
       }
 
       function roundResolutionLabel(round) {
@@ -426,7 +447,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             const meta = element("div", "round-bet__meta");
             meta.append(
               element("span", "", `#${bet.rank ?? "—"} · ${trancheLabel(bet.tranche)} · ${regionLabel(bet.map_name)}`),
-              element("small", `status status--${bet.status}`, predictionStatus(bet)),
+              predictionResult(bet),
             );
             row.append(meta, predictionHeadline(bet), supportingEvidence(bet.evidence));
             bets.append(row);
@@ -446,14 +467,15 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         empty.hidden = bets.length > 0;
         bets.slice(0, 100).forEach((bet) => {
           const row = document.createElement("tr");
-          const status = predictionStatus(bet);
           const modelCell = element("td", "", bet.model_label);
           const predictionCell = element("td", "prediction-cell");
+          const resultCell = element("td", "result-cell");
           predictionCell.append(predictionHeadline(bet), supportingEvidence(bet.evidence));
+          resultCell.append(predictionResult(bet));
           row.append(
             modelCell,
             predictionCell,
-            element("td", `status status--${bet.status}`, status),
+            resultCell,
           );
           rows.append(row);
         });

@@ -82,7 +82,16 @@ h1 span { color: var(--colonial); }
 .round__body { padding: 24px; border-top: 1px solid var(--line); }
 .round__bets { margin-top: 22px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
 .round-bet { min-width: 0; padding: 18px; background: var(--paper); }
-.round-bet__meta { margin-bottom: 9px; display: flex; justify-content: space-between; gap: 14px; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+.round-bet__meta { margin-bottom: 9px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px 14px; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+.prediction-result { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 7px 10px; }
+.prediction-score { padding: 4px 7px; display: inline-flex; align-items: baseline; gap: 5px; color: var(--ink); border: 1px solid currentColor; background: rgba(17,23,19,.68); white-space: nowrap; }
+.prediction-score--hit { color: var(--colonial); }
+.prediction-score--partial { color: var(--signal); }
+.prediction-score--miss { color: var(--danger); }
+.prediction-score__label, .prediction-score__denominator { color: var(--muted); font-size: 8px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.prediction-score strong { font-size: 13px; font-weight: 600; letter-spacing: 0; }
+.result-cell { min-width: 235px; }
+.result-cell .prediction-result { justify-content: flex-start; }
 .prediction-headline { margin: 0; color: var(--ink); font: 500 18px/1.45 var(--serif); }
 .prediction-headline__confidence { color: var(--signal); font-family: var(--mono); font-size: 15px; }
 .base-identity { font-weight: 650; }
