@@ -349,12 +349,19 @@ def build_detail_packet(settings: Settings, selected_regions: list[str]) -> dict
     strategic_bases = sorted(
         (
             {
-                **base,
-                "allowed_destination_teams": [
+                "base_id": base["base_id"],
+                "name": base.get("name"),
+                "map_name": base.get("map_name"),
+                "current_owner": base.get("team"),
+                "valid_next_states": [
                     team
                     for team in ("WARDENS", "COLONIALS", "NONE")
                     if team != base.get("team")
                 ],
+                "icon_type": base.get("icon_type"),
+                "flags": base.get("flags", []),
+                "x": base.get("x"),
+                "y": base.get("y"),
             }
             for name in selected
             for base in latest["maps"][name].get("bases", {}).values()

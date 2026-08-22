@@ -27,7 +27,7 @@ class DashboardTests(unittest.TestCase):
                     "base_id": "base-1",
                     "name": "Test Base",
                     "map_name": "TestHex",
-                    "team": "WARDENS",
+                    "current_owner": "WARDENS",
                 }
             ],
             "selected_metrics": [

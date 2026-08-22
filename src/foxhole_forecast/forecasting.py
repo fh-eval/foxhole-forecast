@@ -217,7 +217,8 @@ def _call_validated(
 ) -> tuple[ProviderResponse, Any]:
     last_error: Exception | None = None
     active_messages = list(messages)
-    for attempt in range(2):
+    validation_attempts = max(1, int(provider.config.get("validation_attempts", 2)))
+    for attempt in range(validation_attempts):
         try:
             response = provider.complete_json(active_messages, schema_name, schema)
             validated = validator(response.parsed)
@@ -228,7 +229,7 @@ def _call_validated(
                 provider.attempts[-1].setdefault(
                     "error", f"{type(error).__name__}: {error}"
                 )
-            if attempt == 0:
+            if attempt < validation_attempts - 1:
                 active_messages = [
                     *messages,
                     {
@@ -277,7 +278,7 @@ def _freeze_evidence(
     }
     for prediction in frozen.get("predictions", []):
         base = bases.get(prediction.get("base_id"), {})
-        prediction["current_team"] = base.get("team")
+        prediction["current_team"] = base.get("current_owner", base.get("team"))
         prediction["base_name"] = base.get("name")
         prediction["map_name"] = base.get("map_name")
         for evidence in prediction.get("evidence", []):
