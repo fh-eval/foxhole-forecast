@@ -56,9 +56,19 @@ def validate_forecast(value: dict[str, Any], packet: dict[str, Any], settings: S
         destination = row.get("destination_team")
         if destination not in {"WARDENS", "COLONIALS", "NONE"}:
             raise ValidationError(f"Invalid destination_team for {identifier}")
-        if destination == bases[identifier].get("team"):
+        allowed_destinations = bases[identifier].get(
+            "allowed_destination_teams",
+            [
+                team
+                for team in ("WARDENS", "COLONIALS", "NONE")
+                if team != bases[identifier].get("team")
+            ],
+        )
+        if destination not in allowed_destinations:
             raise ValidationError(
-                f"destination_team must differ from current owner for {identifier}"
+                f"destination_team for {identifier} must be one of "
+                f"{allowed_destinations}; current owner is "
+                f"{bases[identifier].get('team')}"
             )
         confidence = row.get("confidence")
         if (

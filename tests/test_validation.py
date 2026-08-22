@@ -72,7 +72,7 @@ class ValidationTests(unittest.TestCase):
     def test_destination_must_change_current_state(self) -> None:
         value = copy.deepcopy(self.valid)
         value["predictions"][0]["destination_team"] = "WARDENS"
-        with self.assertRaisesRegex(ValidationError, "differ from current owner"):
+        with self.assertRaisesRegex(ValidationError, "must be one of"):
             validate_forecast(value, self.packet, self.settings)
 
     def test_tranche_must_match_eta(self) -> None:

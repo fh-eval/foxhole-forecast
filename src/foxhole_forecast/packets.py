@@ -348,7 +348,14 @@ def build_detail_packet(settings: Settings, selected_regions: list[str]) -> dict
     events = _events_before(cutoff, war_id, settings.recent_event_hours)
     strategic_bases = sorted(
         (
-            base
+            {
+                **base,
+                "allowed_destination_teams": [
+                    team
+                    for team in ("WARDENS", "COLONIALS", "NONE")
+                    if team != base.get("team")
+                ],
+            }
             for name in selected
             for base in latest["maps"][name].get("bases", {}).values()
         ),
