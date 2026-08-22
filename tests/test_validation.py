@@ -61,13 +61,10 @@ class ValidationTests(unittest.TestCase):
             )
         validate_forecast(self.valid, self.packet, self.settings)
 
-    def test_exactly_eight_predictions_are_required(self) -> None:
-        with self.assertRaisesRegex(ValidationError, "exactly 8"):
-            validate_forecast(
-                {"predictions": self.valid["predictions"][:-1]},
-                self.packet,
-                self.settings,
-            )
+    def test_fewer_predictions_are_valid_after_dropped_bets(self) -> None:
+        value = copy.deepcopy(self.valid)
+        value["predictions"] = value["predictions"][:-1]
+        validate_forecast(value, self.packet, self.settings)
 
     def test_destroyed_base_cannot_be_predicted_destroyed_again(self) -> None:
         value = copy.deepcopy(self.valid)
@@ -85,11 +82,17 @@ class ValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, "must be one of"):
             validate_forecast(value, packet, self.settings)
 
-    def test_tranche_must_match_eta(self) -> None:
+    def test_tranche_is_not_part_of_the_model_contract(self) -> None:
         value = copy.deepcopy(self.valid)
-        value["predictions"][0]["tranche"] = "EXTENDED"
-        with self.assertRaisesRegex(ValidationError, "tranche does not match"):
-            validate_forecast(value, self.packet, self.settings)
+        value["predictions"][0].pop("tranche")
+        value["predictions"][0]["eta_utc"] = "2026-01-01T05:59:00Z"
+        validate_forecast(value, self.packet, self.settings)
+
+    def test_rank_gaps_are_valid_after_dropped_bets(self) -> None:
+        value = copy.deepcopy(self.valid)
+        value["predictions"].pop(1)
+        value["predictions"][1]["rank"] = 3
+        validate_forecast(value, self.packet, self.settings)
 
     def test_evidence_must_exist_in_packet(self) -> None:
         value = copy.deepcopy(self.valid)

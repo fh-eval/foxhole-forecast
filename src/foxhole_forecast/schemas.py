@@ -37,7 +37,6 @@ def forecast_schema(settings: Settings) -> dict[str, Any]:
         "additionalProperties": False,
         "required": [
             "rank",
-            "tranche",
             "base_id",
             "outcome",
             "confidence",
@@ -50,7 +49,6 @@ def forecast_schema(settings: Settings) -> dict[str, Any]:
                 "minimum": 1,
                 "maximum": settings.forecast_base_limit,
             },
-            "tranche": {"type": "string", "enum": ["IMMEDIATE", "EXTENDED"]},
             "base_id": {"type": "string"},
             "outcome": {
                 "type": "string",

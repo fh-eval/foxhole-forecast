@@ -48,18 +48,18 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <div class="scoring-section__heading"><p class="kicker">01</p><h2>What a model must forecast</h2></div>
         <div class="rule-grid">
           <article class="rule-card"><strong>8</strong><h3>Unique bases</h3><p>Every round contains exactly eight ranked predictions on eight different strategic bases.</p></article>
-          <article class="rule-card"><strong>4 + 4</strong><h3>Two ETA ranges</h3><p>Four ETAs must be after the cutoff and within six hours. Four must be more than six and no more than 24 hours after the cutoff.</p></article>
+          <article class="rule-card"><strong>4 + 4</strong><h3>Two ETA priorities</h3><p>Ranks 1–4 are immediate priorities and ranks 5–8 are extended priorities. The model gives exact minutes; an ETA near the six-hour boundary is retained and scored on the time it named.</p></article>
           <article class="rule-card"><strong>2</strong><h3>Allowed events</h3><p><b>Captured</b> means ownership completes a change to the opposing faction. <b>Destroyed</b> means a faction-owned base becomes neutral—demolished and not yet rebuilt.</p></article>
           <article class="rule-card"><strong>1–5</strong><h3>Evidence references</h3><p>Each call cites cutoff-safe metrics and rates their relevance from 1–10. Evidence ratings are shown for auditability, but are not judged or added to the score.</p></article>
         </div>
-        <p class="method-note">A neutral base must be forecast as captured by Wardens or captured by Colonials; generic CAPTURED is retained only for legacy bets. A same-faction capture call is recorded as SELF_CAPTURE and scored like destruction. Each prediction also includes an exact UTC minute and confidence from 0.00 to 1.00. Rank records the model’s priority, but does not change a prediction’s weight.</p>
+        <p class="method-note">A neutral base must be forecast as captured by Wardens or captured by Colonials; generic CAPTURED is retained only for legacy bets. A same-faction capture call is treated as a model error, removed from the bet set, and shown in the round as a dropped bet rather than scored. Each prediction also includes an exact UTC minute and confidence from 0.00 to 1.00. Rank records the model’s priority, but does not change a prediction’s weight.</p>
       </section>
 
       <section id="settlement" class="scoring-section">
         <div class="scoring-section__heading"><p class="kicker">02</p><h2>How a prediction resolves</h2></div>
         <div class="rule-grid rule-grid--two">
           <article class="rule-card"><h3>Finite deadline</h3><p>Each prediction remains open through <code>ETA + 3 hours</code>. We look for the first physical ownership transition for that base after the round cutoff and before that deadline.</p></article>
-          <article class="rule-card"><h3>Destruction before capture</h3><p>A faction-owned base normally becomes neutral before an enemy rebuild completes. If the model called a faction-specific capture, we wait through the deadline for that follow-up. The named enemy capture earns full outcome credit; destruction without a completed capture earns 0.75. SELF_CAPTURE is displayed as a destruction with an explanatory note and scores exactly like DESTROYED.</p></article>
+          <article class="rule-card"><h3>Destruction before capture</h3><p>A faction-owned base normally becomes neutral before an enemy rebuild completes. If the model called a faction-specific capture, we wait through the deadline for that follow-up. The named enemy capture earns full outcome credit; destruction without a completed capture earns 0.75. Invalid same-faction capture calls are dropped and explained on the round page.</p></article>
         </div>
         <p class="method-note">If no transition occurs by the deadline and observation coverage is adequate, the prediction is a miss. The forecast is never left open forever and is never assigned an infinite ETA error.</p>
       </section>

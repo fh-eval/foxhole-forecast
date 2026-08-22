@@ -142,6 +142,7 @@ def _run_model(
     calls = provider.attempts
     overview: dict[str, Any] = {}
     selected: list[str] = []
+    dropped_predictions: list[dict[str, Any]] = []
     try:
         scout_contract = scout_schema(settings)
         model_scout_packet = copy.deepcopy(scout_packet)
@@ -178,21 +179,20 @@ def _run_model(
         write_json(cohort_dir / f"{config['series_id']}-detail-packet.json", detail_packet)
         forecast_contract = forecast_schema(settings)
         forecast_messages = _messages(FORECAST_SYSTEM, detail_packet, forecast_contract)
-        forecast_response, _ = _call_validated(
+        def validate_and_filter_forecast(value: dict[str, Any]) -> dict[str, Any]:
+            filtered, dropped = _drop_invalid_predictions(value, detail_packet)
+            validate_forecast(filtered, detail_packet, settings)
+            dropped_predictions[:] = dropped
+            return filtered
+
+        forecast_response, filtered_forecast = _call_validated(
             provider,
             forecast_messages,
             "foxhole_forecast",
             forecast_contract,
-            lambda value: validate_forecast(
-                _normalize_same_faction_captures(value, detail_packet),
-                detail_packet,
-                settings,
-            ),
+            validate_and_filter_forecast,
         )
-        frozen_forecast = _freeze_evidence(
-            _normalize_same_faction_captures(forecast_response.parsed, detail_packet),
-            detail_packet,
-        )
+        frozen_forecast = _freeze_evidence(filtered_forecast, detail_packet)
         total_cost = provider.accumulated_cost
         ledger[ledger_key] = round(spent + total_cost, 8)
         write_json(DATA_DIR / "state.json", state)
@@ -204,6 +204,7 @@ def _run_model(
             "war_summary": overview["war_summary"],
             "selected_regions": selected,
             "forecast": frozen_forecast,
+            "dropped_predictions": dropped_predictions,
             "calls": calls,
             "cost_usd": round(total_cost, 8),
             "settlement": {"status": "open", "horizons": {}},
@@ -218,6 +219,7 @@ def _run_model(
             "error": f"{type(error).__name__}: {error}",
             "war_summary": overview.get("war_summary"),
             "selected_regions": selected,
+            "dropped_predictions": dropped_predictions,
             "calls": calls,
             "cost_usd": round(total_cost, 8),
         }
@@ -260,22 +262,33 @@ def _previous_model_summary(
     }
 
 
-def _normalize_same_faction_captures(
+def _drop_invalid_predictions(
     value: dict[str, Any], detail_packet: dict[str, Any]
-) -> dict[str, Any]:
-    """Treat a model's same-faction capture call as the explicit self-capture outcome."""
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Remove only bets that cannot describe a state change for their target base."""
     bases = {
         base["base_id"]: base for base in detail_packet.get("strategic_bases", [])
     }
-    for prediction in value.get("predictions", []):
+    filtered = copy.deepcopy(value)
+    kept: list[dict[str, Any]] = []
+    dropped: list[dict[str, Any]] = []
+    for prediction in filtered.get("predictions", []):
         outcome = prediction.get("outcome")
-        if not isinstance(outcome, str) or not outcome.startswith("CAPTURED_BY_"):
-            continue
-        target = outcome.removeprefix("CAPTURED_BY_")
         current_owner = bases.get(prediction.get("base_id"), {}).get("current_owner")
-        if target == current_owner:
-            prediction["outcome"] = "SELF_CAPTURE"
-    return value
+        target = outcome.removeprefix("CAPTURED_BY_") if isinstance(outcome, str) else None
+        if target and target == current_owner:
+            dropped.append(
+                {
+                    "rank": prediction.get("rank"),
+                    "base_id": prediction.get("base_id"),
+                    "outcome": outcome,
+                    "reason": "same-faction capture is not a valid state change",
+                }
+            )
+            continue
+        kept.append(prediction)
+    filtered["predictions"] = kept
+    return filtered, dropped
 
 
 def _budget(
@@ -370,6 +383,7 @@ def _freeze_evidence(
         base["base_id"]: base for base in detail_packet.get("strategic_bases", [])
     }
     for prediction in frozen.get("predictions", []):
+        prediction["tranche"] = "IMMEDIATE" if prediction.get("rank", 0) <= 4 else "EXTENDED"
         base = bases.get(prediction.get("base_id"), {})
         prediction["current_team"] = base.get("current_owner", base.get("team"))
         prediction["base_name"] = base.get("name")

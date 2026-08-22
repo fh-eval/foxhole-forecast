@@ -44,7 +44,7 @@ def _behavior_summary(
         predictions = round_record.get("predictions", [])
         if (
             round_record.get("protocol") != "event_outcome_v4"
-            or len(predictions) != predictions_per_round
+            or not 1 <= len(predictions) <= predictions_per_round
         ):
             continue
         by_series[round_record["series_id"]].extend(predictions)
@@ -165,6 +165,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
             "integrated_brier": settlement.get("integrated_brier"),
             "settlement_status": settlement.get("status", "not_available"),
             "forecast_count": len(forecast_rows),
+            "dropped_predictions": run.get("dropped_predictions", []),
             "cost_usd": run.get("cost_usd", 0),
         }
         by_series[series].append(history)
@@ -247,6 +248,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                 "cutoff": run["cutoff"],
                 "war_summary": run.get("war_summary"),
                 "selected_regions": run.get("selected_regions", []),
+                "dropped_predictions": run.get("dropped_predictions", []),
                 "protocol": settlement.get("protocol"),
                 "settlement_status": settlement.get("status", "not_available"),
                 "timing_score_pct": settlement.get("timing_score_pct"),

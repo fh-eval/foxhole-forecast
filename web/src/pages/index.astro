@@ -194,7 +194,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const currentProtocol = dashboard?.methodology?.current_protocol;
         const predictions = round.predictions || [];
         return round.protocol === currentProtocol
-          && predictions.length === expected
+          && predictions.length >= 1
+          && predictions.length <= expected
           && predictions.every((bet) =>
             ["CAPTURED", "CAPTURED_BY_WARDENS", "CAPTURED_BY_COLONIALS", "DESTROYED", "SELF_CAPTURE"].includes(bet.predicted_outcome)
             && bet.base_name
@@ -647,6 +648,13 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
               element("p", "briefing__copy", round.war_summary || "No briefing was retained for this round."),
               element("p", "region-list", (round.selected_regions || []).join(" · ")),
             );
+            if (round.dropped_predictions?.length) {
+              participantBody.append(element(
+                "p",
+                "method-note",
+                `Model error: ${round.dropped_predictions.length} invalid bet${round.dropped_predictions.length === 1 ? " was" : "s were"} dropped and will not be scored.`,
+              ));
+            }
             const bets = element("div", "round__bets");
             (round.predictions || []).forEach((bet) => {
               const row = element("article", "round-bet");

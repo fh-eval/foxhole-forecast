@@ -155,9 +155,11 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 
       function isCompleteCurrentRound(round) {
         const expected = dashboard?.methodology?.predictions_per_round ?? 8;
+        const predictions = round.predictions || [];
         return round.protocol === dashboard?.methodology?.current_protocol
-          && round.predictions?.length === expected
-          && round.predictions.every((bet) =>
+          && predictions.length >= 1
+          && predictions.length <= expected
+          && predictions.every((bet) =>
             ["CAPTURED", "CAPTURED_BY_WARDENS", "CAPTURED_BY_COLONIALS", "DESTROYED", "SELF_CAPTURE"].includes(bet.predicted_outcome)
             && bet.base_name
             && bet.base_type
@@ -174,7 +176,9 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const empty = document.querySelector("#prediction-empty");
         const summary = document.querySelector("#prediction-summary");
         rows.replaceChildren();
-        const allBets = (dashboard.rounds || []).filter(isCompleteCurrentRound).flatMap((round) =>
+        const currentRounds = (dashboard.rounds || []).filter(isCompleteCurrentRound);
+        const dropped = currentRounds.reduce((total, round) => total + (round.dropped_predictions?.length || 0), 0);
+        const allBets = currentRounds.flatMap((round) =>
           (round.predictions || []).map((bet) => ({
             ...bet,
             war_number: round.war_number,
@@ -188,7 +192,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           && (modelFilter === "all" || bet.series_id === modelFilter)
         );
         empty.hidden = bets.length > 0;
-        summary.textContent = `${number(bets.length)} ${betView} predictions · generated ${formatDate(dashboard.generated_at)}`;
+        summary.textContent = `${number(bets.length)} ${betView} predictions${dropped ? ` · ${dropped} model error bet${dropped === 1 ? "" : "s"} dropped` : ""} · generated ${formatDate(dashboard.generated_at)}`;
         bets.forEach((bet) => {
           const row = document.createElement("tr");
           const modelCell = element("td", "prediction-browser__model");
