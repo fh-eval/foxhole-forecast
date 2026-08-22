@@ -60,7 +60,7 @@ class ModelProvider:
         body: dict[str, Any] = {
             "model": self.config["model"],
             "messages": messages,
-            "max_tokens": self.settings.output_token_limit,
+            "max_tokens": int(self.config.get("max_tokens", self.settings.output_token_limit)),
             "stream": False,
             "response_format": response_format,
         }
@@ -74,6 +74,10 @@ class ModelProvider:
                 provider["only"] = self.config["provider_only"]
             body["provider"] = provider
             body["reasoning"] = {"effort": self.settings.reasoning_effort}
+        request_extra = self.config.get("request_extra", {})
+        if not isinstance(request_extra, dict):
+            raise ValueError("request_extra must be an object")
+        body.update(request_extra)
 
         request = urllib.request.Request(
             url,

@@ -40,6 +40,22 @@ h1 span { color: var(--colonial); }
 .status-strip > div { padding: 16px 18px; border-right: 1px solid var(--line); }
 .status-strip > div:last-child { border: 0; }
 .status-strip strong { font-size: 13px; }
+.telemetry-grid { margin-bottom: 28px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+.telemetry-card { min-height: 112px; padding: 18px; background: var(--panel); }
+.telemetry-card small { display: block; min-height: 34px; color: var(--muted); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.telemetry-card strong { display: block; color: var(--signal); font: 650 30px/1 var(--serif); }
+.telemetry-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 24px; align-items: start; }
+.subheading { min-height: 42px; display: flex; justify-content: space-between; gap: 20px; align-items: baseline; }
+.subheading h3 { margin: 0; font: 500 22px var(--serif); }
+.subheading span { color: var(--muted); font-size: 10px; }
+.telemetry-table { min-width: 940px; }
+.activity { color: var(--signal); font-weight: 600; }
+.event-feed { min-width: 0; }
+.event-feed ol { margin: 0; padding: 0; border: 1px solid var(--line); list-style: none; }
+.event-feed__item { padding: 13px 15px; display: grid; gap: 3px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.event-feed__item:last-child { border-bottom: 0; }
+.event-feed__item time, .event-feed__item span { color: var(--muted); font-size: 10px; }
+.event-feed__item strong { overflow: hidden; font-size: 12px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .section-block { padding: 72px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 48px; }
 .section-heading { margin-bottom: 28px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 430px); gap: 32px; align-items: end; }
 .section-heading h2, .methodology h2 { margin: 0; font: 650 clamp(35px, 5vw, 58px)/1 var(--serif); letter-spacing: -.03em; }
@@ -75,7 +91,7 @@ th, td { padding: 14px 16px; border-bottom: 1px solid var(--line); }
 tbody tr:hover { background: rgba(158,183,137,.05); }
 .prediction-cell strong { display: block; font-weight: 500; }
 .evidence-list { margin-top: 7px; display: flex; flex-wrap: wrap; gap: 5px; }
-.evidence-chip { max-width: 390px; padding: 2px 6px; overflow: hidden; color: var(--muted); border: 1px solid var(--line); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.evidence-chip { max-width: 100%; padding: 3px 7px; color: var(--muted); border: 1px solid var(--line); font-size: 9px; line-height: 1.45; white-space: normal; }
 .outlook-shell { margin-bottom: 0; }
 .probability { color: var(--muted); font: 500 18px var(--serif); }
 .probability--primary { color: var(--signal); font-weight: 650; }
@@ -109,7 +125,8 @@ footer strong { color: var(--signal); letter-spacing: .1em; }
 @media (max-width: 900px) {
   .masthead__body { min-height: 300px; align-items: flex-start; flex-direction: column; justify-content: center; }
   .war-stamp { width: 100%; }
-  .status-strip, .score-grid { grid-template-columns: repeat(2, 1fr); }
+  .status-strip, .score-grid, .telemetry-grid { grid-template-columns: repeat(2, 1fr); }
+  .telemetry-layout { grid-template-columns: 1fr; }
   .section-heading { grid-template-columns: 1fr; align-items: start; }
   .methodology { grid-template-columns: 1fr; }
   .fine-print { grid-column: 1; }
@@ -117,7 +134,7 @@ footer strong { color: var(--signal); letter-spacing: .1em; }
 @media (max-width: 580px) {
   .page-width { width: min(100% - 24px, 1180px); }
   h1 { font-size: 55px; }
-  .status-strip, .score-grid, .method-grid { grid-template-columns: 1fr; }
+  .status-strip, .score-grid, .method-grid, .telemetry-grid { grid-template-columns: 1fr; }
   .status-strip > div { border-right: 0; border-bottom: 1px solid var(--line); }
   .section-block { padding: 52px 0; }
   .section-heading--controls { align-items: flex-start; flex-direction: column; }

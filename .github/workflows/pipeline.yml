@@ -66,6 +66,8 @@ jobs:
         with:
           name: foxhole-data
           path: .
+      - name: Rebuild dashboard with the checked-out source
+        run: PYTHONPATH=src python3 -m foxhole_forecast build-dashboard >/dev/null
       - name: Commit new observations and results
         run: |
           git config user.name "foxhole-forecast[bot]"
@@ -75,5 +77,7 @@ jobs:
             echo "No persisted changes"
           else
             git commit -m "data: update war observations and forecasts"
+            git fetch origin main
+            git rebase origin/main
             git push
           fi

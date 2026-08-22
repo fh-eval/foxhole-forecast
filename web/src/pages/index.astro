@@ -29,6 +29,7 @@ import "../styles/global.css";
     <nav class="section-nav" aria-label="Page sections">
       <div class="page-width">
         <a href="#scoreboard">Scoreboard</a>
+        <a href="#war-data">War data</a>
         <a href="#briefings">Briefings</a>
         <a href="#outlook">Base outlook</a>
         <a href="#predictions">Predictions</a>
@@ -43,6 +44,29 @@ import "../styles/global.css";
         <div><small>STRATEGIC BASES</small><strong id="base-count">—</strong></div>
         <div><small>COLLECTOR POLLS</small><strong id="poll-count">—</strong></div>
         <div><small>TIMING RESOLUTION</small><strong>≤ 15 min</strong></div>
+      </section>
+
+      <section id="war-data" class="section-block">
+        <div class="section-heading">
+          <div><p class="kicker">What the models see</p><h2>Current war telemetry</h2></div>
+          <p>Cutoff-safe public data from the official War API. Model forecasts retain their own earlier cutoff, so the live snapshot can move after a prediction is published.</p>
+        </div>
+        <div id="telemetry-summary" class="telemetry-grid"></div>
+        <div class="telemetry-layout">
+          <div>
+            <div class="subheading"><h3>Most active regions</h3><span id="telemetry-cutoff">—</span></div>
+            <div class="table-shell">
+              <table class="telemetry-table">
+                <thead><tr><th>Region</th><th>24h events</th><th>Warden bases</th><th>Colonial bases</th><th>Warden casualties</th><th>Colonial casualties</th><th>Enlistments</th></tr></thead>
+                <tbody id="telemetry-regions"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="event-feed">
+            <div class="subheading"><h3>Latest observed changes</h3><span>Official API only</span></div>
+            <ol id="telemetry-events"></ol>
+          </div>
+        </div>
       </section>
 
       <section id="scoreboard" class="section-block">
@@ -123,7 +147,20 @@ import "../styles/global.css";
       };
       const formatDate = (value) => value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value)) + " UTC" : "—";
       const percent = (value) => `${Math.round(Number(value) * 100)}%`;
+      const number = (value) => new Intl.NumberFormat().format(Number(value) || 0);
       const eventLabel = (value) => String(value || "").replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+      const regionLabel = (value) => String(value || "Unknown region").replace(/Hex$/, "").replace(/([a-z])([A-Z])/g, "$1 $2");
+      const evidenceValue = (item) => {
+        if (item.value == null) return "value unavailable";
+        if (String(item.metric_id).includes("ratio_")) return `${Number(item.value).toFixed(2)}×`;
+        const formatted = number(item.value);
+        return String(item.metric_id).includes(".delta_") && Number(item.value) > 0 ? `+${formatted}` : formatted;
+      };
+      const evidenceChip = (item) => {
+        const chip = element("span", "evidence-chip", `${item.label || item.metric_id}: ${evidenceValue(item)} · relevance ${item.relevance}/10`);
+        if (item.observed_at) chip.title = `Metric observed ${formatDate(item.observed_at)}`;
+        return chip;
+      };
       let dashboard = null;
       let betView = "open";
 
@@ -151,6 +188,60 @@ import "../styles/global.css";
           card.append(rank, title, score, unit, meta, identity);
           grid.append(card);
         });
+      }
+
+      function renderWarData(snapshot) {
+        const summary = document.querySelector("#telemetry-summary");
+        const regions = document.querySelector("#telemetry-regions");
+        const events = document.querySelector("#telemetry-events");
+        summary.replaceChildren();
+        regions.replaceChildren();
+        events.replaceChildren();
+        if (!snapshot) {
+          summary.append(element("p", "empty-state", "No official War API snapshot is available yet."));
+          return;
+        }
+        const ownership = snapshot.strategic_base_ownership || {};
+        const casualties = snapshot.casualties || {};
+        [
+          ["Day of war", snapshot.day_of_war ?? "—"],
+          ["Warden strategic bases", number(ownership.WARDENS)],
+          ["Colonial strategic bases", number(ownership.COLONIALS)],
+          ["Warden casualties", number(casualties.WARDENS)],
+          ["Colonial casualties", number(casualties.COLONIALS)],
+        ].forEach(([label, value]) => {
+          const card = element("article", "telemetry-card");
+          card.append(element("small", "", label), element("strong", "", value));
+          summary.append(card);
+        });
+        document.querySelector("#telemetry-cutoff").textContent = `Observed ${formatDate(snapshot.observed_at)}`;
+        (snapshot.active_regions || []).forEach((region) => {
+          const row = document.createElement("tr");
+          row.append(
+            element("td", "", regionLabel(region.map_name)),
+            element("td", region.ownership_events_24h ? "activity" : "", number(region.ownership_events_24h)),
+            element("td", "faction faction--wardens", number(region.ownership?.WARDENS)),
+            element("td", "faction faction--colonials", number(region.ownership?.COLONIALS)),
+            element("td", "", number(region.warden_casualties)),
+            element("td", "", number(region.colonial_casualties)),
+            element("td", "", number(region.total_enlistments)),
+          );
+          regions.append(row);
+        });
+        const recent = snapshot.recent_ownership_events || [];
+        if (!recent.length) {
+          events.append(element("li", "empty-state", "No official ownership changes have been observed in the last 24 hours."));
+        } else {
+          recent.forEach((event) => {
+            const item = element("li", "event-feed__item");
+            item.append(
+              element("time", "", formatDate(event.observed_at)),
+              element("strong", "", `${event.base_name || "Unknown base"} · ${event.map_display_name || regionLabel(event.map_name)}`),
+              element("span", "", `${eventLabel(event.event_type)} · ${eventLabel(event.actor)}`),
+            );
+            events.append(item);
+          });
+        }
       }
 
       function stat(label, value) {
@@ -192,7 +283,7 @@ import "../styles/global.css";
           predictionCell.append(element("strong", "", prediction));
           const evidence = element("div", "evidence-list");
           (bet.evidence || []).forEach((item) => {
-            evidence.append(element("span", "evidence-chip", `${item.metric_id} · ${item.relevance}/10`));
+            evidence.append(evidenceChip(item));
           });
           predictionCell.append(evidence);
           row.append(
@@ -218,7 +309,7 @@ import "../styles/global.css";
           baseCell.append(element("strong", "", `${forecast.base_name}, ${forecast.map_name}`));
           const evidence = element("div", "evidence-list");
           (forecast.evidence || []).slice(0, 5).forEach((item) => {
-            evidence.append(element("span", "evidence-chip", `${item.metric_id} · ${item.relevance}/10`));
+            evidence.append(evidenceChip(item));
           });
           baseCell.append(evidence);
           row.append(
@@ -277,6 +368,7 @@ import "../styles/global.css";
           document.querySelector("#base-count").textContent = dashboard.strategic_base_count ?? 0;
           document.querySelector("#poll-count").textContent = dashboard.collector_runs ?? 0;
           document.querySelector("#generated-at").textContent = dashboard.generated_at ? `Generated ${formatDate(dashboard.generated_at)}` : "No dataset generated yet";
+          renderWarData(dashboard.war_api_snapshot);
           renderScores(dashboard.models || []);
           renderBriefings(dashboard.models || []);
           renderOutlook();

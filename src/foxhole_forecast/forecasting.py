@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 from datetime import UTC, datetime
@@ -124,6 +125,7 @@ def _run_model(
             lambda value: validate_forecast(value, detail_packet, settings),
         )
         calls.append(_call_record("forecast", forecast_messages, forecast_response))
+        frozen_forecast = _freeze_evidence(forecast_response.parsed, detail_packet)
         total_cost = provider.accumulated_cost
         state["daily_costs"][date_key] = round(spent + total_cost, 8)
         write_json(DATA_DIR / "state.json", state)
@@ -133,7 +135,7 @@ def _run_model(
             "returned_model": forecast_response.returned_model,
             "upstream_provider": forecast_response.upstream_provider,
             "selected_regions": selected,
-            "forecast": forecast_response.parsed,
+            "forecast": frozen_forecast,
             "calls": calls,
             "cost_usd": round(total_cost, 8),
             "settlement": {"status": "open", "horizons": {}},
@@ -206,3 +208,21 @@ def _call_record(stage: str, messages: list[dict[str, str]], response: ProviderR
 def _identifier(war_id: str, cutoff: str) -> str:
     digest = hashlib.sha256(f"{war_id}:{cutoff}".encode()).hexdigest()[:12]
     return f"{cutoff[:10]}-{digest}"
+
+
+def _freeze_evidence(
+    forecast: dict[str, Any], detail_packet: dict[str, Any]
+) -> dict[str, Any]:
+    frozen = copy.deepcopy(forecast)
+    metrics = {
+        metric["metric_id"]: metric
+        for metric in detail_packet.get("selected_metrics", [])
+    }
+    for base in frozen.get("base_forecasts", []):
+        for event in base.get("events", []):
+            for evidence in event.get("evidence", []):
+                metric = metrics.get(evidence.get("metric_id"))
+                if metric:
+                    evidence["value"] = metric.get("value")
+                    evidence["observed_at"] = metric.get("observed_at")
+    return frozen

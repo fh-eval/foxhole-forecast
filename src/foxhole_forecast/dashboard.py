@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import timedelta
+import re
 from typing import Any
 
 from .config import DATA_DIR, ROOT
-from .storage import isoformat, read_json, read_jsonl, write_json
+from .storage import isoformat, parse_time, read_json, read_jsonl, write_json
 
 
 def build_dashboard_data() -> dict[str, Any]:
@@ -13,6 +15,7 @@ def build_dashboard_data() -> dict[str, Any]:
     runs = read_jsonl(DATA_DIR / "model_runs.jsonl")
     settlements = read_json(DATA_DIR / "settlements.json", default={})
     collector_runs = read_jsonl(DATA_DIR / "collector_runs.jsonl")
+    official_events = read_jsonl(DATA_DIR / "events.jsonl")
 
     bases = {
         identifier: base
@@ -25,6 +28,7 @@ def build_dashboard_data() -> dict[str, Any]:
     resolved_bets: list[dict[str, Any]] = []
     for run in runs:
         series = run["series_id"]
+        metric_lookup = _metric_lookup(run)
         if run.get("status") == "valid" and (
             series not in latest_valid_runs or run["cutoff"] > latest_valid_runs[series]["cutoff"]
         ):
@@ -57,7 +61,10 @@ def build_dashboard_data() -> dict[str, Any]:
                 "actor": bet["actor"],
                 "confidence": bet["confidence"],
                 "eta_utc": bet["eta_utc"],
-                "evidence": bet["evidence"],
+                "evidence": [
+                    _present_evidence(item, metric_lookup)
+                    for item in bet["evidence"]
+                ],
                 "status": bet["status"],
                 "eta_error_minutes": bet["eta_error_minutes"],
                 "brier": bet["brier"],
@@ -95,12 +102,16 @@ def build_dashboard_data() -> dict[str, Any]:
     resolved_bets.sort(key=lambda row: row["cutoff"], reverse=True)
     base_forecasts: list[dict[str, Any]] = []
     for run in latest_valid_runs.values():
+        metric_lookup = _metric_lookup(run)
         for forecast in run["forecast"]["base_forecasts"]:
             base = bases.get(forecast["base_id"], {})
-            evidence: dict[str, int] = {}
+            evidence: dict[str, dict[str, Any]] = {}
             for event in forecast["events"]:
                 for item in event["evidence"]:
-                    evidence[item["metric_id"]] = max(evidence.get(item["metric_id"], 0), item["relevance"])
+                    presented = _present_evidence(item, metric_lookup)
+                    existing = evidence.get(item["metric_id"])
+                    if not existing or presented["relevance"] > existing["relevance"]:
+                        evidence[item["metric_id"]] = presented
             base_forecasts.append(
                 {
                     "series_id": run["series_id"],
@@ -113,10 +124,10 @@ def build_dashboard_data() -> dict[str, Any]:
                     "p_change_1h": forecast["p_change_1h"],
                     "p_change_6h": forecast["p_change_6h"],
                     "p_change_24h": forecast["p_change_24h"],
-                    "evidence": [
-                        {"metric_id": metric_id, "relevance": relevance}
-                        for metric_id, relevance in sorted(evidence.items(), key=lambda item: (-item[1], item[0]))
-                    ],
+                    "evidence": sorted(
+                        evidence.values(),
+                        key=lambda item: (-item["relevance"], item["metric_id"]),
+                    ),
                 }
             )
     base_forecasts.sort(key=lambda row: (-row["p_change_24h"], row["model_label"], row["base_name"]))
@@ -127,6 +138,7 @@ def build_dashboard_data() -> dict[str, Any]:
         "last_collected_at": latest.get("observed_at"),
         "collector_runs": len(collector_runs),
         "strategic_base_count": len(bases),
+        "war_api_snapshot": _build_war_api_snapshot(latest, official_events),
         "models": models,
         "base_forecasts": base_forecasts[:500],
         "open_bets": open_bets[:500],
@@ -141,3 +153,140 @@ def build_dashboard_data() -> dict[str, Any]:
     }
     write_json(ROOT / "web" / "public" / "data" / "dashboard.json", output)
     return output
+
+
+def _build_war_api_snapshot(
+    latest: dict[str, Any], official_events: list[dict[str, Any]]
+) -> dict[str, Any]:
+    observed_at = latest.get("observed_at")
+    cutoff = parse_time(observed_at) if observed_at else None
+    recent_events = []
+    if cutoff:
+        start = cutoff - timedelta(hours=24)
+        recent_events = [
+            event
+            for event in official_events
+            if event.get("observed_to") and start <= parse_time(event["observed_to"]) <= cutoff
+        ]
+
+    event_counts: dict[str, int] = defaultdict(int)
+    for event in recent_events:
+        event_counts[event.get("map_name", "")] += 1
+
+    owner_totals = {team: 0 for team in ("WARDENS", "COLONIALS", "NONE")}
+    casualty_totals = {team: 0 for team in ("WARDENS", "COLONIALS")}
+    regions: list[dict[str, Any]] = []
+    days: list[int] = []
+    for map_name, map_state in latest.get("maps", {}).items():
+        bases = list(map_state.get("bases", {}).values())
+        ownership = {
+            team: sum(1 for base in bases if base.get("team") == team)
+            for team in owner_totals
+        }
+        for team, count in ownership.items():
+            owner_totals[team] += count
+
+        report = map_state.get("report", {})
+        colonial_casualties = int(report.get("colonialCasualties", 0) or 0)
+        warden_casualties = int(report.get("wardenCasualties", 0) or 0)
+        casualty_totals["COLONIALS"] += colonial_casualties
+        casualty_totals["WARDENS"] += warden_casualties
+        if isinstance(report.get("dayOfWar"), int):
+            days.append(report["dayOfWar"])
+        regions.append(
+            {
+                "map_name": map_name,
+                "strategic_base_count": len(bases),
+                "ownership": ownership,
+                "colonial_casualties": colonial_casualties,
+                "warden_casualties": warden_casualties,
+                "total_enlistments": int(report.get("totalEnlistments", 0) or 0),
+                "ownership_events_24h": event_counts.get(map_name, 0),
+            }
+        )
+
+    regions.sort(
+        key=lambda region: (
+            -region["ownership_events_24h"],
+            -(region["colonial_casualties"] + region["warden_casualties"]),
+            region["map_name"],
+        )
+    )
+    recent_events.sort(key=lambda event: event["observed_to"], reverse=True)
+    return {
+        "source": "Official Foxhole War API",
+        "observed_at": observed_at,
+        "day_of_war": max(days) if days else None,
+        "region_count": len(regions),
+        "strategic_base_ownership": owner_totals,
+        "casualties": casualty_totals,
+        "active_regions": regions[:16],
+        "recent_ownership_events": [
+            {
+                "observed_at": event["observed_to"],
+                "map_name": event.get("map_name"),
+                "map_display_name": event.get("map_display_name"),
+                "base_name": event.get("base_name"),
+                "event_type": event.get("event_type"),
+                "actor": event.get("actor"),
+            }
+            for event in recent_events[:12]
+        ],
+    }
+
+
+def _metric_lookup(run: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    path = (
+        DATA_DIR
+        / "raw"
+        / "cohorts"
+        / run["cohort_id"]
+        / f"{run['series_id']}-detail-packet.json"
+    )
+    packet = read_json(path, default={})
+    return {
+        metric["metric_id"]: metric
+        for metric in packet.get("selected_metrics", [])
+    }
+
+
+def _present_evidence(
+    item: dict[str, Any], metric_lookup: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
+    metric_id = item["metric_id"]
+    metric = metric_lookup.get(metric_id, {})
+    return {
+        "metric_id": metric_id,
+        "label": _metric_label(metric_id),
+        "relevance": item["relevance"],
+        "value": item["value"] if "value" in item else metric.get("value"),
+        "observed_at": (
+            item["observed_at"]
+            if "observed_at" in item
+            else metric.get("observed_at")
+        ),
+    }
+
+
+def _metric_label(metric_id: str) -> str:
+    parts = metric_id.split(".")
+    if len(parts) < 4 or parts[0] != "region":
+        return metric_id
+    region = re.sub(r"([a-z])([A-Z])", r"\1 \2", re.sub(r"Hex$", "", parts[1]))
+    field = ".".join(parts[2:])
+    if field == "casualties.ratio_colonial_to_warden":
+        description = "Colonial/Warden casualty ratio"
+    else:
+        match = re.fullmatch(r"(colonialCasualties|wardenCasualties|totalEnlistments|dayOfWar)\.(raw|delta_(\d+)h)", field)
+        if not match:
+            description = field.replace(".", " ").replace("_", " ")
+        else:
+            description = {
+                "colonialCasualties": "Colonial casualties",
+                "wardenCasualties": "Warden casualties",
+                "totalEnlistments": "Enlistments",
+                "dayOfWar": "Day of war",
+            }[match.group(1)]
+            if match.group(3):
+                description += f", {match.group(3)}h change"
+    return f"{region} · {description}"
