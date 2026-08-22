@@ -276,7 +276,7 @@ def _drop_invalid_predictions(
         outcome = prediction.get("outcome")
         current_owner = bases.get(prediction.get("base_id"), {}).get("current_owner")
         target = outcome.removeprefix("CAPTURED_BY_") if isinstance(outcome, str) else None
-        if target and target == current_owner:
+        if outcome == "SELF_CAPTURE" or (target and target == current_owner):
             dropped.append(
                 {
                     "rank": prediction.get("rank"),
