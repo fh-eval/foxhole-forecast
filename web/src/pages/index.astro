@@ -51,10 +51,35 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 
       <section id="scoreboard" class="section-block">
         <div class="section-heading">
-          <div><p class="kicker">Current standings</p><h2>Forecast scores</h2></div>
-          <p>Timed rounds earn full credit inside the observed 15-minute interval, then lose one-twelfth per 15-minute block. A neutralized base earns partial state credit when an enemy capture was predicted.</p>
+          <div><p class="kicker">Performance and behavior</p><h2>How the models think</h2></div>
+          <p>Score measures what the model got right. Confidence, target horizon, ETA error, and calibration describe how it tends to make those calls. Credits and probabilities use one consistent 0.00–1.00 scale.</p>
         </div>
-        <div id="score-grid" class="score-grid" aria-live="polite"></div>
+        <div class="table-shell">
+          <table class="score-table" aria-describedby="score-guide">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Model</th>
+                <th>Forecast score<small>Mean earned credit ↑</small></th>
+                <th>Confidence<small>Mean stated</small></th>
+                <th>Typical target<small>Median after cutoff</small></th>
+                <th>ETA error<small>Median matched event ↓</small></th>
+                <th>Calibration<small>Mean squared gap ↓</small></th>
+                <th>Results<small>Hit / partial / miss</small></th>
+              </tr>
+            </thead>
+            <tbody id="score-rows" aria-live="polite"></tbody>
+          </table>
+          <p id="score-empty" class="empty-state" hidden>No model has completed a full round under the current protocol yet.</p>
+        </div>
+        <dl id="score-guide" class="score-guide">
+          <div><dt>Forecast score</dt><dd>Average outcome × timing credit for scoreable bets. 1.00 is perfect.</dd></div>
+          <div><dt>Confidence</dt><dd>The model’s average stated confidence across all published bets, including open bets.</dd></div>
+          <div><dt>Typical target</dt><dd>How far after the round cutoff the model usually places its exact ETA.</dd></div>
+          <div><dt>ETA error</dt><dd>Median distance from the ETA to a matched transition interval; no-event misses are not measurable here.</dd></div>
+          <div><dt>Calibration</dt><dd>Average squared gap between confidence and earned credit. Lower means confidence better matches results.</dd></div>
+          <div><dt>Censored</dt><dd>Settled without a score because observation coverage could not support a fair result.</dd></div>
+        </dl>
       </section>
 
       <section id="war-data" class="section-block">
@@ -144,7 +169,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         return value;
       };
       const formatDate = (value) => value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value)) + " UTC" : "—";
-      const percent = (value) => `${Math.round(Number(value) * 100)}%`;
+      const decimal = (value) => value == null || !Number.isFinite(Number(value)) ? "—" : Number(value).toFixed(2);
       const number = (value) => new Intl.NumberFormat().format(Number(value) || 0);
       const eventLabel = (value) => String(value || "").replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
       const trancheLabel = (value) => value === "IMMEDIATE"
@@ -191,31 +216,90 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           );
       }
 
-      function renderScores(models) {
-        const grid = document.querySelector("#score-grid");
-        grid.replaceChildren();
+      const mean = (values) => values.length ? values.reduce((total, value) => total + value, 0) / values.length : null;
+      const median = (values) => {
+        if (!values.length) return null;
+        const ordered = [...values].sort((a, b) => a - b);
+        const middle = Math.floor(ordered.length / 2);
+        return ordered.length % 2 ? ordered[middle] : (ordered[middle - 1] + ordered[middle]) / 2;
+      };
+      const duration = (minutes) => {
+        if (minutes == null) return "—";
+        return minutes < 60 ? `${Math.round(minutes)}m` : `${(minutes / 60).toFixed(1)}h`;
+      };
+
+      function modelBehavior(model, rounds) {
+        const bets = rounds.filter((round) => round.series_id === model.series_id).flatMap((round) => round.predictions || []);
+        const scoreable = bets.filter((bet) => predictionScoreValue(bet) != null);
+        const confidences = bets.map((bet) => Number(bet.confidence)).filter(Number.isFinite);
+        const leadMinutes = bets.map((bet) => (new Date(bet.eta_utc) - new Date(bet.cutoff || rounds.find((round) => round.run_id === bet.run_id)?.cutoff)) / 60000).filter((value) => Number.isFinite(value) && value >= 0);
+        const etaErrors = scoreable.filter((bet) => bet.eta_error_minutes != null).map((bet) => Number(bet.eta_error_minutes)).filter(Number.isFinite);
+        const credits = scoreable.map((bet) => Number(bet.timing_credit));
+        const calibrationErrors = scoreable
+          .map((bet) => (Number(bet.confidence) - Number(bet.timing_credit)) ** 2)
+          .filter(Number.isFinite);
+        const count = (status) => bets.filter((bet) => bet.status === status).length;
+        return {
+          model,
+          bets,
+          scoreable,
+          score: mean(credits),
+          confidence: mean(confidences),
+          leadMinutes: median(leadMinutes),
+          etaErrorMinutes: median(etaErrors),
+          matched: etaErrors.length,
+          calibration: mean(calibrationErrors),
+          hits: count("hit"),
+          partials: count("partial"),
+          misses: count("miss"),
+          censored: count("censored"),
+          open: count("open"),
+        };
+      }
+
+      function metricCell(value, note, className = "") {
+        const cell = element("td", `score-table__metric ${className}`.trim());
+        cell.append(element("strong", "", value), element("small", "", note));
+        return cell;
+      }
+
+      function renderScores(models, rounds) {
+        const rows = document.querySelector("#score-rows");
+        const empty = document.querySelector("#score-empty");
+        rows.replaceChildren();
+        empty.hidden = models.length > 0;
         if (!models.length) {
-          grid.append(element("p", "empty-state", "No model has completed a full round under the current protocol yet."));
           return;
         }
-        models.forEach((model, index) => {
-          const card = element("article", "score-card");
-          const rank = element("span", "rank", String(index + 1).padStart(2, "0"));
-          const title = element("h3", "", model.label || model.series_id);
-          const timed = model.timing_score_pct;
-          const skill = model.brier_skill_score;
-          const primary = timed ?? skill;
-          const score = element("strong", `score ${primary != null && primary < 0 ? "score--negative" : ""}`, primary == null ? "Collecting" : `${Number(primary).toFixed(1)}`);
-          const unit = element("small", "", primary == null ? "awaiting resolved bets" : timed != null ? "prediction credit / 100" : "legacy Brier skill");
-          const meta = element("div", "score-meta");
-          meta.append(
-            stat("Matured", model.complete_runs ?? 0),
-            stat("Hit / partial", `${model.event_hits ?? 0} / ${model.event_partials ?? 0}`),
-            stat("ETA median", model.median_eta_error_minutes == null ? "—" : `${model.median_eta_error_minutes}m`),
+        const behaviors = models.map((model) => modelBehavior(model, rounds)).sort((a, b) =>
+          (a.score == null) - (b.score == null)
+          || (b.score ?? -1) - (a.score ?? -1)
+          || (a.calibration ?? Infinity) - (b.calibration ?? Infinity)
+          || String(a.model.label).localeCompare(String(b.model.label))
+        );
+        behaviors.forEach((behavior, index) => {
+          const row = document.createElement("tr");
+          const modelCell = element("td", "score-table__model");
+          modelCell.append(
+            element("strong", "", behavior.model.label || behavior.model.series_id),
+            element("small", "", `${behavior.model.gateway || "provider"} · ${behavior.model.returned_model || behavior.model.requested_model || behavior.model.series_id}`),
           );
-          const identity = element("p", "model-id", `${model.gateway || "provider"} · ${model.returned_model || model.requested_model || model.series_id}`);
-          card.append(rank, title, score, unit, meta, identity);
-          grid.append(card);
+          const resultsCell = element("td", "score-table__results");
+          resultsCell.append(
+            element("strong", "", `${behavior.hits} / ${behavior.partials} / ${behavior.misses}`),
+            element("small", "", `${behavior.censored} censored · ${behavior.open} open`),
+          );
+          row.append(
+            element("td", "score-table__rank", String(index + 1).padStart(2, "0")),
+            modelCell,
+            metricCell(decimal(behavior.score), `${behavior.scoreable.length} scoreable bets`, "score-table__primary"),
+            metricCell(decimal(behavior.confidence), `${behavior.bets.length} published bets`),
+            metricCell(duration(behavior.leadMinutes), "cutoff → ETA"),
+            metricCell(duration(behavior.etaErrorMinutes), `${behavior.matched} matched transitions`),
+            metricCell(decimal(behavior.calibration), "lower is better"),
+            resultsCell,
+          );
+          rows.append(row);
         });
       }
 
@@ -329,7 +413,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       function predictionHeadline(bet) {
         const line = element("p", "prediction-headline");
         const predictedOutcome = bet.predicted_outcome || (typeof bet.outcome === "string" ? bet.outcome : null);
-        const confidence = element("strong", "prediction-headline__confidence", `${percent(bet.confidence)} confidence`);
+        const confidence = element("strong", "prediction-headline__confidence", `${decimal(bet.confidence)} confidence`);
         line.append(confidence, document.createTextNode(": "));
         if (predictedOutcome) {
           line.append(baseIdentity(bet));
@@ -394,7 +478,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 
       function predictionScoreValue(bet) {
         if (!["hit", "partial", "miss"].includes(bet.status) || bet.timing_credit == null) return null;
-        const value = Number(bet.timing_credit) * 100;
+        const value = Number(bet.timing_credit);
         return Number.isFinite(value) ? value : null;
       }
 
@@ -407,7 +491,6 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           badge.append(
             element("span", "prediction-score__label", "Score"),
             element("strong", "", score.toFixed(2)),
-            element("span", "prediction-score__denominator", "/ 100"),
           );
           result.append(badge);
         }
@@ -530,14 +613,16 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           document.querySelector("#poll-count").textContent = dashboard.collector_runs ?? 0;
           document.querySelector("#generated-at").textContent = dashboard.generated_at ? `Generated ${formatDate(dashboard.generated_at)}` : "No dataset generated yet";
           renderWarData(dashboard.war_api_snapshot);
-          renderScores(currentModels);
+          renderScores(currentModels, currentRounds);
           renderRounds(currentRounds);
           setupBriefingFilter(currentModels);
           renderBriefings(currentModels);
           renderPredictions();
           setupHistory(currentModels);
         } catch (error) {
-          document.querySelector("#score-grid").append(element("p", "empty-state", `Dashboard data could not be loaded: ${error.message}`));
+          const empty = document.querySelector("#score-empty");
+          empty.textContent = `Dashboard data could not be loaded: ${error.message}`;
+          empty.hidden = false;
         }
       }
 
