@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from .config import DATA_DIR, Settings, load_models
+from .config import DATA_DIR, ROOT, Settings, load_models
 from .packets import build_detail_packet, build_scout_packet
 from .providers import MissingApiKey, ModelProvider, ProviderResponse
 from .schemas import forecast_schema, scout_schema
@@ -15,11 +15,16 @@ from .storage import append_jsonl, isoformat, read_json, write_json
 from .validation import ValidationError, validate_forecast, validate_scout
 
 
-SCOUT_SYSTEM = """You are the scouting stage of Foxhole Forecast, a prospective forecasting evaluation.
-Use only the supplied cutoff-safe public data. Select the regions whose detailed history would be most useful for predicting strategic-base ownership changes during the next 24 hours. Return only the requested JSON. Do not explain your selection."""
+PROMPT_DIR = ROOT / "prompts"
 
-FORECAST_SYSTEM = """You are a military-state forecasting model evaluated against future public Foxhole telemetry.
-Use only the supplied data. Identify the strategic bases most likely to change ownership state. You may forecast at most the configured number of bases; every omitted strategic base is scored as 0% change at 1h, 6h, and 24h. Probabilities must be calibrated and monotonic. Each named base needs at least one exact event bet. Use only supplied metric IDs as evidence and rate how influential each metric was from 1 to 10. Return only the requested JSON. Do not expose private chain-of-thought; provide only the short campaign summary and structured forecasts."""
+
+def _load_prompt(name: str) -> str:
+    return (PROMPT_DIR / name).read_text(encoding="utf-8").strip()
+
+
+SCOUT_SYSTEM = _load_prompt("scout.md")
+FORECAST_SYSTEM = _load_prompt("forecast.md")
+CORRECTION_USER = _load_prompt("correction.md")
 
 
 def forecast_due(state: dict[str, Any], settings: Settings, now: datetime | None = None) -> tuple[bool, str]:
@@ -199,7 +204,7 @@ def _call_validated(
                     *messages,
                     {
                         "role": "user",
-                        "content": f"Your prior response failed local validation: {error}. Return a corrected JSON object only.",
+                        "content": CORRECTION_USER.format(error=error),
                     },
                 ]
     assert last_error is not None

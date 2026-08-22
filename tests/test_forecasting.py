@@ -3,10 +3,15 @@ from __future__ import annotations
 import unittest
 
 from foxhole_forecast.config import Settings
-from foxhole_forecast.forecasting import _budget
+from foxhole_forecast.forecasting import CORRECTION_USER, FORECAST_SYSTEM, SCOUT_SYSTEM, _budget
 
 
 class ForecastBudgetTests(unittest.TestCase):
+    def test_editable_prompts_load_from_markdown(self) -> None:
+        self.assertTrue(SCOUT_SYSTEM.startswith("You are the scouting stage"))
+        self.assertTrue(FORECAST_SYSTEM.startswith("You are a military-state forecasting model"))
+        self.assertIn("{error}", CORRECTION_USER)
+
     def test_existing_paid_models_keep_shared_legacy_ledger(self) -> None:
         state = {"daily_costs": {"2026-08-22": 0.2}}
 

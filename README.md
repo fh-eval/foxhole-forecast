@@ -28,6 +28,7 @@ A result is censored instead of guessed when collector coverage has a gap longer
 
 ```text
 config/                    Evaluation and model-series configuration
+prompts/                   Editable scout, forecast, and correction prompts
 data/                      Append-only observations, forecasts, and scores
 src/foxhole_forecast/      Collector, packet builder, adapters, validator, scorer
 tests/                     Deterministic unit tests
