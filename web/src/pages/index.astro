@@ -118,7 +118,7 @@ import "../styles/global.css";
         </div>
         <div class="table-shell">
           <table>
-            <thead><tr><th>Model</th><th>Prediction</th><th>Confidence</th><th>ETA (UTC)</th><th>Status</th></tr></thead>
+            <thead><tr><th>Model</th><th>Prediction and supporting evidence</th><th>Status</th></tr></thead>
             <tbody id="prediction-rows"></tbody>
           </table>
           <p id="prediction-empty" class="empty-state" hidden>No predictions in this view yet.</p>
@@ -159,7 +159,11 @@ import "../styles/global.css";
       const number = (value) => new Intl.NumberFormat().format(Number(value) || 0);
       const eventLabel = (value) => String(value || "").replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
       const teamLabel = (value) => value === "NONE" ? "Neutral / destroyed" : eventLabel(value);
+      const teamAdjective = (value) => value === "WARDENS" ? "Warden" : value === "COLONIALS" ? "Colonial" : "Destroyed";
       const regionLabel = (value) => String(value || "Unknown region").replace(/Hex$/, "").replace(/([a-z])([A-Z])/g, "$1 $2");
+      const predictionTime = (value) => value ? new Intl.DateTimeFormat(undefined, {
+        month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC",
+      }).format(new Date(value)) + " UTC" : "an unknown time";
       const evidenceValue = (item) => {
         if (item.value == null) return "value unavailable";
         if (String(item.metric_id).includes("ratio_")) return `${Number(item.value).toFixed(2)}×`;
@@ -298,15 +302,64 @@ import "../styles/global.css";
         });
       }
 
-      function predictionText(bet) {
-        if (bet.outcome) {
-          const action = bet.outcome === "DESTROYED" ? "Destroyed / no-man’s-land" : "Captured";
-          return `${action} — ${bet.base_name}, ${regionLabel(bet.map_name)}`;
+      function factionName(team, adjective = false) {
+        const label = adjective ? teamAdjective(team) : teamLabel(team);
+        return element("span", `faction-name faction-name--${String(team || "none").toLowerCase()}`, label);
+      }
+
+      function predictionHeadline(bet) {
+        const line = element("p", "prediction-headline");
+        const predictedOutcome = bet.predicted_outcome || (typeof bet.outcome === "string" ? bet.outcome : null);
+        const confidence = element("strong", "prediction-headline__confidence", `${percent(bet.confidence)} confidence`);
+        line.append(confidence, document.createTextNode(" that "));
+        if (predictedOutcome) {
+          line.append(factionName(bet.current_team, true), document.createTextNode(" base "));
+          line.append(element("strong", "prediction-headline__base", bet.base_name || "Unknown base"));
+          if (predictedOutcome === "DESTROYED") {
+            line.append(document.createTextNode(" will be destroyed at "));
+          } else {
+            line.append(document.createTextNode(" will be captured by "));
+            if (bet.current_team === "WARDENS") {
+              line.append(factionName("COLONIALS"));
+            } else if (bet.current_team === "COLONIALS") {
+              line.append(factionName("WARDENS"));
+            } else {
+              line.append(factionName("WARDENS"), document.createTextNode(" or "), factionName("COLONIALS"));
+            }
+            line.append(document.createTextNode(" at "));
+          }
+          line.append(element("time", "prediction-headline__time", predictionTime(bet.eta_utc)));
+          return line;
         }
+
+        // Retain a readable sentence for archived destination/event protocols.
         if (bet.destination_team) {
-          return `${teamLabel(bet.current_team)} → ${teamLabel(bet.destination_team)} — ${bet.base_name}, ${regionLabel(bet.map_name)}`;
+          line.append(factionName(bet.current_team, true), document.createTextNode(" base "));
+          line.append(element("strong", "prediction-headline__base", bet.base_name || "Unknown base"));
+          line.append(document.createTextNode(" will be captured by "), factionName(bet.destination_team), document.createTextNode(" at "));
+        } else if (String(bet.event_type).startsWith("CAPTURED_BY_") && bet.actor) {
+          line.append(element("strong", "prediction-headline__base", bet.base_name || "Unknown base"));
+          line.append(document.createTextNode(" will be captured by "), factionName(bet.actor), document.createTextNode(" at "));
+        } else if (bet.event_type === "OWNER_LOSES" && bet.actor) {
+          line.append(factionName(bet.actor, true), document.createTextNode(" base "));
+          line.append(element("strong", "prediction-headline__base", bet.base_name || "Unknown base"));
+          line.append(document.createTextNode(" will lose ownership at "));
+        } else {
+          line.append(element("strong", "prediction-headline__base", bet.base_name || "Unknown base"));
+          line.append(document.createTextNode(` will undergo ${eventLabel(bet.event_type)} at `));
         }
-        return `${eventLabel(bet.event_type)} — ${bet.base_name}, ${regionLabel(bet.map_name)}`;
+        line.append(element("time", "prediction-headline__time", predictionTime(bet.eta_utc)));
+        return line;
+      }
+
+      function supportingEvidence(items) {
+        const wrapper = element("div", "supporting-evidence");
+        wrapper.append(element("small", "supporting-evidence__label", "Supporting evidence"));
+        const evidence = element("div", "evidence-list");
+        (items || []).forEach((item) => evidence.append(evidenceChip(item)));
+        if (!items?.length) evidence.append(element("span", "evidence-empty", "No supporting evidence retained."));
+        wrapper.append(evidence);
+        return wrapper;
       }
 
       function predictionStatus(bet) {
@@ -341,14 +394,12 @@ import "../styles/global.css";
           const bets = element("div", "round__bets");
           (round.predictions || []).forEach((bet) => {
             const row = element("article", "round-bet");
-            const heading = element("div", "round-bet__heading");
-            heading.append(
-              element("strong", "", `#${bet.rank ?? "—"} ${predictionText(bet)}`),
-              element("span", "", `${percent(bet.confidence)} · ${formatDate(bet.eta_utc)}`),
+            const meta = element("div", "round-bet__meta");
+            meta.append(
+              element("span", "", `#${bet.rank ?? "—"} · ${eventLabel(bet.tranche)} · ${regionLabel(bet.map_name)}`),
+              element("small", `status status--${bet.status}`, predictionStatus(bet)),
             );
-            const evidence = element("div", "evidence-list");
-            (bet.evidence || []).forEach((item) => evidence.append(evidenceChip(item)));
-            row.append(heading, element("small", `status status--${bet.status}`, predictionStatus(bet)), evidence);
+            row.append(meta, predictionHeadline(bet), supportingEvidence(bet.evidence));
             bets.append(row);
           });
           body.append(bets);
@@ -365,21 +416,13 @@ import "../styles/global.css";
         empty.hidden = bets.length > 0;
         bets.slice(0, 100).forEach((bet) => {
           const row = document.createElement("tr");
-          const prediction = predictionText(bet);
           const status = predictionStatus(bet);
           const modelCell = element("td", "", bet.model_label);
           const predictionCell = element("td", "prediction-cell");
-          predictionCell.append(element("strong", "", prediction));
-          const evidence = element("div", "evidence-list");
-          (bet.evidence || []).forEach((item) => {
-            evidence.append(evidenceChip(item));
-          });
-          predictionCell.append(evidence);
+          predictionCell.append(predictionHeadline(bet), supportingEvidence(bet.evidence));
           row.append(
             modelCell,
             predictionCell,
-            element("td", "", percent(bet.confidence)),
-            element("td", "", formatDate(bet.eta_utc)),
             element("td", `status status--${bet.status}`, status),
           );
           rows.append(row);

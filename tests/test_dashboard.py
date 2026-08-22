@@ -5,12 +5,21 @@ import unittest
 from foxhole_forecast.dashboard import (
     _build_war_api_snapshot,
     _metric_label,
+    _predicted_outcome,
     _present_evidence,
 )
 from foxhole_forecast.forecasting import _freeze_evidence
 
 
 class DashboardTests(unittest.TestCase):
+    def test_predicted_outcome_is_recovered_from_archived_forecast(self) -> None:
+        settled_bet = {"outcome": None}
+        forecast_bet = {"outcome": "CAPTURED"}
+
+        self.assertEqual(
+            _predicted_outcome(settled_bet, forecast_bet), "CAPTURED"
+        )
+
     def test_timed_prediction_freezes_base_state_and_evidence(self) -> None:
         metric_id = "region.TestHex.totalEnlistments.rate_1h_per_hour"
         forecast = {

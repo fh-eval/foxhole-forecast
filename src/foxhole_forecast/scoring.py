@@ -261,6 +261,9 @@ def _settle_timed_run(
         settled.append(
             {
                 **prediction,
+                # Keep the model's categorical call separate from the numeric
+                # settlement outcome used by the Brier calculation below.
+                "predicted_outcome": prediction.get("outcome"),
                 "status": status,
                 "outcome": outcome,
                 "brier": (

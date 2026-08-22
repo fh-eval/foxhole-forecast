@@ -56,8 +56,16 @@ def build_dashboard_data() -> dict[str, Any]:
         settled_bets = settlement.get(
             "timed_predictions", settlement.get("event_bets", [])
         )
+        forecast_lookup = {
+            (row.get("base_id"), row.get("eta_utc"), row.get("rank")): row
+            for row in forecast_rows
+        }
         for bet in settled_bets:
             base = bases.get(bet["base_id"], {})
+            forecast_bet = forecast_lookup.get(
+                (bet.get("base_id"), bet.get("eta_utc"), bet.get("rank")), {}
+            )
+            predicted_outcome = _predicted_outcome(bet, forecast_bet)
             presented = {
                 "run_id": run["run_id"],
                 "series_id": series,
@@ -72,7 +80,8 @@ def build_dashboard_data() -> dict[str, Any]:
                 "tranche": bet.get("tranche"),
                 "current_team": bet.get("current_team"),
                 "destination_team": bet.get("destination_team"),
-                "outcome": bet.get("outcome"),
+                "predicted_outcome": predicted_outcome,
+                "settlement_outcome": bet.get("outcome"),
                 "confidence": bet["confidence"],
                 "eta_utc": bet["eta_utc"],
                 "evidence": [
@@ -172,7 +181,7 @@ def build_dashboard_data() -> dict[str, Any]:
     base_forecasts.sort(key=lambda row: (-row["p_change_24h"], row["model_label"], row["base_name"]))
     rounds.sort(key=lambda row: row["cutoff"], reverse=True)
     output = {
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_at": isoformat(),
         "war": latest.get("war"),
         "last_collected_at": latest.get("observed_at"),
@@ -199,6 +208,19 @@ def build_dashboard_data() -> dict[str, Any]:
     }
     write_json(ROOT / "web" / "public" / "data" / "dashboard.json", output)
     return output
+
+
+def _predicted_outcome(
+    settled_bet: dict[str, Any], forecast_bet: dict[str, Any]
+) -> str | None:
+    """Recover the model's call without confusing it with numeric settlement credit."""
+    for candidate in (
+        settled_bet.get("predicted_outcome"),
+        forecast_bet.get("outcome"),
+    ):
+        if candidate in {"CAPTURED", "DESTROYED"}:
+            return candidate
+    return None
 
 
 def _build_war_api_snapshot(

@@ -66,6 +66,7 @@ class ScoringTests(unittest.TestCase):
         )
 
         bet = settlement["timed_predictions"][0]
+        self.assertEqual(bet["predicted_outcome"], "CAPTURED")
         self.assertEqual(bet["status"], "partial")
         self.assertEqual(bet["state_credit"], 0.75)
         self.assertEqual(bet["timing_credit"], 0.75)
