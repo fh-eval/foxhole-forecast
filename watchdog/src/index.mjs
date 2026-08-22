@@ -13,6 +13,12 @@ export function forecastSlot(now) {
   return value;
 }
 
+export function cacheBustedUrl(url, now) {
+  const value = new URL(url);
+  value.searchParams.set("watchdog_time", String(now));
+  return value.toString();
+}
+
 function githubHeaders(token) {
   return {
     Accept: "application/vnd.github+json",
@@ -53,17 +59,21 @@ async function dispatchIfIdle(env, workflow, fetchImpl) {
   });
   if (!dispatchResponse.ok) {
     const body = await dispatchResponse.text();
-    throw new Error(`Collector dispatch failed with HTTP ${dispatchResponse.status}: ${body.slice(0, 300)}`);
+    throw new Error(`Workflow dispatch failed with HTTP ${dispatchResponse.status}: ${body.slice(0, 300)}`);
   }
   return { action: "dispatched", workflow };
 }
 
 export async function checkAndDispatch(env, fetchImpl = fetch, now = Date.now()) {
   if (!env.GITHUB_TOKEN) throw new Error("GITHUB_TOKEN secret is not configured");
-  const publicHeaders = { "User-Agent": "foxhole-forecast-watchdog" };
+  const publicHeaders = {
+    "Cache-Control": "no-cache",
+    Pragma: "no-cache",
+    "User-Agent": "foxhole-forecast-watchdog",
+  };
   const [latestResponse, stateResponse] = await Promise.all([
-    fetchImpl(env.LATEST_DATA_URL, { headers: publicHeaders, cf: { cacheTtl: 0 } }),
-    fetchImpl(env.STATE_DATA_URL, { headers: publicHeaders, cf: { cacheTtl: 0 } }),
+    fetchImpl(cacheBustedUrl(env.LATEST_DATA_URL, now), { headers: publicHeaders, cf: { cacheTtl: 0 } }),
+    fetchImpl(cacheBustedUrl(env.STATE_DATA_URL, now), { headers: publicHeaders, cf: { cacheTtl: 0 } }),
   ]);
   const [latest, state] = await Promise.all([
     jsonResponse(latestResponse, "Latest observation request"),
