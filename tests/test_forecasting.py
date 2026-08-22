@@ -103,10 +103,10 @@ class ForecastBudgetTests(unittest.TestCase):
 
         self.assertIs(ledger, state["daily_costs"])
         self.assertEqual(key, "2026-08-22")
-        self.assertEqual((spent, limit, reserve), (0.2, 0.25, 0.05))
+        self.assertEqual((spent, limit, reserve), (0.2, 1.0, 0.05))
 
     def test_direct_provider_can_have_an_independent_daily_budget(self) -> None:
-        state = {"daily_costs": {"2026-08-22": 0.25}}
+        state = {"daily_costs": {"2026-08-22": 1.0}}
         config = {
             "paid": True,
             "budget_group": "deepseek-direct",
