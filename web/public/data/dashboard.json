@@ -1149,9 +1149,9 @@
       "series_id": "deepseek-v4-flash-direct-json-war-overview-v2"
     }
   ],
-  "collector_runs": 22,
-  "generated_at": "2026-08-22T05:57:07.535637Z",
-  "last_collected_at": "2026-08-22T05:56:17.722681Z",
+  "collector_runs": 23,
+  "generated_at": "2026-08-22T05:58:25.878614Z",
+  "last_collected_at": "2026-08-22T05:57:39.603092Z",
   "methodology": {
     "current_protocol": "event_outcome_v4",
     "data_source": "Official Foxhole War API, with a provenance-tagged one-time FoxholeStats history backfill",
@@ -2174,6 +2174,72 @@
       "requested_model": "thinkingmachines/inkling",
       "returned_model": "thinkingmachines/inkling",
       "series_id": "nvidia-thinkingmachines-inkling-event-v4",
+      "timing_score_pct": null,
+      "upstream_provider": null,
+      "valid_runs": 1,
+      "within_15m_pct": null,
+      "within_180m_pct": null,
+      "within_30m_pct": null,
+      "within_60m_pct": null
+    },
+    {
+      "baseline_integrated_brier": null,
+      "brier_skill_score": null,
+      "censored_event_bets": 0,
+      "complete_runs": 0,
+      "event_brier": null,
+      "event_hits": 0,
+      "event_misses": 0,
+      "event_partials": 0,
+      "failed_runs": 0,
+      "gateway": "nvidia_nim",
+      "history": [
+        {
+          "brier_skill_score": null,
+          "cost_usd": 0.0,
+          "cutoff": "2026-08-22T05:57:39.603092Z",
+          "forecast_count": 8,
+          "integrated_brier": null,
+          "run_id": "2026-08-22-782711805531:nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+          "selected_regions": [
+            "ClahstraHex",
+            "StlicanShelfHex",
+            "OarbreakerHex",
+            "MooringCountyHex",
+            "EndlessShoreHex",
+            "OnyxHex"
+          ],
+          "settlement_status": "open",
+          "status": "valid",
+          "war_summary": "War 139 is on day 86 with no winner yet. The map is heavily polarized: Colonials hold 140 strategic bases across 27 regions, Wardens hold 68 across 10 regions, and no bases are neutral. Combat is concentrated in a handful of contested regions. Clahstra, Stlican Shelf, Oarbreaker, Mooring County, Endless Shore, and Onyx show recent ownership flips (captures and owner-losses) and elevated casualties. Clahstra and Stlican Shelf have the highest 24h event counts (21 and 25) with multiple bases seeing repeated captures. Oarbreaker saw 7 events in the last 2h and 22 in 24h, including bases turning neutral. Mooring County and Endless Shore also have multi-base churn. Olavis Wake and Speaking Woods have high casualty rates but fewer recent flips. Most other regions are quiet with zero 24h events and one-sided ownership."
+        }
+      ],
+      "integrated_brier": null,
+      "label": "Nemotron 3 Ultra 550B A55B",
+      "latest": {
+        "brier_skill_score": null,
+        "cost_usd": 0.0,
+        "cutoff": "2026-08-22T05:57:39.603092Z",
+        "forecast_count": 8,
+        "integrated_brier": null,
+        "run_id": "2026-08-22-782711805531:nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+        "selected_regions": [
+          "ClahstraHex",
+          "StlicanShelfHex",
+          "OarbreakerHex",
+          "MooringCountyHex",
+          "EndlessShoreHex",
+          "OnyxHex"
+        ],
+        "settlement_status": "open",
+        "status": "valid",
+        "war_summary": "War 139 is on day 86 with no winner yet. The map is heavily polarized: Colonials hold 140 strategic bases across 27 regions, Wardens hold 68 across 10 regions, and no bases are neutral. Combat is concentrated in a handful of contested regions. Clahstra, Stlican Shelf, Oarbreaker, Mooring County, Endless Shore, and Onyx show recent ownership flips (captures and owner-losses) and elevated casualties. Clahstra and Stlican Shelf have the highest 24h event counts (21 and 25) with multiple bases seeing repeated captures. Oarbreaker saw 7 events in the last 2h and 22 in 24h, including bases turning neutral. Mooring County and Endless Shore also have multi-base churn. Olavis Wake and Speaking Woods have high casualty rates but fewer recent flips. Most other regions are quiet with zero 24h events and one-sided ownership."
+      },
+      "median_eta_error_minutes": null,
+      "open_event_bets": 8,
+      "requested_model": "nvidia/nemotron-3-ultra-550b-a55b",
+      "returned_model": "nvidia/nemotron-3-ultra-550b-a55b",
+      "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
       "timing_score_pct": null,
       "upstream_provider": null,
       "valid_runs": 1,
@@ -3523,6 +3589,52 @@
       "base_id": "OarbreakerHex:0f9d37288d",
       "base_name": "Silver",
       "brier": null,
+      "confidence": 0.85,
+      "current_team": "WARDENS",
+      "cutoff": "2026-08-22T05:57:39.603092Z",
+      "destination_team": null,
+      "eta_error_minutes": null,
+      "eta_utc": "2026-08-22T06:30:00Z",
+      "event_type": null,
+      "evidence": [
+        {
+          "label": "Oarbreaker · Warden casualties, 2h change",
+          "metric_id": "region.OarbreakerHex.wardenCasualties.delta_2h",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 9,
+          "value": 388
+        },
+        {
+          "label": "Oarbreaker · Enlistments, 2h change",
+          "metric_id": "region.OarbreakerHex.totalEnlistments.delta_2h",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 8,
+          "value": 105
+        },
+        {
+          "label": "Oarbreaker · Colonial casualties rate change, last 1h vs prior 1h",
+          "metric_id": "region.OarbreakerHex.colonialCasualties.rate_change_1h_vs_previous",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 7,
+          "value": -328.0
+        }
+      ],
+      "map_name": "OarbreakerHex",
+      "model_label": "Nemotron 3 Ultra 550B A55B",
+      "outcome": null,
+      "rank": 1,
+      "run_id": "2026-08-22-782711805531:nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+      "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+      "state_credit": null,
+      "status": "open",
+      "timing_credit": null,
+      "tranche": "IMMEDIATE"
+    },
+    {
+      "actor": null,
+      "base_id": "OarbreakerHex:0f9d37288d",
+      "base_name": "Silver",
+      "brier": null,
       "confidence": 0.82,
       "current_team": "WARDENS",
       "cutoff": "2026-08-22T05:52:32.551343Z",
@@ -3789,6 +3901,52 @@
     },
     {
       "actor": null,
+      "base_id": "OarbreakerHex:177e212176",
+      "base_name": "Grisly Refuge",
+      "brier": null,
+      "confidence": 0.8,
+      "current_team": "COLONIALS",
+      "cutoff": "2026-08-22T05:57:39.603092Z",
+      "destination_team": null,
+      "eta_error_minutes": null,
+      "eta_utc": "2026-08-22T07:00:00Z",
+      "event_type": null,
+      "evidence": [
+        {
+          "label": "Oarbreaker · Colonial casualties, 2h change",
+          "metric_id": "region.OarbreakerHex.colonialCasualties.delta_2h",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 9,
+          "value": 442
+        },
+        {
+          "label": "Oarbreaker · Warden casualties, 2h change",
+          "metric_id": "region.OarbreakerHex.wardenCasualties.delta_2h",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 8,
+          "value": 388
+        },
+        {
+          "label": "Oarbreaker · Enlistments rate, last 1h (per hour)",
+          "metric_id": "region.OarbreakerHex.totalEnlistments.rate_1h_per_hour",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 7,
+          "value": 33.0
+        }
+      ],
+      "map_name": "OarbreakerHex",
+      "model_label": "Nemotron 3 Ultra 550B A55B",
+      "outcome": null,
+      "rank": 2,
+      "run_id": "2026-08-22-782711805531:nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+      "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+      "state_credit": null,
+      "status": "open",
+      "timing_credit": null,
+      "tranche": "IMMEDIATE"
+    },
+    {
+      "actor": null,
       "base_id": "ClahstraHex:5c7f52b44c",
       "base_name": "East Narthex",
       "brier": null,
@@ -4012,6 +4170,52 @@
       "rank": 3,
       "run_id": "2026-08-22-2bc420cce000:nvidia-thinkingmachines-inkling-event-v4",
       "series_id": "nvidia-thinkingmachines-inkling-event-v4",
+      "state_credit": null,
+      "status": "open",
+      "timing_credit": null,
+      "tranche": "IMMEDIATE"
+    },
+    {
+      "actor": null,
+      "base_id": "OarbreakerHex:521b42564a",
+      "base_name": "Fort Fogwood",
+      "brier": null,
+      "confidence": 0.75,
+      "current_team": "COLONIALS",
+      "cutoff": "2026-08-22T05:57:39.603092Z",
+      "destination_team": null,
+      "eta_error_minutes": null,
+      "eta_utc": "2026-08-22T07:30:00Z",
+      "event_type": null,
+      "evidence": [
+        {
+          "label": "Oarbreaker · Colonial casualties rate, last 1h (per hour)",
+          "metric_id": "region.OarbreakerHex.colonialCasualties.rate_1h_per_hour",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 8,
+          "value": 57.0
+        },
+        {
+          "label": "Oarbreaker · Enlistments, 2h change",
+          "metric_id": "region.OarbreakerHex.totalEnlistments.delta_2h",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 8,
+          "value": 105
+        },
+        {
+          "label": "Oarbreaker · Warden casualties rate change, last 1h vs prior 1h",
+          "metric_id": "region.OarbreakerHex.wardenCasualties.rate_change_1h_vs_previous",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 6,
+          "value": -328.0
+        }
+      ],
+      "map_name": "OarbreakerHex",
+      "model_label": "Nemotron 3 Ultra 550B A55B",
+      "outcome": null,
+      "rank": 3,
+      "run_id": "2026-08-22-782711805531:nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+      "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
       "state_credit": null,
       "status": "open",
       "timing_credit": null,
@@ -4320,6 +4524,52 @@
       "rank": 4,
       "run_id": "2026-08-22-2bc420cce000:nvidia-thinkingmachines-inkling-event-v4",
       "series_id": "nvidia-thinkingmachines-inkling-event-v4",
+      "state_credit": null,
+      "status": "open",
+      "timing_credit": null,
+      "tranche": "IMMEDIATE"
+    },
+    {
+      "actor": null,
+      "base_id": "StlicanShelfHex:abd38f27e2",
+      "base_name": "The South Wind",
+      "brier": null,
+      "confidence": 0.7,
+      "current_team": "WARDENS",
+      "cutoff": "2026-08-22T05:57:39.603092Z",
+      "destination_team": null,
+      "eta_error_minutes": null,
+      "eta_utc": "2026-08-22T08:00:00Z",
+      "event_type": null,
+      "evidence": [
+        {
+          "label": "Stlican Shelf · Warden casualties rate, last 1h (per hour)",
+          "metric_id": "region.StlicanShelfHex.wardenCasualties.rate_1h_per_hour",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 8,
+          "value": 446.0
+        },
+        {
+          "label": "Stlican Shelf · Colonial casualties, 2h change",
+          "metric_id": "region.StlicanShelfHex.colonialCasualties.delta_2h",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 7,
+          "value": 724
+        },
+        {
+          "label": "Stlican Shelf · Enlistments rate, last 1h (per hour)",
+          "metric_id": "region.StlicanShelfHex.totalEnlistments.rate_1h_per_hour",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 6,
+          "value": 50.0
+        }
+      ],
+      "map_name": "StlicanShelfHex",
+      "model_label": "Nemotron 3 Ultra 550B A55B",
+      "outcome": null,
+      "rank": 4,
+      "run_id": "2026-08-22-782711805531:nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+      "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
       "state_credit": null,
       "status": "open",
       "timing_credit": null,
@@ -5418,6 +5668,52 @@
     },
     {
       "actor": null,
+      "base_id": "ClahstraHex:b391413115",
+      "base_name": "Transept",
+      "brier": null,
+      "confidence": 0.65,
+      "current_team": "COLONIALS",
+      "cutoff": "2026-08-22T05:57:39.603092Z",
+      "destination_team": null,
+      "eta_error_minutes": null,
+      "eta_utc": "2026-08-22T14:00:00Z",
+      "event_type": null,
+      "evidence": [
+        {
+          "label": "Clahstra · Colonial casualties rate, last 1h (per hour)",
+          "metric_id": "region.ClahstraHex.colonialCasualties.rate_1h_per_hour",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 8,
+          "value": 352.0
+        },
+        {
+          "label": "Clahstra · Warden casualties rate, last 1h (per hour)",
+          "metric_id": "region.ClahstraHex.wardenCasualties.rate_1h_per_hour",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 8,
+          "value": 379.0
+        },
+        {
+          "label": "Clahstra · Enlistments rate change, last 1h vs prior 1h",
+          "metric_id": "region.ClahstraHex.totalEnlistments.rate_change_1h_vs_previous",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 7,
+          "value": 36.0
+        }
+      ],
+      "map_name": "ClahstraHex",
+      "model_label": "Nemotron 3 Ultra 550B A55B",
+      "outcome": null,
+      "rank": 5,
+      "run_id": "2026-08-22-782711805531:nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+      "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+      "state_credit": null,
+      "status": "open",
+      "timing_credit": null,
+      "tranche": "EXTENDED"
+    },
+    {
+      "actor": null,
       "base_id": "OnyxHex:0105130eb0",
       "base_name": "Beholder's Span",
       "brier": null,
@@ -5588,6 +5884,52 @@
     },
     {
       "actor": null,
+      "base_id": "ClahstraHex:5c7f52b44c",
+      "base_name": "East Narthex",
+      "brier": null,
+      "confidence": 0.6,
+      "current_team": "WARDENS",
+      "cutoff": "2026-08-22T05:57:39.603092Z",
+      "destination_team": null,
+      "eta_error_minutes": null,
+      "eta_utc": "2026-08-22T16:00:00Z",
+      "event_type": null,
+      "evidence": [
+        {
+          "label": "Clahstra · Colonial casualties, 2h change",
+          "metric_id": "region.ClahstraHex.colonialCasualties.delta_2h",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 8,
+          "value": 610
+        },
+        {
+          "label": "Clahstra · Warden casualties, 2h change",
+          "metric_id": "region.ClahstraHex.wardenCasualties.delta_2h",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 8,
+          "value": 714
+        },
+        {
+          "label": "Clahstra · Enlistments rate, last 1h (per hour)",
+          "metric_id": "region.ClahstraHex.totalEnlistments.rate_1h_per_hour",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 7,
+          "value": 65.0
+        }
+      ],
+      "map_name": "ClahstraHex",
+      "model_label": "Nemotron 3 Ultra 550B A55B",
+      "outcome": null,
+      "rank": 6,
+      "run_id": "2026-08-22-782711805531:nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+      "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+      "state_credit": null,
+      "status": "open",
+      "timing_credit": null,
+      "tranche": "EXTENDED"
+    },
+    {
+      "actor": null,
       "base_id": "ClahstraHex:d96c1d2ff1",
       "base_name": "The Treasury",
       "brier": null,
@@ -5726,6 +6068,52 @@
     },
     {
       "actor": null,
+      "base_id": "EndlessShoreHex:392c15bbb7",
+      "base_name": "Iron Junction",
+      "brier": null,
+      "confidence": 0.55,
+      "current_team": "COLONIALS",
+      "cutoff": "2026-08-22T05:57:39.603092Z",
+      "destination_team": null,
+      "eta_error_minutes": null,
+      "eta_utc": "2026-08-22T18:00:00Z",
+      "event_type": null,
+      "evidence": [
+        {
+          "label": "Endless Shore · Colonial casualties rate, last 1h (per hour)",
+          "metric_id": "region.EndlessShoreHex.colonialCasualties.rate_1h_per_hour",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 7,
+          "value": 253.0
+        },
+        {
+          "label": "Endless Shore · Warden casualties rate, last 1h (per hour)",
+          "metric_id": "region.EndlessShoreHex.wardenCasualties.rate_1h_per_hour",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 7,
+          "value": 254.0
+        },
+        {
+          "label": "Endless Shore · Enlistments, 2h change",
+          "metric_id": "region.EndlessShoreHex.totalEnlistments.delta_2h",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 6,
+          "value": 120
+        }
+      ],
+      "map_name": "EndlessShoreHex",
+      "model_label": "Nemotron 3 Ultra 550B A55B",
+      "outcome": null,
+      "rank": 7,
+      "run_id": "2026-08-22-782711805531:nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+      "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+      "state_credit": null,
+      "status": "open",
+      "timing_credit": null,
+      "tranche": "EXTENDED"
+    },
+    {
+      "actor": null,
       "base_id": "StlicanShelfHex:83aee5c728",
       "base_name": "Port of Rime",
       "brier": null,
@@ -5811,6 +6199,52 @@
       "rank": 8,
       "run_id": "2026-08-22-2bc420cce000:nvidia-thinkingmachines-inkling-event-v4",
       "series_id": "nvidia-thinkingmachines-inkling-event-v4",
+      "state_credit": null,
+      "status": "open",
+      "timing_credit": null,
+      "tranche": "EXTENDED"
+    },
+    {
+      "actor": null,
+      "base_id": "OnyxHex:92f769a1c1",
+      "base_name": "Cisterna Run",
+      "brier": null,
+      "confidence": 0.5,
+      "current_team": "COLONIALS",
+      "cutoff": "2026-08-22T05:57:39.603092Z",
+      "destination_team": null,
+      "eta_error_minutes": null,
+      "eta_utc": "2026-08-22T20:00:00Z",
+      "event_type": null,
+      "evidence": [
+        {
+          "label": "Onyx · Warden casualties rate, last 1h (per hour)",
+          "metric_id": "region.OnyxHex.wardenCasualties.rate_1h_per_hour",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 8,
+          "value": 391.0
+        },
+        {
+          "label": "Onyx · Colonial casualties rate change, last 1h vs prior 1h",
+          "metric_id": "region.OnyxHex.colonialCasualties.rate_change_1h_vs_previous",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 7,
+          "value": -81.0
+        },
+        {
+          "label": "Onyx · Enlistments rate, last 1h (per hour)",
+          "metric_id": "region.OnyxHex.totalEnlistments.rate_1h_per_hour",
+          "observed_at": "2026-08-22T05:57:39.603092Z",
+          "relevance": 6,
+          "value": 36.0
+        }
+      ],
+      "map_name": "OnyxHex",
+      "model_label": "Nemotron 3 Ultra 550B A55B",
+      "outcome": null,
+      "rank": 8,
+      "run_id": "2026-08-22-782711805531:nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+      "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
       "state_credit": null,
       "status": "open",
       "timing_credit": null,
@@ -5951,6 +6385,395 @@
     }
   ],
   "rounds": [
+    {
+      "cutoff": "2026-08-22T05:57:39.603092Z",
+      "event_brier": null,
+      "model_label": "Nemotron 3 Ultra 550B A55B",
+      "predictions": [
+        {
+          "actor": null,
+          "base_id": "OarbreakerHex:0f9d37288d",
+          "base_name": "Silver",
+          "brier": null,
+          "confidence": 0.85,
+          "current_team": "WARDENS",
+          "cutoff": "2026-08-22T05:57:39.603092Z",
+          "destination_team": null,
+          "eta_error_minutes": null,
+          "eta_utc": "2026-08-22T06:30:00Z",
+          "event_type": null,
+          "evidence": [
+            {
+              "label": "Oarbreaker · Warden casualties, 2h change",
+              "metric_id": "region.OarbreakerHex.wardenCasualties.delta_2h",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 9,
+              "value": 388
+            },
+            {
+              "label": "Oarbreaker · Enlistments, 2h change",
+              "metric_id": "region.OarbreakerHex.totalEnlistments.delta_2h",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 8,
+              "value": 105
+            },
+            {
+              "label": "Oarbreaker · Colonial casualties rate change, last 1h vs prior 1h",
+              "metric_id": "region.OarbreakerHex.colonialCasualties.rate_change_1h_vs_previous",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 7,
+              "value": -328.0
+            }
+          ],
+          "map_name": "OarbreakerHex",
+          "model_label": "Nemotron 3 Ultra 550B A55B",
+          "outcome": null,
+          "rank": 1,
+          "run_id": "2026-08-22-782711805531:nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+          "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+          "state_credit": null,
+          "status": "open",
+          "timing_credit": null,
+          "tranche": "IMMEDIATE"
+        },
+        {
+          "actor": null,
+          "base_id": "OarbreakerHex:177e212176",
+          "base_name": "Grisly Refuge",
+          "brier": null,
+          "confidence": 0.8,
+          "current_team": "COLONIALS",
+          "cutoff": "2026-08-22T05:57:39.603092Z",
+          "destination_team": null,
+          "eta_error_minutes": null,
+          "eta_utc": "2026-08-22T07:00:00Z",
+          "event_type": null,
+          "evidence": [
+            {
+              "label": "Oarbreaker · Colonial casualties, 2h change",
+              "metric_id": "region.OarbreakerHex.colonialCasualties.delta_2h",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 9,
+              "value": 442
+            },
+            {
+              "label": "Oarbreaker · Warden casualties, 2h change",
+              "metric_id": "region.OarbreakerHex.wardenCasualties.delta_2h",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 8,
+              "value": 388
+            },
+            {
+              "label": "Oarbreaker · Enlistments rate, last 1h (per hour)",
+              "metric_id": "region.OarbreakerHex.totalEnlistments.rate_1h_per_hour",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 7,
+              "value": 33.0
+            }
+          ],
+          "map_name": "OarbreakerHex",
+          "model_label": "Nemotron 3 Ultra 550B A55B",
+          "outcome": null,
+          "rank": 2,
+          "run_id": "2026-08-22-782711805531:nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+          "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+          "state_credit": null,
+          "status": "open",
+          "timing_credit": null,
+          "tranche": "IMMEDIATE"
+        },
+        {
+          "actor": null,
+          "base_id": "OarbreakerHex:521b42564a",
+          "base_name": "Fort Fogwood",
+          "brier": null,
+          "confidence": 0.75,
+          "current_team": "COLONIALS",
+          "cutoff": "2026-08-22T05:57:39.603092Z",
+          "destination_team": null,
+          "eta_error_minutes": null,
+          "eta_utc": "2026-08-22T07:30:00Z",
+          "event_type": null,
+          "evidence": [
+            {
+              "label": "Oarbreaker · Colonial casualties rate, last 1h (per hour)",
+              "metric_id": "region.OarbreakerHex.colonialCasualties.rate_1h_per_hour",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 8,
+              "value": 57.0
+            },
+            {
+              "label": "Oarbreaker · Enlistments, 2h change",
+              "metric_id": "region.OarbreakerHex.totalEnlistments.delta_2h",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 8,
+              "value": 105
+            },
+            {
+              "label": "Oarbreaker · Warden casualties rate change, last 1h vs prior 1h",
+              "metric_id": "region.OarbreakerHex.wardenCasualties.rate_change_1h_vs_previous",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 6,
+              "value": -328.0
+            }
+          ],
+          "map_name": "OarbreakerHex",
+          "model_label": "Nemotron 3 Ultra 550B A55B",
+          "outcome": null,
+          "rank": 3,
+          "run_id": "2026-08-22-782711805531:nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+          "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+          "state_credit": null,
+          "status": "open",
+          "timing_credit": null,
+          "tranche": "IMMEDIATE"
+        },
+        {
+          "actor": null,
+          "base_id": "StlicanShelfHex:abd38f27e2",
+          "base_name": "The South Wind",
+          "brier": null,
+          "confidence": 0.7,
+          "current_team": "WARDENS",
+          "cutoff": "2026-08-22T05:57:39.603092Z",
+          "destination_team": null,
+          "eta_error_minutes": null,
+          "eta_utc": "2026-08-22T08:00:00Z",
+          "event_type": null,
+          "evidence": [
+            {
+              "label": "Stlican Shelf · Warden casualties rate, last 1h (per hour)",
+              "metric_id": "region.StlicanShelfHex.wardenCasualties.rate_1h_per_hour",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 8,
+              "value": 446.0
+            },
+            {
+              "label": "Stlican Shelf · Colonial casualties, 2h change",
+              "metric_id": "region.StlicanShelfHex.colonialCasualties.delta_2h",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 7,
+              "value": 724
+            },
+            {
+              "label": "Stlican Shelf · Enlistments rate, last 1h (per hour)",
+              "metric_id": "region.StlicanShelfHex.totalEnlistments.rate_1h_per_hour",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 6,
+              "value": 50.0
+            }
+          ],
+          "map_name": "StlicanShelfHex",
+          "model_label": "Nemotron 3 Ultra 550B A55B",
+          "outcome": null,
+          "rank": 4,
+          "run_id": "2026-08-22-782711805531:nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+          "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+          "state_credit": null,
+          "status": "open",
+          "timing_credit": null,
+          "tranche": "IMMEDIATE"
+        },
+        {
+          "actor": null,
+          "base_id": "ClahstraHex:b391413115",
+          "base_name": "Transept",
+          "brier": null,
+          "confidence": 0.65,
+          "current_team": "COLONIALS",
+          "cutoff": "2026-08-22T05:57:39.603092Z",
+          "destination_team": null,
+          "eta_error_minutes": null,
+          "eta_utc": "2026-08-22T14:00:00Z",
+          "event_type": null,
+          "evidence": [
+            {
+              "label": "Clahstra · Colonial casualties rate, last 1h (per hour)",
+              "metric_id": "region.ClahstraHex.colonialCasualties.rate_1h_per_hour",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 8,
+              "value": 352.0
+            },
+            {
+              "label": "Clahstra · Warden casualties rate, last 1h (per hour)",
+              "metric_id": "region.ClahstraHex.wardenCasualties.rate_1h_per_hour",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 8,
+              "value": 379.0
+            },
+            {
+              "label": "Clahstra · Enlistments rate change, last 1h vs prior 1h",
+              "metric_id": "region.ClahstraHex.totalEnlistments.rate_change_1h_vs_previous",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 7,
+              "value": 36.0
+            }
+          ],
+          "map_name": "ClahstraHex",
+          "model_label": "Nemotron 3 Ultra 550B A55B",
+          "outcome": null,
+          "rank": 5,
+          "run_id": "2026-08-22-782711805531:nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+          "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+          "state_credit": null,
+          "status": "open",
+          "timing_credit": null,
+          "tranche": "EXTENDED"
+        },
+        {
+          "actor": null,
+          "base_id": "ClahstraHex:5c7f52b44c",
+          "base_name": "East Narthex",
+          "brier": null,
+          "confidence": 0.6,
+          "current_team": "WARDENS",
+          "cutoff": "2026-08-22T05:57:39.603092Z",
+          "destination_team": null,
+          "eta_error_minutes": null,
+          "eta_utc": "2026-08-22T16:00:00Z",
+          "event_type": null,
+          "evidence": [
+            {
+              "label": "Clahstra · Colonial casualties, 2h change",
+              "metric_id": "region.ClahstraHex.colonialCasualties.delta_2h",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 8,
+              "value": 610
+            },
+            {
+              "label": "Clahstra · Warden casualties, 2h change",
+              "metric_id": "region.ClahstraHex.wardenCasualties.delta_2h",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 8,
+              "value": 714
+            },
+            {
+              "label": "Clahstra · Enlistments rate, last 1h (per hour)",
+              "metric_id": "region.ClahstraHex.totalEnlistments.rate_1h_per_hour",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 7,
+              "value": 65.0
+            }
+          ],
+          "map_name": "ClahstraHex",
+          "model_label": "Nemotron 3 Ultra 550B A55B",
+          "outcome": null,
+          "rank": 6,
+          "run_id": "2026-08-22-782711805531:nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+          "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+          "state_credit": null,
+          "status": "open",
+          "timing_credit": null,
+          "tranche": "EXTENDED"
+        },
+        {
+          "actor": null,
+          "base_id": "EndlessShoreHex:392c15bbb7",
+          "base_name": "Iron Junction",
+          "brier": null,
+          "confidence": 0.55,
+          "current_team": "COLONIALS",
+          "cutoff": "2026-08-22T05:57:39.603092Z",
+          "destination_team": null,
+          "eta_error_minutes": null,
+          "eta_utc": "2026-08-22T18:00:00Z",
+          "event_type": null,
+          "evidence": [
+            {
+              "label": "Endless Shore · Colonial casualties rate, last 1h (per hour)",
+              "metric_id": "region.EndlessShoreHex.colonialCasualties.rate_1h_per_hour",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 7,
+              "value": 253.0
+            },
+            {
+              "label": "Endless Shore · Warden casualties rate, last 1h (per hour)",
+              "metric_id": "region.EndlessShoreHex.wardenCasualties.rate_1h_per_hour",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 7,
+              "value": 254.0
+            },
+            {
+              "label": "Endless Shore · Enlistments, 2h change",
+              "metric_id": "region.EndlessShoreHex.totalEnlistments.delta_2h",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 6,
+              "value": 120
+            }
+          ],
+          "map_name": "EndlessShoreHex",
+          "model_label": "Nemotron 3 Ultra 550B A55B",
+          "outcome": null,
+          "rank": 7,
+          "run_id": "2026-08-22-782711805531:nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+          "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+          "state_credit": null,
+          "status": "open",
+          "timing_credit": null,
+          "tranche": "EXTENDED"
+        },
+        {
+          "actor": null,
+          "base_id": "OnyxHex:92f769a1c1",
+          "base_name": "Cisterna Run",
+          "brier": null,
+          "confidence": 0.5,
+          "current_team": "COLONIALS",
+          "cutoff": "2026-08-22T05:57:39.603092Z",
+          "destination_team": null,
+          "eta_error_minutes": null,
+          "eta_utc": "2026-08-22T20:00:00Z",
+          "event_type": null,
+          "evidence": [
+            {
+              "label": "Onyx · Warden casualties rate, last 1h (per hour)",
+              "metric_id": "region.OnyxHex.wardenCasualties.rate_1h_per_hour",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 8,
+              "value": 391.0
+            },
+            {
+              "label": "Onyx · Colonial casualties rate change, last 1h vs prior 1h",
+              "metric_id": "region.OnyxHex.colonialCasualties.rate_change_1h_vs_previous",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 7,
+              "value": -81.0
+            },
+            {
+              "label": "Onyx · Enlistments rate, last 1h (per hour)",
+              "metric_id": "region.OnyxHex.totalEnlistments.rate_1h_per_hour",
+              "observed_at": "2026-08-22T05:57:39.603092Z",
+              "relevance": 6,
+              "value": 36.0
+            }
+          ],
+          "map_name": "OnyxHex",
+          "model_label": "Nemotron 3 Ultra 550B A55B",
+          "outcome": null,
+          "rank": 8,
+          "run_id": "2026-08-22-782711805531:nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+          "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+          "state_credit": null,
+          "status": "open",
+          "timing_credit": null,
+          "tranche": "EXTENDED"
+        }
+      ],
+      "round_number": 1,
+      "run_id": "2026-08-22-782711805531:nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+      "selected_regions": [
+        "ClahstraHex",
+        "StlicanShelfHex",
+        "OarbreakerHex",
+        "MooringCountyHex",
+        "EndlessShoreHex",
+        "OnyxHex"
+      ],
+      "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+      "settlement_status": "open",
+      "timing_score_pct": null,
+      "war_summary": "War 139 is on day 86 with no winner yet. The map is heavily polarized: Colonials hold 140 strategic bases across 27 regions, Wardens hold 68 across 10 regions, and no bases are neutral. Combat is concentrated in a handful of contested regions. Clahstra, Stlican Shelf, Oarbreaker, Mooring County, Endless Shore, and Onyx show recent ownership flips (captures and owner-losses) and elevated casualties. Clahstra and Stlican Shelf have the highest 24h event counts (21 and 25) with multiple bases seeing repeated captures. Oarbreaker saw 7 events in the last 2h and 22 in 24h, including bases turning neutral. Mooring County and Endless Shore also have multi-base churn. Olavis Wake and Speaking Woods have high casualty rates but fewer recent flips. Most other regions are quiet with zero 24h events and one-sided ownership."
+    },
     {
       "cutoff": "2026-08-22T05:56:17.722681Z",
       "event_brier": null,
@@ -10070,7 +10893,7 @@
       "WARDENS": 273119
     },
     "day_of_war": 86,
-    "observed_at": "2026-08-22T05:56:17.722681Z",
+    "observed_at": "2026-08-22T05:57:39.603092Z",
     "recent_ownership_events": [
       {
         "actor": "WARDENS",
