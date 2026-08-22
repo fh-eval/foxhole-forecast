@@ -72,10 +72,12 @@ def validate_forecast(value: dict[str, Any], packet: dict[str, Any], settings: S
             else [
                 f"CAPTURED_BY_{'COLONIALS' if current_owner == 'WARDENS' else 'WARDENS'}",
                 "DESTROYED",
-                "SELF_CAPTURE",
             ],
         )
-        if outcome not in valid_outcomes:
+        # SELF_CAPTURE is an internal normalization for a same-faction
+        # CAPTURED_BY_* response; it is intentionally absent from model packets
+        # and the provider-facing JSON schema.
+        if outcome != "SELF_CAPTURE" and outcome not in valid_outcomes:
             raise ValidationError(
                 f"outcome for {identifier} must be one of {valid_outcomes}; "
                 f"current owner is {current_owner}"

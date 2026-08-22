@@ -58,7 +58,6 @@ def forecast_schema(settings: Settings) -> dict[str, Any]:
                     "CAPTURED_BY_WARDENS",
                     "CAPTURED_BY_COLONIALS",
                     "DESTROYED",
-                    "SELF_CAPTURE",
                 ],
             },
             "confidence": {"type": "number", "minimum": 0, "maximum": 1},

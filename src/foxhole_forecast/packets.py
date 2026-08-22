@@ -375,7 +375,6 @@ def build_detail_packet(settings: Settings, selected_regions: list[str]) -> dict
                     else [
                         f"CAPTURED_BY_{'COLONIALS' if base.get('team') == 'WARDENS' else 'WARDENS'}",
                         "DESTROYED",
-                        "SELF_CAPTURE",
                     ]
                 ),
                 "icon_type": base.get("icon_type"),

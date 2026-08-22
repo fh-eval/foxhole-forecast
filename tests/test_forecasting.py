@@ -14,6 +14,7 @@ from foxhole_forecast.forecasting import (
     _previous_model_summary,
     run_forecast_cohort,
 )
+from foxhole_forecast.schemas import forecast_schema
 
 
 class ForecastBudgetTests(unittest.TestCase):
@@ -95,6 +96,10 @@ class ForecastBudgetTests(unittest.TestCase):
 
         self.assertIn("OUTPUT JSON SCHEMA", messages[1]["content"])
         self.assertIn('"required":["war_summary"]', messages[1]["content"])
+
+    def test_provider_schema_hides_internal_self_capture_outcome(self) -> None:
+        outcome_enum = forecast_schema(Settings.load())["properties"]["predictions"]["items"]["properties"]["outcome"]["enum"]
+        self.assertNotIn("SELF_CAPTURE", outcome_enum)
 
     def test_same_faction_capture_is_normalized_before_validation(self) -> None:
         value = {
