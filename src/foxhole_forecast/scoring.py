@@ -159,11 +159,15 @@ def _settle_timed_run(
             first, collector_runs, run["war_id"], cutoff, settings
         ):
             current_team = prediction.get("current_team")
-            destination = prediction["destination_team"]
+            predicted_outcome = prediction.get("outcome")
+            destination = prediction.get("destination_team")
+            expects_completed_capture = predicted_outcome == "CAPTURED" or (
+                destination in {"WARDENS", "COLONIALS"}
+                and destination != current_team
+            )
             if (
                 current_team in {"WARDENS", "COLONIALS"}
-                and destination in {"WARDENS", "COLONIALS"}
-                and destination != current_team
+                and expects_completed_capture
                 and first.get("to_team") == "NONE"
             ):
                 followup = min(
@@ -176,7 +180,15 @@ def _settle_timed_run(
                     key=lambda row: row["observed_to"],
                     default=None,
                 )
-                if followup and followup.get("to_team") == destination:
+                followup_is_capture = followup and (
+                    (
+                        predicted_outcome == "CAPTURED"
+                        and followup.get("to_team")
+                        in {"WARDENS", "COLONIALS"} - {current_team}
+                    )
+                    or followup.get("to_team") == destination
+                )
+                if followup_is_capture:
                     matched = followup
                     if _transition_is_covered(
                         followup,
@@ -206,9 +218,14 @@ def _settle_timed_run(
                     status = "censored"
                     outcome = None
             else:
-                state_credit = _state_credit(
-                    current_team, destination, first.get("to_team")
-                )
+                if predicted_outcome:
+                    state_credit = _outcome_credit(
+                        current_team, predicted_outcome, first.get("to_team")
+                    )
+                else:
+                    state_credit = _state_credit(
+                        current_team, destination, first.get("to_team")
+                    )
 
             if state_credit is not None:
                 assert matched is not None
@@ -269,7 +286,11 @@ def _settle_timed_run(
     brier_values = [row["brier"] for row in resolved]
     return {
         "schema_version": 2,
-        "protocol": "timed_transition_v3",
+        "protocol": (
+            "event_outcome_v4"
+            if all("outcome" in row for row in run["forecast"]["predictions"])
+            else "timed_transition_v3"
+        ),
         "run_id": run["run_id"],
         "series_id": run["series_id"],
         "cohort_id": run["cohort_id"],
@@ -338,6 +359,30 @@ def _state_credit(
         and observed_team != current_team
         and "NONE" in {predicted_team, observed_team}
     ):
+        return 0.75
+    return 0.0
+
+
+def _outcome_credit(
+    current_team: str | None, predicted_outcome: str, observed_team: str | None
+) -> float:
+    if current_team == "NONE":
+        observed_outcome = (
+            "CAPTURED" if observed_team in {"WARDENS", "COLONIALS"} else None
+        )
+    elif observed_team == "NONE":
+        observed_outcome = "DESTROYED"
+    elif (
+        current_team in {"WARDENS", "COLONIALS"}
+        and observed_team in {"WARDENS", "COLONIALS"}
+        and observed_team != current_team
+    ):
+        observed_outcome = "CAPTURED"
+    else:
+        observed_outcome = None
+    if predicted_outcome == observed_outcome:
+        return 1.0
+    if {predicted_outcome, observed_outcome} == {"CAPTURED", "DESTROYED"}:
         return 0.75
     return 0.0
 

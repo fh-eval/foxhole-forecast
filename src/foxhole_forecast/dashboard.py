@@ -72,6 +72,7 @@ def build_dashboard_data() -> dict[str, Any]:
                 "tranche": bet.get("tranche"),
                 "current_team": bet.get("current_team"),
                 "destination_team": bet.get("destination_team"),
+                "outcome": bet.get("outcome"),
                 "confidence": bet["confidence"],
                 "eta_utc": bet["eta_utc"],
                 "evidence": [
@@ -184,7 +185,7 @@ def build_dashboard_data() -> dict[str, Any]:
         "open_bets": open_bets[:500],
         "resolved_bets": resolved_bets[:500],
         "methodology": {
-            "current_protocol": "timed_transition_v3",
+            "current_protocol": "event_outcome_v4",
             "predictions_per_round": 8,
             "tranches": {"immediate": "0-6h", "extended": "6-24h"},
             "partial_credit_window_minutes": 180,

@@ -29,7 +29,7 @@ class ValidationTests(unittest.TestCase):
                     "rank": index,
                     "tranche": "IMMEDIATE" if index <= 4 else "EXTENDED",
                     "base_id": f"base-{index}",
-                    "destination_team": "NONE",
+                    "outcome": "DESTROYED",
                     "confidence": 0.6,
                     "eta_utc": (
                         f"2026-01-01T0{index}:00:00Z"
@@ -69,9 +69,9 @@ class ValidationTests(unittest.TestCase):
                 self.settings,
             )
 
-    def test_destination_must_change_current_state(self) -> None:
+    def test_destroyed_base_cannot_be_predicted_destroyed_again(self) -> None:
         value = copy.deepcopy(self.valid)
-        value["predictions"][0]["destination_team"] = "WARDENS"
+        self.packet["strategic_bases"][0]["team"] = "NONE"
         with self.assertRaisesRegex(ValidationError, "must be one of"):
             validate_forecast(value, self.packet, self.settings)
 

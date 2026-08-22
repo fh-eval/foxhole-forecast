@@ -353,11 +353,11 @@ def build_detail_packet(settings: Settings, selected_regions: list[str]) -> dict
                 "name": base.get("name"),
                 "map_name": base.get("map_name"),
                 "current_owner": base.get("team"),
-                "valid_next_states": [
-                    team
-                    for team in ("WARDENS", "COLONIALS", "NONE")
-                    if team != base.get("team")
-                ],
+                "valid_outcomes": (
+                    ["CAPTURED"]
+                    if base.get("team") == "NONE"
+                    else ["CAPTURED", "DESTROYED"]
+                ),
                 "icon_type": base.get("icon_type"),
                 "flags": base.get("flags", []),
                 "x": base.get("x"),

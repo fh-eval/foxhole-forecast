@@ -39,7 +39,7 @@ def forecast_schema(settings: Settings) -> dict[str, Any]:
             "rank",
             "tranche",
             "base_id",
-            "destination_team",
+            "outcome",
             "confidence",
             "eta_utc",
             "evidence",
@@ -52,9 +52,9 @@ def forecast_schema(settings: Settings) -> dict[str, Any]:
             },
             "tranche": {"type": "string", "enum": ["IMMEDIATE", "EXTENDED"]},
             "base_id": {"type": "string"},
-            "destination_team": {
+            "outcome": {
                 "type": "string",
-                "enum": ["WARDENS", "COLONIALS", "NONE"],
+                "enum": ["CAPTURED", "DESTROYED"],
             },
             "confidence": {"type": "number", "minimum": 0, "maximum": 1},
             "eta_utc": {"type": "string"},

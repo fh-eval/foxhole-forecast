@@ -299,6 +299,10 @@ import "../styles/global.css";
       }
 
       function predictionText(bet) {
+        if (bet.outcome) {
+          const action = bet.outcome === "DESTROYED" ? "Destroyed / no-man’s-land" : "Captured";
+          return `${action} — ${bet.base_name}, ${regionLabel(bet.map_name)}`;
+        }
         if (bet.destination_team) {
           return `${teamLabel(bet.current_team)} → ${teamLabel(bet.destination_team)} — ${bet.base_name}, ${regionLabel(bet.map_name)}`;
         }

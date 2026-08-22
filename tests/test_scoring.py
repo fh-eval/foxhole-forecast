@@ -4,7 +4,7 @@ import unittest
 from datetime import UTC, datetime, timedelta
 
 from foxhole_forecast.config import Settings
-from foxhole_forecast.scoring import _state_credit, _timing_credit, settle_run
+from foxhole_forecast.scoring import _outcome_credit, _timing_credit, settle_run
 from foxhole_forecast.storage import isoformat
 
 
@@ -28,7 +28,7 @@ class ScoringTests(unittest.TestCase):
                         "base_name": "Base One",
                         "map_name": "TestHex",
                         "current_team": "WARDENS",
-                        "destination_team": "COLONIALS",
+                        "outcome": "CAPTURED",
                         "confidence": 0.8,
                         "eta_utc": isoformat(eta),
                         "evidence": [],
@@ -75,8 +75,8 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(_timing_credit(0), 1)
         self.assertAlmostEqual(_timing_credit(15), 11 / 12)
         self.assertEqual(_timing_credit(180), 0)
-        self.assertEqual(_state_credit("WARDENS", "COLONIALS", "NONE"), 0.75)
-        self.assertEqual(_state_credit("NONE", "COLONIALS", "WARDENS"), 0)
+        self.assertEqual(_outcome_credit("WARDENS", "CAPTURED", "NONE"), 0.75)
+        self.assertEqual(_outcome_credit("NONE", "CAPTURED", "WARDENS"), 1)
 
     def test_integrated_brier_and_interval_eta(self) -> None:
         settings = Settings.load()
