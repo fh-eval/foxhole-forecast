@@ -93,8 +93,10 @@ def _run_model(
         "created_at": isoformat(),
     }
     date_key = scout_packet["cutoff"][:10]
-    spent = float(state.setdefault("daily_costs", {}).get(date_key, 0))
-    if config.get("paid") and spent + 0.05 > settings.max_paid_usd_per_day:
+    ledger, ledger_key, spent, daily_limit, reserve = _budget(
+        settings, config, state, date_key
+    )
+    if config.get("paid") and spent + reserve > daily_limit:
         return {**base, "status": "skipped_budget", "cost_usd": 0.0}
     try:
         provider = ModelProvider(config, settings)
@@ -127,7 +129,7 @@ def _run_model(
         calls.append(_call_record("forecast", forecast_messages, forecast_response))
         frozen_forecast = _freeze_evidence(forecast_response.parsed, detail_packet)
         total_cost = provider.accumulated_cost
-        state["daily_costs"][date_key] = round(spent + total_cost, 8)
+        ledger[ledger_key] = round(spent + total_cost, 8)
         write_json(DATA_DIR / "state.json", state)
         return {
             **base,
@@ -142,7 +144,7 @@ def _run_model(
         }
     except Exception as error:
         total_cost = provider.accumulated_cost
-        state["daily_costs"][date_key] = round(spent + total_cost, 8)
+        ledger[ledger_key] = round(spent + total_cost, 8)
         write_json(DATA_DIR / "state.json", state)
         return {
             **base,
@@ -151,6 +153,29 @@ def _run_model(
             "calls": calls,
             "cost_usd": round(total_cost, 8),
         }
+
+
+def _budget(
+    settings: Settings,
+    config: dict[str, Any],
+    state: dict[str, Any],
+    date_key: str,
+) -> tuple[dict[str, Any], str, float, float, float]:
+    group = config.get("budget_group")
+    if group:
+        ledger = state.setdefault("daily_costs_by_group", {}).setdefault(date_key, {})
+        ledger_key = str(group)
+        daily_limit = float(
+            config.get("max_paid_usd_per_day", settings.max_paid_usd_per_day)
+        )
+        reserve = float(config.get("budget_reserve_usd", 0.05))
+    else:
+        # Preserve the original shared paid-model ledger for existing series.
+        ledger = state.setdefault("daily_costs", {})
+        ledger_key = date_key
+        daily_limit = settings.max_paid_usd_per_day
+        reserve = 0.05
+    return ledger, ledger_key, float(ledger.get(ledger_key, 0)), daily_limit, reserve
 
 
 def _call_validated(
