@@ -28,6 +28,15 @@ function githubHeaders(token) {
   };
 }
 
+export function successfulRunSince(runs, notBefore) {
+  if (!Number.isFinite(notBefore)) return undefined;
+  return runs.find((run) =>
+    run.status === "completed"
+    && run.conclusion === "success"
+    && Date.parse(run.created_at) >= notBefore
+  );
+}
+
 async function jsonResponse(response, label) {
   if (!response.ok) {
     const body = await response.text();
@@ -36,7 +45,7 @@ async function jsonResponse(response, label) {
   return response.json();
 }
 
-async function dispatchIfIdle(env, workflow, fetchImpl) {
+async function dispatchIfIdle(env, workflow, fetchImpl, notBefore) {
   const workflowUrl = `https://api.github.com/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/actions/workflows/${workflow}`;
   const runsResponse = await fetchImpl(`${workflowUrl}/runs?per_page=10`, {
     headers: githubHeaders(env.GITHUB_TOKEN),
@@ -47,6 +56,10 @@ async function dispatchIfIdle(env, workflow, fetchImpl) {
   );
   if (active) {
     return { action: "already_active", workflow, run_id: active.id };
+  }
+  const completed = successfulRunSince(runs.workflow_runs || [], notBefore);
+  if (completed) {
+    return { action: "recently_completed", workflow, run_id: completed.id };
   }
 
   const dispatchResponse = await fetchImpl(`${workflowUrl}/dispatches`, {
@@ -89,10 +102,15 @@ export async function checkAndDispatch(env, fetchImpl = fetch, now = Date.now())
   const actions = [];
 
   if (collectionNeeded) {
-    actions.push(await dispatchIfIdle(env, env.COLLECT_WORKFLOW, fetchImpl));
+    actions.push(await dispatchIfIdle(
+      env,
+      env.COLLECT_WORKFLOW,
+      fetchImpl,
+      now - staleAfterMinutes * 60_000,
+    ));
   }
   if (forecastDue && observationInSlot) {
-    actions.push(await dispatchIfIdle(env, env.FORECAST_WORKFLOW, fetchImpl));
+    actions.push(await dispatchIfIdle(env, env.FORECAST_WORKFLOW, fetchImpl, slot.getTime()));
   } else if (forecastDue) {
     actions.push({ action: "waiting_for_current_slot_observation", workflow: env.FORECAST_WORKFLOW });
   }

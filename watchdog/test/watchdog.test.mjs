@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { cacheBustedUrl, forecastSlot, observationIsStale } from "../src/index.mjs";
+import {
+  cacheBustedUrl,
+  forecastSlot,
+  observationIsStale,
+  successfulRunSince,
+} from "../src/index.mjs";
 
 const now = Date.parse("2026-08-22T12:00:00Z");
 
@@ -29,4 +34,13 @@ test("repository data URLs are cache-busted for each watchdog check", () => {
     cacheBustedUrl("https://example.test/latest.json?raw=1", now),
     `https://example.test/latest.json?raw=1&watchdog_time=${now}`,
   );
+});
+
+test("a successful run inside the guard window suppresses a duplicate", () => {
+  const runs = [
+    { status: "completed", conclusion: "failure", created_at: "2026-08-22T12:30:00Z" },
+    { id: 42, status: "completed", conclusion: "success", created_at: "2026-08-22T12:15:00Z" },
+  ];
+  assert.equal(successfulRunSince(runs, Date.parse("2026-08-22T12:00:00Z"))?.id, 42);
+  assert.equal(successfulRunSince(runs, Date.parse("2026-08-22T12:20:00Z")), undefined);
 });
