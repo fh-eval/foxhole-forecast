@@ -78,8 +78,10 @@ class ForecastBudgetTests(unittest.TestCase):
                 run_forecast_cohort(Settings.load(), force=True, series_id="missing")
 
     def test_editable_prompts_load_from_markdown(self) -> None:
-        self.assertTrue(SCOUT_SYSTEM.startswith("You are the war-overview stage"))
-        self.assertTrue(FORECAST_SYSTEM.startswith("You are the forecasting stage"))
+        self.assertTrue(SCOUT_SYSTEM)
+        self.assertTrue(FORECAST_SYSTEM)
+        self.assertIn("select the most active regions", SCOUT_SYSTEM)
+        self.assertIn("exactly eight ranked bets", FORECAST_SYSTEM)
         self.assertIn("{error}", CORRECTION_USER)
 
     def test_json_schema_is_visible_in_model_prompt(self) -> None:

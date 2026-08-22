@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from foxhole_forecast.config import Settings
-from foxhole_forecast.providers import ModelProvider, _cost
+from foxhole_forecast.providers import ModelProvider, _cost, _parse_json_content
 
 
 class _Response:
@@ -43,6 +43,22 @@ class _MalformedPaidResponse:
 
 
 class ProviderTests(unittest.TestCase):
+    def test_json_parser_salvages_markdown_fences_and_surrounding_text(self) -> None:
+        self.assertEqual(
+            _parse_json_content(
+                "Here is the requested JSON:\n```json\n{\"ok\":true}\n```\nDone."
+            ),
+            {"ok": True},
+        )
+
+    def test_json_parser_does_not_salvage_two_adjacent_objects(self) -> None:
+        with self.assertRaises(json.JSONDecodeError):
+            _parse_json_content('{"first":true}\n{"second":true}')
+
+    def test_json_parser_does_not_extract_nested_object_from_malformed_output(self) -> None:
+        with self.assertRaises(json.JSONDecodeError):
+            _parse_json_content('{"outer":{"ok":true}')
+
     def test_deepseek_cost_uses_cache_specific_rates(self) -> None:
         cost = _cost(
             "deepseek-v4-flash",

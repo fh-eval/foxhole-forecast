@@ -115,7 +115,9 @@ class ModelProvider:
         if isinstance(content, list):
             content = "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
         try:
-            parsed = _parse_json_content(str(content))
+            parsed, salvaged = _parse_json_content_with_metadata(str(content))
+            if salvaged:
+                attempt["json_salvaged"] = True
         except Exception as error:
             attempt["error"] = f"{type(error).__name__}: {error}"
             raise
@@ -150,18 +152,50 @@ class ModelProvider:
 
 
 def _parse_json_content(content: str) -> dict[str, Any]:
+    parsed, _ = _parse_json_content_with_metadata(content)
+    return parsed
+
+
+def _parse_json_content_with_metadata(content: str) -> tuple[dict[str, Any], bool]:
     stripped = content.strip()
-    if stripped.startswith("```"):
-        lines = stripped.splitlines()
-        if lines and lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        stripped = "\n".join(lines)
-    value = json.loads(stripped)
-    if not isinstance(value, dict):
-        raise ValueError("Model output must be a JSON object")
-    return value
+    try:
+        value = json.loads(stripped)
+        if not isinstance(value, dict):
+            raise ValueError("Model output must be a JSON object")
+        return value, False
+    except (json.JSONDecodeError, ValueError) as strict_error:
+        decoder = json.JSONDecoder()
+        candidates: list[tuple[int, int, dict[str, Any]]] = []
+        for index, character in enumerate(stripped):
+            if character != "{":
+                continue
+            try:
+                value, consumed = decoder.raw_decode(stripped[index:])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(value, dict) and not any(
+                marker in stripped[:index] for marker in "{["
+            ):
+                candidates.append((index, index + consumed, value))
+        if not candidates:
+            raise strict_error
+
+        start, end, value = min(candidates, key=lambda item: item[0])
+        # A second complete top-level object is ambiguous and should remain
+        # invalid rather than silently dropping part of a model response.
+        for index in range(end, len(stripped)):
+            if stripped[index] != "{":
+                continue
+            try:
+                _second, _consumed = decoder.raw_decode(stripped[index:])
+            except json.JSONDecodeError:
+                continue
+            if not stripped[end:index].strip().strip("`").strip():
+                raise strict_error
+            break
+        # Prefix/suffix may be prose or Markdown fences. No repair is attempted
+        # inside the JSON object itself.
+        return value, bool(stripped[:start].strip() or stripped[end:].strip())
 
 
 def _cost(model: str, usage: dict[str, Any]) -> float:
