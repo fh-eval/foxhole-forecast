@@ -190,9 +190,16 @@ def _settle_timed_run(
             current_team = prediction.get("current_team")
             predicted_outcome = prediction.get("outcome")
             destination = prediction.get("destination_team")
+            predicted_capture_team = _capture_team(predicted_outcome)
+            if predicted_capture_team == current_team:
+                predicted_outcome = "SELF_CAPTURE"
+                predicted_capture_team = None
             expects_completed_capture = predicted_outcome == "CAPTURED" or (
-                destination in {"WARDENS", "COLONIALS"}
-                and destination != current_team
+                predicted_capture_team in {"WARDENS", "COLONIALS"}
+                or (
+                    destination in {"WARDENS", "COLONIALS"}
+                    and destination != current_team
+                )
             )
             if (
                 current_team in {"WARDENS", "COLONIALS"}
@@ -214,6 +221,10 @@ def _settle_timed_run(
                         predicted_outcome == "CAPTURED"
                         and followup.get("to_team")
                         in {"WARDENS", "COLONIALS"} - {current_team}
+                    )
+                    or (
+                        predicted_capture_team
+                        and followup.get("to_team") == predicted_capture_team
                     )
                     or followup.get("to_team") == destination
                 )
@@ -467,9 +478,14 @@ def _state_credit(
 def _outcome_credit(
     current_team: str | None, predicted_outcome: str, observed_team: str | None
 ) -> float:
+    predicted_capture_team = _capture_team(predicted_outcome)
+    if predicted_capture_team == current_team:
+        predicted_outcome = "SELF_CAPTURE"
     if current_team == "NONE":
         observed_outcome = (
-            "CAPTURED" if observed_team in {"WARDENS", "COLONIALS"} else None
+            f"CAPTURED_BY_{observed_team}"
+            if observed_team in {"WARDENS", "COLONIALS"}
+            else None
         )
     elif observed_team == "NONE":
         observed_outcome = "DESTROYED"
@@ -478,14 +494,35 @@ def _outcome_credit(
         and observed_team in {"WARDENS", "COLONIALS"}
         and observed_team != current_team
     ):
-        observed_outcome = "CAPTURED"
+        observed_outcome = f"CAPTURED_BY_{observed_team}"
     else:
         observed_outcome = None
+    # Legacy CAPTURED remains scoreable for archived forecasts. It means any
+    # faction capture, with the old destruction-vs-capture partial-credit rule.
+    if predicted_outcome == "CAPTURED":
+        if observed_outcome and observed_outcome.startswith("CAPTURED_BY_"):
+            return 1.0
+        if observed_outcome == "DESTROYED":
+            return 0.75
+        return 0.0
+    if predicted_outcome == "SELF_CAPTURE":
+        predicted_outcome = "DESTROYED"
     if predicted_outcome == observed_outcome:
         return 1.0
-    if {predicted_outcome, observed_outcome} == {"CAPTURED", "DESTROYED"}:
+    if (
+        {predicted_outcome, observed_outcome}
+        & {"CAPTURED_BY_WARDENS", "CAPTURED_BY_COLONIALS"}
+        and "DESTROYED" in {predicted_outcome, observed_outcome}
+    ):
         return 0.75
     return 0.0
+
+
+def _capture_team(outcome: str | None) -> str | None:
+    if not isinstance(outcome, str) or not outcome.startswith("CAPTURED_BY_"):
+        return None
+    target = outcome.removeprefix("CAPTURED_BY_")
+    return target if target in {"WARDENS", "COLONIALS"} else None
 
 
 def _coverage_status(

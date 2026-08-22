@@ -75,6 +75,16 @@ class ValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, "must be one of"):
             validate_forecast(value, self.packet, self.settings)
 
+    def test_neutral_base_requires_a_named_faction_capture(self) -> None:
+        packet = copy.deepcopy(self.packet)
+        packet["strategic_bases"][0]["team"] = "NONE"
+        value = copy.deepcopy(self.valid)
+        value["predictions"][0]["outcome"] = "CAPTURED_BY_WARDENS"
+        validate_forecast(value, packet, self.settings)
+        value["predictions"][0]["outcome"] = "CAPTURED"
+        with self.assertRaisesRegex(ValidationError, "must be one of"):
+            validate_forecast(value, packet, self.settings)
+
     def test_tranche_must_match_eta(self) -> None:
         value = copy.deepcopy(self.valid)
         value["predictions"][0]["tranche"] = "EXTENDED"

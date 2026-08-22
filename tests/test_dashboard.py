@@ -66,6 +66,15 @@ class DashboardTests(unittest.TestCase):
             _predicted_outcome(settled_bet, forecast_bet), "CAPTURED"
         )
 
+    def test_same_faction_capture_is_presented_as_self_capture(self) -> None:
+        self.assertEqual(
+            _predicted_outcome(
+                {"current_team": "WARDENS", "predicted_outcome": "CAPTURED_BY_WARDENS"},
+                {},
+            ),
+            "SELF_CAPTURE",
+        )
+
     def test_timed_prediction_freezes_base_state_and_evidence(self) -> None:
         metric_id = "region.TestHex.totalEnlistments.rate_1h_per_hour"
         forecast = {

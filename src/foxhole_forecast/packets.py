@@ -370,9 +370,13 @@ def build_detail_packet(settings: Settings, selected_regions: list[str]) -> dict
                 "map_name": base.get("map_name"),
                 "current_owner": base.get("team"),
                 "valid_outcomes": (
-                    ["CAPTURED"]
+                    ["CAPTURED_BY_WARDENS", "CAPTURED_BY_COLONIALS"]
                     if base.get("team") == "NONE"
-                    else ["CAPTURED", "DESTROYED"]
+                    else [
+                        f"CAPTURED_BY_{'COLONIALS' if base.get('team') == 'WARDENS' else 'WARDENS'}",
+                        "DESTROYED",
+                        "SELF_CAPTURE",
+                    ]
                 ),
                 "icon_type": base.get("icon_type"),
                 "base_type": strategic_base_type(base.get("icon_type")),

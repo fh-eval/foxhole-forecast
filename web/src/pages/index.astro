@@ -141,7 +141,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <div class="method-grid">
           <article><span>01</span><h3>Observe</h3><p>The official Foxhole War API is polled every 15 minutes. A tagged FoxholeStats snapshot backfills pre-launch history only; every prompt remains cutoff-safe.</p></article>
           <article><span>02</span><h3>Forecast</h3><p>Each model scouts six regions, then publishes eight ranked state-transition bets: four with ETAs within six hours and four with ETAs from six to 24 hours.</p></article>
-          <article><span>03</span><h3>Settle</h3><p>Timing earns full credit inside the observed 15-minute interval and falls to zero three hours away. Neutralization and capture share partial state credit.</p></article>
+          <article><span>03</span><h3>Settle</h3><p>Timing earns full credit inside the observed 15-minute interval and falls to zero three hours away. Faction-specific capture and destruction share partial state credit.</p></article>
         </div>
         <a class="method-link" href={`${basePath}scoring/`}>Read the complete scoring method and rationale →</a>
         <p class="fine-print">Foxhole Forecast is an independent, non-commercial experiment. Foxhole is developed by Siege Camp. Model summaries are predictions, not gameplay advice.</p>
@@ -196,7 +196,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         return round.protocol === currentProtocol
           && predictions.length === expected
           && predictions.every((bet) =>
-            ["CAPTURED", "DESTROYED"].includes(bet.predicted_outcome)
+            ["CAPTURED", "CAPTURED_BY_WARDENS", "CAPTURED_BY_COLONIALS", "DESTROYED", "SELF_CAPTURE"].includes(bet.predicted_outcome)
             && bet.base_name
             && bet.base_type
             && bet.current_team
@@ -486,9 +486,18 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           line.append(baseIdentity(bet));
           if (predictedOutcome === "DESTROYED") {
             line.append(document.createTextNode(" will be destroyed at "));
+          } else if (predictedOutcome === "SELF_CAPTURE") {
+            line.append(document.createTextNode(" will be destroyed (predicted faction would capture its own base) at "));
           } else {
             line.append(document.createTextNode(" will be captured by "));
-            if (bet.current_team === "WARDENS") {
+            const predictedFaction = predictedOutcome === "CAPTURED_BY_WARDENS"
+              ? "WARDENS"
+              : predictedOutcome === "CAPTURED_BY_COLONIALS"
+                ? "COLONIALS"
+                : null;
+            if (predictedFaction) {
+              line.append(factionName(predictedFaction));
+            } else if (bet.current_team === "WARDENS") {
               line.append(factionName("COLONIALS"));
             } else if (bet.current_team === "COLONIALS") {
               line.append(factionName("WARDENS"));

@@ -395,11 +395,20 @@ def _predicted_outcome(
     settled_bet: dict[str, Any], forecast_bet: dict[str, Any]
 ) -> str | None:
     """Recover the model's call without confusing it with numeric settlement credit."""
+    current_team = settled_bet.get("current_team") or forecast_bet.get("current_team")
     for candidate in (
         settled_bet.get("predicted_outcome"),
         forecast_bet.get("outcome"),
     ):
-        if candidate in {"CAPTURED", "DESTROYED"}:
+        if candidate in {
+            "CAPTURED",
+            "CAPTURED_BY_WARDENS",
+            "CAPTURED_BY_COLONIALS",
+            "DESTROYED",
+            "SELF_CAPTURE",
+        }:
+            if candidate == f"CAPTURED_BY_{current_team}":
+                return "SELF_CAPTURE"
             return candidate
     return None
 

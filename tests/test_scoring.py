@@ -202,6 +202,18 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(_outcome_credit("WARDENS", "CAPTURED", "NONE"), 0.75)
         self.assertEqual(_outcome_credit("NONE", "CAPTURED", "WARDENS"), 1)
 
+    def test_faction_specific_and_self_capture_outcomes(self) -> None:
+        self.assertEqual(
+            _outcome_credit("NONE", "CAPTURED_BY_WARDENS", "WARDENS"), 1
+        )
+        self.assertEqual(
+            _outcome_credit("WARDENS", "CAPTURED_BY_COLONIALS", "COLONIALS"), 1
+        )
+        self.assertEqual(_outcome_credit("WARDENS", "SELF_CAPTURE", "NONE"), 1)
+        self.assertEqual(
+            _outcome_credit("WARDENS", "CAPTURED_BY_COLONIALS", "NONE"), 0.75
+        )
+
     def test_integrated_brier_and_interval_eta(self) -> None:
         settings = Settings.load()
         cutoff = datetime(2026, 1, 1, tzinfo=UTC)

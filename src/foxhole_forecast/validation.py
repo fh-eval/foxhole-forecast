@@ -54,16 +54,26 @@ def validate_forecast(value: dict[str, Any], packet: dict[str, Any], settings: S
             raise ValidationError(f"Unknown or duplicate base_id: {identifier}")
         seen.add(identifier)
         outcome = row.get("outcome")
-        if outcome not in {"CAPTURED", "DESTROYED"}:
+        if outcome not in {
+            "CAPTURED",
+            "CAPTURED_BY_WARDENS",
+            "CAPTURED_BY_COLONIALS",
+            "DESTROYED",
+            "SELF_CAPTURE",
+        }:
             raise ValidationError(f"Invalid outcome for {identifier}")
         current_owner = bases[identifier].get(
             "current_owner", bases[identifier].get("team")
         )
         valid_outcomes = bases[identifier].get(
             "valid_outcomes",
-            ["CAPTURED"]
+            ["CAPTURED_BY_WARDENS", "CAPTURED_BY_COLONIALS"]
             if current_owner == "NONE"
-            else ["CAPTURED", "DESTROYED"],
+            else [
+                f"CAPTURED_BY_{'COLONIALS' if current_owner == 'WARDENS' else 'WARDENS'}",
+                "DESTROYED",
+                "SELF_CAPTURE",
+            ],
         )
         if outcome not in valid_outcomes:
             raise ValidationError(

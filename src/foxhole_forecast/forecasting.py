@@ -183,9 +183,16 @@ def _run_model(
             forecast_messages,
             "foxhole_forecast",
             forecast_contract,
-            lambda value: validate_forecast(value, detail_packet, settings),
+            lambda value: validate_forecast(
+                _normalize_same_faction_captures(value, detail_packet),
+                detail_packet,
+                settings,
+            ),
         )
-        frozen_forecast = _freeze_evidence(forecast_response.parsed, detail_packet)
+        frozen_forecast = _freeze_evidence(
+            _normalize_same_faction_captures(forecast_response.parsed, detail_packet),
+            detail_packet,
+        )
         total_cost = provider.accumulated_cost
         ledger[ledger_key] = round(spent + total_cost, 8)
         write_json(DATA_DIR / "state.json", state)
@@ -251,6 +258,24 @@ def _previous_model_summary(
         "cutoff": previous["cutoff"],
         "war_summary": previous["war_summary"].strip(),
     }
+
+
+def _normalize_same_faction_captures(
+    value: dict[str, Any], detail_packet: dict[str, Any]
+) -> dict[str, Any]:
+    """Treat a model's same-faction capture call as the explicit self-capture outcome."""
+    bases = {
+        base["base_id"]: base for base in detail_packet.get("strategic_bases", [])
+    }
+    for prediction in value.get("predictions", []):
+        outcome = prediction.get("outcome")
+        if not isinstance(outcome, str) or not outcome.startswith("CAPTURED_BY_"):
+            continue
+        target = outcome.removeprefix("CAPTURED_BY_")
+        current_owner = bases.get(prediction.get("base_id"), {}).get("current_owner")
+        if target == current_owner:
+            prediction["outcome"] = "SELF_CAPTURE"
+    return value
 
 
 def _budget(

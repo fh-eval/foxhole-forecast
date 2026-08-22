@@ -10,6 +10,7 @@ from foxhole_forecast.forecasting import (
     SCOUT_SYSTEM,
     _budget,
     _messages,
+    _normalize_same_faction_captures,
     _previous_model_summary,
     run_forecast_cohort,
 )
@@ -94,6 +95,19 @@ class ForecastBudgetTests(unittest.TestCase):
 
         self.assertIn("OUTPUT JSON SCHEMA", messages[1]["content"])
         self.assertIn('"required":["war_summary"]', messages[1]["content"])
+
+    def test_same_faction_capture_is_normalized_before_validation(self) -> None:
+        value = {
+            "predictions": [{"base_id": "base-1", "outcome": "CAPTURED_BY_WARDENS"}]
+        }
+        packet = {
+            "strategic_bases": [{"base_id": "base-1", "current_owner": "WARDENS"}]
+        }
+
+        self.assertEqual(
+            _normalize_same_faction_captures(value, packet)["predictions"][0]["outcome"],
+            "SELF_CAPTURE",
+        )
 
     @patch("foxhole_forecast.forecasting.read_jsonl")
     def test_previous_summary_is_latest_valid_same_model_and_war(

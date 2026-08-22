@@ -54,7 +54,12 @@ def forecast_schema(settings: Settings) -> dict[str, Any]:
             "base_id": {"type": "string"},
             "outcome": {
                 "type": "string",
-                "enum": ["CAPTURED", "DESTROYED"],
+                "enum": [
+                    "CAPTURED_BY_WARDENS",
+                    "CAPTURED_BY_COLONIALS",
+                    "DESTROYED",
+                    "SELF_CAPTURE",
+                ],
             },
             "confidence": {"type": "number", "minimum": 0, "maximum": 1},
             "eta_utc": {"type": "string"},
