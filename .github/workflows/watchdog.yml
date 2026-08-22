@@ -7,6 +7,12 @@ on:
       - "watchdog/**"
       - ".github/workflows/watchdog.yml"
   workflow_dispatch:
+    inputs:
+      observe_cron:
+        description: Watch Cloudflare logs until the next scheduled invocation
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -73,3 +79,18 @@ jobs:
         env:
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
         run: curl --fail --silent --show-error --retry 10 --retry-delay 2 --retry-all-errors "$DEPLOYMENT_URL"
+
+      - name: Observe the next scheduled invocation
+        if: inputs.observe_cron
+        working-directory: watchdog
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ steps.cloudflare.outputs.account_id }}
+        run: |
+          set +e
+          timeout 360s npx --yes wrangler@4 tail foxhole-forecast-watchdog --format=json
+          tail_status=$?
+          set -e
+          if [[ "$tail_status" != "0" && "$tail_status" != "124" ]]; then
+            exit "$tail_status"
+          fi
