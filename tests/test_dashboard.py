@@ -42,6 +42,9 @@ class DashboardTests(unittest.TestCase):
         current = _behavior_summary(rounds, "war-2", 1)[0]
         all_time = _behavior_summary(rounds, None, 1)[0]
         self.assertEqual(current["crps_minutes"], 0)
+        self.assertEqual(current["short_crps_minutes"], 0)
+        self.assertIsNone(current["long_crps_minutes"])
+        self.assertIsNone(current["forecast_score"])
         self.assertEqual(current["published_bets"], 1)
         self.assertEqual(all_time["crps_minutes"], 0.5)
         self.assertEqual(all_time["published_bets"], 2)

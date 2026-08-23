@@ -136,16 +136,26 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       function predictionStatus(bet) {
         if (bet.status === "censored" && bet.settlement_reason === "ambiguous_transition_interval") return "Not scored · transition time ambiguous";
         if (bet.status === "censored") return "Not scored · missing observations";
-        if (bet.status === "miss" && bet.settlement_reason === "interval_timing_credit_certain") return "Miss · timing definitely outside ±3h";
-        if (["hit", "partial"].includes(bet.status) && bet.eta_error_minutes != null) return `${eventLabel(bet.status)} · ${bet.eta_error_minutes}m error`;
+        if (bet.crps_minutes != null && bet.settlement_reason === "no_transition_by_deadline") return "Scored · no qualifying transition by deadline";
+        if (bet.crps_minutes != null && bet.settlement_reason === "observed_transition") {
+          const observation = Number(bet.state_credit) === 1
+            ? "named outcome observed"
+            : Number(bet.state_credit) > 0
+              ? "related outcome observed"
+              : "different outcome observed";
+          const timing = bet.eta_error_minutes != null ? ` · ${bet.eta_error_minutes}m from ETA` : "";
+          return `Scored · ${observation}${timing}`;
+        }
+        if (bet.crps_minutes != null) return "Scored";
         return eventLabel(bet.status);
       }
 
       function predictionResult(bet) {
         const result = element("div", "prediction-result");
-        result.append(element("small", `status status--${bet.status}`, predictionStatus(bet)));
-        if (["hit", "partial", "miss"].includes(bet.status) && bet.crps_minutes != null) {
-          const badge = element("span", `prediction-score prediction-score--${bet.status}`);
+        const scored = bet.crps_minutes != null;
+        result.append(element("small", `status status--${scored ? "scored" : bet.status}`, predictionStatus(bet)));
+        if (scored) {
+          const badge = element("span", "prediction-score prediction-score--scored");
           badge.append(element("span", "prediction-score__label", "CRPS"), element("strong", "", crps(bet.crps_minutes)));
           result.append(badge);
         }

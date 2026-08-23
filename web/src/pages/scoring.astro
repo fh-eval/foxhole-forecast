@@ -41,7 +41,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       <section class="method-intro">
         <p class="kicker">The short version</p>
         <p>Each bet defines a probability distribution over when its named event will occur. CRPS compares that cumulative forecast with the observed API transition interval at every minute through ETA + 3 hours. Lower is better; 0 minutes is perfect.</p>
-        <aside class="method-callout"><strong>Headline score</strong><span>Mean event-time CRPS in minutes across every scoreable prediction.</span></aside>
+        <aside class="method-callout"><strong>Headline score</strong><span>A balanced 0–100 forecast score made from separate short- and long-bet CRPS. Higher is better; raw CRPS minutes remain visible.</span></aside>
       </section>
 
       <section id="forecast" class="scoring-section">
@@ -96,9 +96,16 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       <section id="aggregation" class="scoring-section">
         <div class="scoring-section__heading"><p class="kicker">05</p><h2>Leaderboard and historical sigma</h2></div>
         <div class="rule-grid rule-grid--two">
-          <article class="rule-card"><h3>Mean CRPS</h3><p>The leaderboard is the arithmetic mean CRPS in minutes across scoreable bets. Every bet has equal weight. Lower is better; open and censored bets are excluded.</p></article>
+          <article class="rule-card"><h3>Two raw CRPS results</h3><p>Ranks 1–4 produce the short CRPS and ranks 5–8 produce the long CRPS. Each is the arithmetic mean in minutes across scored bets in that timeline. Lower is better; open and censored bets are excluded.</p></article>
           <article class="rule-card"><h3>Legacy forecasts</h3><p>Older bets did not contain sigma. Their timing uncertainty is deterministically inferred as <code>max(15, 180 × (1 − confidence))</code> minutes and labeled as inferred. Their original confidence is preserved.</p></article>
         </div>
+        <div class="formula-block">
+          <span>fixed timeline scales</span>
+          <strong>short = 540 minutes (6h + 3h) · long = 1,620 minutes (24h + 3h)</strong>
+          <span>balanced forecast score</span>
+          <strong>100 × [1 − ½(short CRPS ÷ 540) − ½(long CRPS ÷ 1,620)]</strong>
+        </div>
+        <p class="method-caption">The constants come from the protocol, not a model’s chosen ETA. Short and long performance therefore contribute exactly 50% each even while long bets are still resolving. A model needs at least one scored bet in both timelines before receiving a topline score. The result is bounded from 0 to 100 for display and is not a percent-accuracy claim.</p>
         <div class="worked-example">
           <p class="kicker">Why retain confidence too?</p>
           <p>Confidence answers “does this named outcome happen by the deadline?” Sigma answers “if it happens, how tightly can I locate its time?” CRPS evaluates both in one forecast distribution.</p>
@@ -119,7 +126,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <div class="scoring-section__heading"><p class="kicker">07</p><h2>Why score it this way?</h2></div>
         <ol class="rationale-list rationale-list--numbered">
           <li><strong>Make every claim falsifiable.</strong> A named base, event, exact ETA, and confidence is more informative than “something may happen in 24 hours.”</li>
-          <li><strong>Force short- and longer-range judgment.</strong> The four-within-6h plus four-from-6–24h split prevents a model from filling a round only with safer, vague next-day bets.</li>
+          <li><strong>Force and balance short- and longer-range judgment.</strong> The four-within-6h plus four-from-6–24h split prevents a model from filling a round only with safer, vague next-day bets. Fixed timeline scales keep longer CRPS integration windows from dominating the topline score.</li>
           <li><strong>Match scoring precision to observation precision.</strong> Interval-aware CRPS uses the whole API observation interval rather than inventing an exact event minute.</li>
           <li><strong>Recognize the structure of Foxhole captures.</strong> Destroyed and captured are distinct outcomes, but both correctly anticipate loss of the current owner; the 0.75 rule captures that shared information.</li>
           <li><strong>Close every fair bet.</strong> The three-hour grace window ensures non-events receive a finite probabilistic penalty rather than remaining unresolved indefinitely.</li>

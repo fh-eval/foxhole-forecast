@@ -53,7 +53,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <div class="section-heading">
           <div><p class="kicker">Performance and behavior</p><h2>How the models think</h2></div>
           <div class="score-heading-controls">
-            <p>CRPS measures the full probability distribution over event time. Confidence, timing uncertainty, target horizon, and ETA error show how each model tends to make its calls. Lower CRPS is better.</p>
+            <p>The forecast score balances short- and long-range CRPS on a 0–100 scale. Raw CRPS minutes, confidence, timing uncertainty, target horizon, and ETA error show how each model tends to make its calls.</p>
             <div class="segmented" role="group" aria-label="Score history scope">
               <button class="active" data-score-scope="current">Current war</button>
               <button data-score-scope="all">All wars</button>
@@ -66,13 +66,15 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
               <tr>
                 <th>Rank</th>
                 <th>Model</th>
-                <th>CRPS<small>Mean error in minutes ↓</small></th>
+                <th>Forecast score<small>Balanced 0–100 ↑</small></th>
+                <th>Short CRPS<small>0–6h bets · mean minutes ↓</small></th>
+                <th>Long CRPS<small>6–24h bets · mean minutes ↓</small></th>
                 <th>Confidence<small>Mean stated</small></th>
                 <th>Timing uncertainty<small>Mean sigma ↓</small></th>
                 <th>Typical 0–6h target<small>Median after cutoff</small></th>
                 <th>Typical 6–24h target<small>Median after cutoff</small></th>
                 <th>ETA error<small>Median matched event ↓</small></th>
-                <th>Results<small>Hit / partial / miss</small></th>
+                <th>Settlement<small>Scored / censored / open</small></th>
               </tr>
             </thead>
             <tbody id="score-rows" aria-live="polite"></tbody>
@@ -80,7 +82,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <p id="score-empty" class="empty-state" hidden>No model has completed a full round under the current protocol yet.</p>
         </div>
         <dl id="score-guide" class="score-guide">
-          <div><dt>CRPS</dt><dd>Average squared distance between the forecast event-time CDF and what happened, integrated in minutes. Lower is better; 0 is perfect.</dd></div>
+          <div><dt>Forecast score</dt><dd>Short and long CRPS are normalized against fixed 540- and 1,620-minute protocol windows, weighted 50/50, and converted to 0–100. Higher is better; it is not percent accuracy.</dd></div>
+          <div><dt>Short / long CRPS</dt><dd>Mean CRPS is kept separate for ranks 1–4 and 5–8. Lower is better; 0 minutes is perfect.</dd></div>
           <div><dt>Confidence</dt><dd>Probability that the named outcome occurs by ETA + 3 hours.</dd></div>
           <div><dt>Timing uncertainty</dt><dd>Mean standard deviation around the ETA. Historical values are inferred from confidence; new values come from the model.</dd></div>
           <div><dt>Typical targets</dt><dd>Median ETA lead is reported separately inside the required 0–6h and 6–24h tranches, so the imposed timeline does not blur model behavior.</dd></div>
@@ -141,7 +144,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <div class="method-grid">
           <article><span>01</span><h3>Observe</h3><p>The official Foxhole War API is polled every 15 minutes. A tagged FoxholeStats snapshot backfills pre-launch history only; every prompt remains cutoff-safe.</p></article>
           <article><span>02</span><h3>Forecast</h3><p>Each model scouts six regions, then publishes eight ranked state-transition bets: four with ETAs within six hours and four with ETAs from six to 24 hours.</p></article>
-          <article><span>03</span><h3>Settle</h3><p>Timing earns full credit inside the observed 15-minute interval and falls to zero three hours away. Faction-specific capture and destruction share partial state credit.</p></article>
+          <article><span>03</span><h3>Settle</h3><p>Interval-aware CRPS evaluates each probability distribution through ETA + 3 hours. Short and long CRPS stay separate, then receive equal weight in the 0–100 forecast score.</p></article>
         </div>
         <a class="method-link" href={`${basePath}scoring/`}>Read the complete scoring method and rationale →</a>
         <p class="fine-print">Foxhole Forecast is an independent, non-commercial experiment. Foxhole is developed by Siege Camp. Model summaries are predictions, not gameplay advice.</p>
@@ -232,10 +235,20 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           .map((bet) => (new Date(bet.eta_utc) - new Date(bet.cutoff || rounds.find((round) => round.run_id === bet.run_id)?.cutoff)) / 60000)
           .filter((value) => Number.isFinite(value) && value >= 0);
         const etaErrors = scoreable.filter((bet) => bet.eta_error_minutes != null).map((bet) => Number(bet.eta_error_minutes)).filter(Number.isFinite);
-        const crpsValues = scoreable.map((bet) => Number(bet.crps_minutes));
-        const calibrationErrors = scoreable
-          .map((bet) => (Number(bet.confidence) - Number(bet.timing_credit)) ** 2)
+        const trancheCrps = (tranche) => scoreable
+          .filter((bet) => bet.tranche === tranche)
+          .map((bet) => Number(bet.crps_minutes))
           .filter(Number.isFinite);
+        const shortCrpsValues = trancheCrps("IMMEDIATE");
+        const longCrpsValues = trancheCrps("EXTENDED");
+        const shortCrpsMinutes = mean(shortCrpsValues);
+        const longCrpsMinutes = mean(longCrpsValues);
+        const scoreConfig = dashboard?.methodology?.forecast_score || {};
+        const forecastScore = shortCrpsMinutes == null || longCrpsMinutes == null
+          ? null
+          : Math.max(0, Math.min(100, 100 * (1
+            - (scoreConfig.short_weight ?? 0.5) * shortCrpsMinutes / (scoreConfig.short_crps_scale_minutes ?? 540)
+            - (scoreConfig.long_weight ?? 0.5) * longCrpsMinutes / (scoreConfig.long_crps_scale_minutes ?? 1620))));
         const count = (status) => bets.filter((bet) => bet.status === status).length;
         return {
           model,
@@ -243,14 +256,17 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           scoreable,
           publishedCount: bets.length,
           scoreableCount: scoreable.length,
-          crpsMinutes: mean(crpsValues),
+          forecastScore,
+          shortCrpsMinutes,
+          longCrpsMinutes,
+          shortScoreableCount: shortCrpsValues.length,
+          longScoreableCount: longCrpsValues.length,
           confidence: mean(confidences),
           sigmaMinutes: mean(sigmas),
           immediateLeadMinutes: median(leadMinutes("IMMEDIATE")),
           extendedLeadMinutes: median(leadMinutes("EXTENDED")),
           etaErrorMinutes: median(etaErrors),
           matched: etaErrors.length,
-          calibration: mean(calibrationErrors),
           hits: count("hit"),
           partials: count("partial"),
           misses: count("miss"),
@@ -280,14 +296,17 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             model,
             publishedCount: summary.published_bets,
             scoreableCount: summary.scoreable_bets,
-            crpsMinutes: summary.crps_minutes,
+            forecastScore: summary.forecast_score,
+            shortCrpsMinutes: summary.short_crps_minutes,
+            longCrpsMinutes: summary.long_crps_minutes,
+            shortScoreableCount: summary.short_scoreable_bets,
+            longScoreableCount: summary.long_scoreable_bets,
             confidence: summary.confidence,
             sigmaMinutes: summary.sigma_minutes,
             immediateLeadMinutes: summary.immediate_lead_minutes,
             extendedLeadMinutes: summary.extended_lead_minutes,
             etaErrorMinutes: summary.eta_error_minutes,
             matched: summary.matched_transitions,
-            calibration: summary.calibration,
             hits: summary.hits,
             partials: summary.partials,
             misses: summary.misses,
@@ -295,9 +314,10 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             open: summary.open,
           } : modelBehavior(model, rounds);
         }).sort((a, b) =>
-          (a.crpsMinutes == null) - (b.crpsMinutes == null)
-          || (a.crpsMinutes ?? Infinity) - (b.crpsMinutes ?? Infinity)
-          || (a.calibration ?? Infinity) - (b.calibration ?? Infinity)
+          (a.forecastScore == null) - (b.forecastScore == null)
+          || (b.forecastScore ?? -Infinity) - (a.forecastScore ?? -Infinity)
+          || (a.shortCrpsMinutes ?? Infinity) - (b.shortCrpsMinutes ?? Infinity)
+          || (a.longCrpsMinutes ?? Infinity) - (b.longCrpsMinutes ?? Infinity)
           || String(a.model.label).localeCompare(String(b.model.label))
         );
         behaviors.forEach((behavior, index) => {
@@ -309,13 +329,15 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           );
           const resultsCell = element("td", "score-table__results");
           resultsCell.append(
-            element("strong", "", `${behavior.hits} / ${behavior.partials} / ${behavior.misses}`),
-            element("small", "", `${behavior.censored} censored · ${behavior.open} open`),
+            element("strong", "", `${behavior.scoreableCount} / ${behavior.censored} / ${behavior.open}`),
+            element("small", "", "scored / censored / open"),
           );
           row.append(
             element("td", "score-table__rank", String(index + 1).padStart(2, "0")),
             modelCell,
-            metricCell(crps(behavior.crpsMinutes), `${behavior.scoreableCount} scoreable bets`, "score-table__primary"),
+            metricCell(decimal(behavior.forecastScore), behavior.forecastScore == null ? "waiting for both timelines" : "equal short / long weight", "score-table__primary"),
+            metricCell(crps(behavior.shortCrpsMinutes), `${behavior.shortScoreableCount} scored short bets`),
+            metricCell(crps(behavior.longCrpsMinutes), `${behavior.longScoreableCount} scored long bets`),
             metricCell(decimal(behavior.confidence), `${behavior.publishedCount} published bets`),
             metricCell(duration(behavior.sigmaMinutes), "conditional standard deviation"),
             metricCell(duration(behavior.immediateLeadMinutes), "within required tranche"),
@@ -551,27 +573,35 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           return "Not scored · transition time ambiguous";
         }
         if (bet.status === "censored") return "Not scored · missing observations";
-        if (bet.status === "miss" && bet.settlement_reason === "interval_timing_credit_certain") {
-          return "Miss · timing definitely outside ±3h";
+        if (bet.crps_minutes != null && bet.settlement_reason === "no_transition_by_deadline") {
+          return "Scored · no qualifying transition by deadline";
         }
-        if (["hit", "partial"].includes(bet.status) && bet.eta_error_minutes != null) {
-          return `${eventLabel(bet.status)} · ${bet.eta_error_minutes}m error`;
+        if (bet.crps_minutes != null && bet.settlement_reason === "observed_transition") {
+          const observation = Number(bet.state_credit) === 1
+            ? "named outcome observed"
+            : Number(bet.state_credit) > 0
+              ? "related outcome observed"
+              : "different outcome observed";
+          const timing = bet.eta_error_minutes != null ? ` · ${bet.eta_error_minutes}m from ETA` : "";
+          return `Scored · ${observation}${timing}`;
         }
+        if (bet.crps_minutes != null) return "Scored";
         return eventLabel(bet.status);
       }
 
       function predictionScoreValue(bet) {
-        if (!["hit", "partial", "miss"].includes(bet.status) || bet.crps_minutes == null) return null;
+        if (bet.crps_minutes == null) return null;
         const value = Number(bet.crps_minutes);
         return Number.isFinite(value) ? value : null;
       }
 
       function predictionResult(bet) {
         const result = element("div", "prediction-result");
-        result.append(element("small", `status status--${bet.status}`, predictionStatus(bet)));
         const score = predictionScoreValue(bet);
+        const displayStatus = score == null ? bet.status : "scored";
+        result.append(element("small", `status status--${displayStatus}`, predictionStatus(bet)));
         if (score != null) {
-          const badge = element("span", `prediction-score prediction-score--${bet.status}`);
+          const badge = element("span", "prediction-score prediction-score--scored");
           badge.append(
             element("span", "prediction-score__label", "CRPS"),
             element("strong", "", crps(score)),

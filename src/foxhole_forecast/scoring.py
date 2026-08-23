@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from .config import DATA_DIR, Settings
+from .score_metrics import summarize_crps
 from .storage import isoformat, parse_time, read_json, read_jsonl, write_json
 
 
@@ -766,6 +767,7 @@ def aggregate_scores(
         event_briers: list[float] = []
         timing_credits: list[float] = []
         crps_values: list[float] = []
+        scored_bets: list[dict[str, Any]] = []
         hits = partials = misses = open_bets = censored_bets = 0
         for row in complete:
             for horizon in row.get("horizons", {}).values():
@@ -794,11 +796,13 @@ def aggregate_scores(
                     timing_credits.append(bet["timing_credit"])
                 if bet.get("crps_minutes") is not None:
                     crps_values.append(bet["crps_minutes"])
+                    scored_bets.append(bet)
         total_n = sum(value[1] for value in horizon_values)
         ibs = sum(value[0] * value[1] for value in horizon_values) / total_n if total_n else None
         baseline = sum(value[2] * value[3] for value in horizon_values) / total_n if total_n else None
         skill = 100 * (1 - ibs / baseline) if ibs is not None and baseline and baseline > 0 else None
         identity = labels[series]
+        crps_summary = summarize_crps(scored_bets)
         models.append(
             {
                 "series_id": series,
@@ -819,11 +823,12 @@ def aggregate_scores(
                 "open_event_bets": open_bets,
                 "censored_event_bets": censored_bets,
                 "event_brier": round(statistics.fmean(event_briers), 8) if event_briers else None,
-                "mean_crps_minutes": (
-                    round(statistics.fmean(crps_values), 8)
-                    if crps_values
-                    else None
-                ),
+                "mean_crps_minutes": crps_summary["crps_minutes"],
+                "short_crps_minutes": crps_summary["short_crps_minutes"],
+                "long_crps_minutes": crps_summary["long_crps_minutes"],
+                "short_scoreable_bets": crps_summary["short_scoreable_bets"],
+                "long_scoreable_bets": crps_summary["long_scoreable_bets"],
+                "forecast_score": crps_summary["forecast_score"],
                 "median_crps_minutes": (
                     round(statistics.median(crps_values), 8)
                     if crps_values
@@ -843,15 +848,16 @@ def aggregate_scores(
         )
     models.sort(
         key=lambda row: (
-            row["mean_crps_minutes"] is None
-            and row["timing_score_pct"] is None
-            and row["brier_skill_score"] is None,
+            row["forecast_score"] is None,
+            -row["forecast_score"]
+            if row["forecast_score"] is not None
+            else float("inf"),
             row["mean_crps_minutes"]
             if row["mean_crps_minutes"] is not None
             else float("inf"),
         )
     )
-    return {"schema_version": 1, "generated_at": isoformat(now), "models": models}
+    return {"schema_version": 2, "generated_at": isoformat(now), "models": models}
 
 
 def _within(values: list[float], threshold: float) -> float | None:

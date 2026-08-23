@@ -1,26 +1,27 @@
 # Foxhole Forecast
 
-Foxhole Forecast is a prospective LLM evaluation: every three hours, several models receive the same cutoff-safe public war data and estimate which strategic bases will change ownership in the next 1, 6, and 24 hours. Later API observations settle those predictions, and a static dashboard publishes calibration, event, and ETA scores.
+Foxhole Forecast is a prospective LLM evaluation: every three hours, several models receive the same cutoff-safe public war data and make eight probabilistic, exact-ETA predictions about strategic base transitions. Later API observations settle those predictions, and a static dashboard publishes short- and long-range CRPS results.
 
 The implementation deliberately starts with the [official Foxhole War API](https://github.com/clapfoot/warapi). FoxholeStats or other community data can be added as a separately versioned data source later; it is not scraped by this version.
 
 ## What the evaluation measures
 
-Each model run has two fixed calls:
+Each model run has two calls:
 
 1. A war-overview call describes what the model sees across a compact whole-map packet and selects up to six of the most active regions.
-2. A forecast call receives detailed history for exactly those regions and returns base-level probabilities, exact event bets, ETAs, and evidence references.
+2. A forecast call receives detailed history for exactly those regions and returns eight ranked event bets with an outcome, confidence, ETA, timing uncertainty, and evidence references.
 
-Every model sees data with the same UTC cutoff. Local validation rejects malformed output, unknown bases or evidence IDs, non-monotonic probabilities, invalid actors, and ETAs outside the 24-hour window. One correction attempt is allowed. A model may omit bases, but every omitted strategic base is scored as a 0% prediction. This prevents selective coverage from inflating the result.
+Every model sees data with the same UTC cutoff. Local validation rejects malformed output, unknown bases or evidence IDs, invalid outcomes, and ETAs outside the 24-hour window. Invalid individual bets can be dropped without discarding the rest of a forecast round.
 
-The primary metric is the integrated Brier score across 1h, 6h, and 24h base-change outcomes:
+CRPS evaluates the full event-time probability distribution. It incorporates the probability that the named outcome occurs, the exact ETA, and the model's conditional timing uncertainty. Lower CRPS is better and 0 minutes is perfect.
 
 ```text
-Brier = mean((forecast probability - observed outcome)^2)
-Brier skill = 100 * (1 - model Brier / zero-change baseline Brier)
+short CRPS = mean CRPS for ranks 1-4
+long CRPS = mean CRPS for ranks 5-8
+forecast score = 100 * [1 - 0.5(short CRPS / 540) - 0.5(long CRPS / 1620)]
 ```
 
-Lower Brier is better; positive skill beats the always-zero baseline. The dashboard also reports exact-event Brier score, hit/miss counts, median ETA error, and the share of matched ETAs within 15, 30, 60, and 180 minutes. Evidence relevance is preserved for audit and display, not treated as truth by an LLM judge.
+The fixed 540- and 1,620-minute scales are the maximum short and long scoring windows. The 0-100 forecast score gives each timeline equal weight and is not percent accuracy. Open and censored bets are excluded, and the score remains pending until a model has a scored bet in both timelines. Evidence relevance is preserved for audit and display, not treated as truth by an LLM judge.
 
 A result is censored instead of guessed when collector coverage has a gap longer than two polling intervals or an ownership transition straddles a cutoff/deadline. Because the API is sampled every 15 minutes, event time is an observation interval rather than an exact instant.
 
@@ -72,6 +73,6 @@ The importer preserves source IDs, URL, timestamp precision, and a SHA-256 prove
 - Initial collection creates a baseline and no synthetic capture event. Only a later observed transition can become an outcome.
 - Direct faction-to-faction changes count as a loss and a capture. Faction-to-neutral counts as a loss and neutralization. A temporarily absent map item is not called destroyed.
 - Model comparisons are only meaningful within the same cohort and schema version. Change prompts, packets, horizons, strategic icon types, or provider routing by starting a new versioned series.
-- Results need enough completed 24-hour cohorts and positive base changes before Brier skill becomes informative. Early leaderboards should be read as provisional.
+- Results need enough settled short- and long-range bets before comparisons become stable. Early leaderboards should be read as provisional.
 
 This project is an independent experiment and is not affiliated with Siege Camp. Foxhole and its related marks belong to their respective owners.

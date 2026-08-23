@@ -9,6 +9,7 @@ from typing import Any
 from .config import DATA_DIR, ROOT, Settings
 from .domain import strategic_base_type
 from .packets import build_scout_packet
+from .score_metrics import CRPS_SCALE_MINUTES, summarize_crps
 from .storage import isoformat, parse_time, read_json, read_jsonl, write_json
 from .war_lifecycle import war_ended_at, war_is_active
 
@@ -52,12 +53,8 @@ def _behavior_summary(
 
     output: list[dict[str, Any]] = []
     for series, bets in by_series.items():
-        scoreable = [
-            bet
-            for bet in bets
-            if bet.get("status") in {"hit", "partial", "miss"}
-            and bet.get("crps_minutes") is not None
-        ]
+        scoreable = [bet for bet in bets if bet.get("crps_minutes") is not None]
+        crps_summary = summarize_crps(scoreable)
         confidences = [float(bet["confidence"]) for bet in bets]
         immediate_leads = _lead_minutes(bets, "IMMEDIATE")
         extended_leads = _lead_minutes(bets, "EXTENDED")
@@ -66,26 +63,19 @@ def _behavior_summary(
             for bet in scoreable
             if bet.get("eta_error_minutes") is not None
         ]
-        crps_values = [float(bet["crps_minutes"]) for bet in scoreable]
         sigmas = [float(bet["sigma_minutes"]) for bet in bets if bet.get("sigma_minutes") is not None]
-        calibration = [
-            (float(bet["confidence"]) - float(bet["timing_credit"])) ** 2
-            for bet in scoreable
-        ]
         output.append(
             {
                 "series_id": series,
                 "model_label": labels[series],
                 "published_bets": len(bets),
-                "scoreable_bets": len(scoreable),
-                "crps_minutes": _mean(crps_values),
+                **crps_summary,
                 "confidence": _mean(confidences),
                 "sigma_minutes": _mean(sigmas),
                 "immediate_lead_minutes": _median(immediate_leads),
                 "extended_lead_minutes": _median(extended_leads),
                 "eta_error_minutes": _median(eta_errors),
                 "matched_transitions": len(eta_errors),
-                "calibration": _mean(calibration),
                 "hits": sum(bet.get("status") == "hit" for bet in bets),
                 "partials": sum(bet.get("status") == "partial" for bet in bets),
                 "misses": sum(bet.get("status") == "miss" for bet in bets),
@@ -312,7 +302,10 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
             models.append(score)
     models.sort(
         key=lambda row: (
-            row.get("mean_crps_minutes") is None,
+            row.get("forecast_score") is None,
+            -row["forecast_score"]
+            if row.get("forecast_score") is not None
+            else float("inf"),
             row.get("mean_crps_minutes")
             if row.get("mean_crps_minutes") is not None
             else float("inf"),
@@ -363,7 +356,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
         ),
     }
     output = {
-        "schema_version": 9,
+        "schema_version": 10,
         "generated_at": isoformat(),
         "war": latest.get("war"),
         "last_collected_at": latest.get("observed_at"),
@@ -395,6 +388,15 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
             },
             "scoring_window_after_eta_minutes": 180,
             "crps_integration_step_minutes": 1,
+            "forecast_score": {
+                "range": [0, 100],
+                "higher_is_better": True,
+                "short_weight": 0.5,
+                "long_weight": 0.5,
+                "short_crps_scale_minutes": CRPS_SCALE_MINUTES["IMMEDIATE"],
+                "long_crps_scale_minutes": CRPS_SCALE_MINUTES["EXTENDED"],
+                "requires_scored_bets_in_both_tranches": True,
+            },
             "neutral_alternative_state_credit": 0.75,
             "horizons_hours": [1, 6, 24],
             "omitted_probability": 0,
