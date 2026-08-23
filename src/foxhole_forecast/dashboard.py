@@ -155,6 +155,25 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
         forecast_rows = run.get("forecast", {}).get(
             "predictions", run.get("forecast", {}).get("base_forecasts", [])
         )
+        presented_drops = []
+        for dropped in run.get("dropped_predictions", []):
+            dropped_base = cutoff_bases.get(dropped.get("base_id"), {})
+            presented_drops.append(
+                {
+                    **dropped,
+                    "base_name": dropped.get("base_name")
+                    or dropped_base.get("name")
+                    or dropped.get("base_id"),
+                    "base_type": dropped.get("base_type")
+                    or dropped_base.get("base_type")
+                    or strategic_base_type(dropped_base.get("icon_type")),
+                    "current_owner": dropped.get("current_owner")
+                    or dropped_base.get("current_owner")
+                    or dropped_base.get("team"),
+                    "valid_outcomes": dropped.get("valid_outcomes")
+                    or dropped_base.get("valid_outcomes", []),
+                }
+            )
         history = {
             "run_id": run["run_id"],
             "war_id": run.get("war_id"),
@@ -167,7 +186,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
             "integrated_brier": settlement.get("integrated_brier"),
             "settlement_status": settlement.get("status", "not_available"),
             "forecast_count": len(forecast_rows),
-            "dropped_predictions": run.get("dropped_predictions", []),
+            "dropped_predictions": presented_drops,
             "cost_usd": run.get("cost_usd", 0),
         }
         by_series[series].append(history)
@@ -253,7 +272,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                 "cutoff": run["cutoff"],
                 "war_summary": run.get("war_summary"),
                 "selected_regions": run.get("selected_regions", []),
-                "dropped_predictions": run.get("dropped_predictions", []),
+                "dropped_predictions": presented_drops,
                 "protocol": settlement.get("protocol"),
                 "settlement_status": settlement.get("status", "not_available"),
                 "timing_score_pct": settlement.get("timing_score_pct"),

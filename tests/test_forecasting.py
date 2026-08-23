@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from foxhole_forecast.config import Settings
@@ -9,12 +10,15 @@ from foxhole_forecast.forecasting import (
     FORECAST_SYSTEM,
     SCOUT_SYSTEM,
     _budget,
+    _call_validated,
+    _dropped_prediction_error,
     _messages,
     _drop_invalid_predictions,
     _previous_model_summary,
     run_forecast_cohort,
 )
 from foxhole_forecast.schemas import forecast_schema
+from foxhole_forecast.validation import ValidationError
 
 
 class ForecastBudgetTests(unittest.TestCase):
@@ -114,6 +118,53 @@ class ForecastBudgetTests(unittest.TestCase):
         filtered, dropped = _drop_invalid_predictions(value, packet)
         self.assertEqual(filtered["predictions"], [])
         self.assertEqual(dropped[0]["reason"], "same-faction capture is not a valid state change")
+
+    def test_same_faction_error_tells_model_exact_allowed_outcomes(self) -> None:
+        message = _dropped_prediction_error(
+            [
+                {
+                    "rank": 2,
+                    "base_id": "base-1",
+                    "base_name": "Test Base",
+                    "current_owner": "WARDENS",
+                    "outcome": "CAPTURED_BY_WARDENS",
+                    "valid_outcomes": ["CAPTURED_BY_COLONIALS", "DESTROYED"],
+                }
+            ]
+        )
+        self.assertIn("rank 2 Test Base", message)
+        self.assertIn("current_owner=WARDENS", message)
+        self.assertIn("CAPTURED_BY_COLONIALS", message)
+
+    def test_validation_retries_before_falling_back_to_individual_drops(self) -> None:
+        class FakeProvider:
+            config = {"validation_attempts": 2}
+            attempts: list[dict] = []
+
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def complete_json(self, *_args):
+                self.calls += 1
+                return SimpleNamespace(parsed={"predictions": ["bad"]})
+
+        provider = FakeProvider()
+
+        def strict(_value):
+            raise ValidationError("same-faction capture")
+
+        response, validated = _call_validated(
+            provider,
+            [{"role": "user", "content": "prompt"}],
+            "schema",
+            {},
+            strict,
+            fallback_validator=lambda _value: {"predictions": []},
+        )
+
+        self.assertEqual(provider.calls, 2)
+        self.assertEqual(response.parsed, {"predictions": ["bad"]})
+        self.assertEqual(validated, {"predictions": []})
 
     @patch("foxhole_forecast.forecasting.read_jsonl")
     def test_previous_summary_is_latest_valid_same_model_and_war(

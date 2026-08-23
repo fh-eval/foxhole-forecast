@@ -656,11 +656,23 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
               element("p", "region-list", (round.selected_regions || []).join(" · ")),
             );
             if (round.dropped_predictions?.length) {
-              participantBody.append(element(
-                "p",
-                "method-note",
+              const warning = element("div", "method-note");
+              warning.append(element(
+                "strong",
+                "",
                 `Model error: ${round.dropped_predictions.length} invalid bet${round.dropped_predictions.length === 1 ? " was" : "s were"} dropped and will not be scored.`,
               ));
+              const droppedList = element("ul", "rationale-list");
+              round.dropped_predictions.forEach((dropped) => {
+                const target = String(dropped.outcome || "").replace("CAPTURED_BY_", "");
+                droppedList.append(element(
+                  "li",
+                  "",
+                  `#${dropped.rank ?? "—"} ${dropped.base_type || "Base"} ${dropped.base_name || dropped.base_id}: predicted capture by ${teamLabel(target)}, but ${teamLabel(dropped.current_owner)} already owned it.`,
+                ));
+              });
+              warning.append(droppedList);
+              participantBody.append(warning);
             }
             const bets = element("div", "round__bets");
             (round.predictions || []).forEach((bet) => {

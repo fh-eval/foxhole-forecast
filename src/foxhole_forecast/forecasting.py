@@ -179,7 +179,15 @@ def _run_model(
         write_json(cohort_dir / f"{config['series_id']}-detail-packet.json", detail_packet)
         forecast_contract = forecast_schema(settings)
         forecast_messages = _messages(FORECAST_SYSTEM, detail_packet, forecast_contract)
-        def validate_and_filter_forecast(value: dict[str, Any]) -> dict[str, Any]:
+        def validate_strict_forecast(value: dict[str, Any]) -> dict[str, Any]:
+            filtered, dropped = _drop_invalid_predictions(value, detail_packet)
+            if dropped:
+                raise ValidationError(_dropped_prediction_error(dropped))
+            validate_forecast(filtered, detail_packet, settings)
+            dropped_predictions.clear()
+            return filtered
+
+        def validate_with_individual_drops(value: dict[str, Any]) -> dict[str, Any]:
             filtered, dropped = _drop_invalid_predictions(value, detail_packet)
             validate_forecast(filtered, detail_packet, settings)
             dropped_predictions[:] = dropped
@@ -190,7 +198,8 @@ def _run_model(
             forecast_messages,
             "foxhole_forecast",
             forecast_contract,
-            validate_and_filter_forecast,
+            validate_strict_forecast,
+            fallback_validator=validate_with_individual_drops,
         )
         frozen_forecast = _freeze_evidence(filtered_forecast, detail_packet)
         total_cost = provider.accumulated_cost
@@ -277,11 +286,15 @@ def _drop_invalid_predictions(
         current_owner = bases.get(prediction.get("base_id"), {}).get("current_owner")
         target = outcome.removeprefix("CAPTURED_BY_") if isinstance(outcome, str) else None
         if outcome == "SELF_CAPTURE" or (target and target == current_owner):
+            base = bases.get(prediction.get("base_id"), {})
             dropped.append(
                 {
                     "rank": prediction.get("rank"),
                     "base_id": prediction.get("base_id"),
                     "outcome": outcome,
+                    "base_name": base.get("name"),
+                    "current_owner": current_owner,
+                    "valid_outcomes": base.get("valid_outcomes", []),
                     "reason": "same-faction capture is not a valid state change",
                 }
             )
@@ -289,6 +302,21 @@ def _drop_invalid_predictions(
         kept.append(prediction)
     filtered["predictions"] = kept
     return filtered, dropped
+
+
+def _dropped_prediction_error(dropped: list[dict[str, Any]]) -> str:
+    details = "; ".join(
+        (
+            f"rank {row.get('rank')} {row.get('base_name') or row.get('base_id')}: "
+            f"current_owner={row.get('current_owner')}, so {row.get('outcome')} is invalid; "
+            f"choose one of {row.get('valid_outcomes')}"
+        )
+        for row in dropped
+    )
+    return (
+        "Correct these individual same-faction capture bets and return all eight bets: "
+        + details
+    )
 
 
 def _budget(
@@ -320,6 +348,7 @@ def _call_validated(
     schema_name: str,
     schema: dict[str, Any],
     validator: Callable[[dict[str, Any]], Any],
+    fallback_validator: Callable[[dict[str, Any]], Any] | None = None,
 ) -> tuple[ProviderResponse, Any]:
     last_error: Exception | None = None
     active_messages = list(messages)
@@ -335,7 +364,17 @@ def _call_validated(
                 provider.attempts[-1].setdefault(
                     "error", f"{type(error).__name__}: {error}"
                 )
-            if attempt < validation_attempts - 1:
+            if attempt == validation_attempts - 1 and fallback_validator is not None:
+                try:
+                    validated = fallback_validator(response.parsed)
+                    return response, validated
+                except (ValidationError, ValueError, KeyError, json.JSONDecodeError) as fallback_error:
+                    last_error = fallback_error
+                    if provider.attempts:
+                        provider.attempts[-1]["fallback_error"] = (
+                            f"{type(fallback_error).__name__}: {fallback_error}"
+                        )
+            elif attempt < validation_attempts - 1:
                 active_messages = [
                     *messages,
                     {
