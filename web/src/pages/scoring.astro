@@ -14,12 +14,12 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
   </head>
   <body>
     <header class="method-masthead">
-      <div class="masthead__eyebrow">EVENT OUTCOME PROTOCOL V4 · PUBLIC SCORING RULES</div>
+      <div class="masthead__eyebrow">EVENT OUTCOME PROTOCOL V5 · CONTINUOUS RANKED PROBABILITY SCORE</div>
       <div class="method-hero page-width">
         <div>
           <p class="kicker">Methodology</p>
           <h1>How forecasts<br /><span>earn credit</span></h1>
-          <p class="sublede">A prediction must name the base, what happens, an exact ETA, and a confidence before the event. The official War API supplies the result.</p>
+          <p class="sublede">A prediction names the base, outcome, ETA, event probability, and timing uncertainty. The official War API supplies the result.</p>
         </div>
         <a class="method-back" href={basePath}>← Return to live scores</a>
       </div>
@@ -40,8 +40,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
     <main class="scoring-page page-width">
       <section class="method-intro">
         <p class="kicker">The short version</p>
-        <p>A correct event inside the API interval containing the predicted minute earns 1.00. Credit declines in 15-minute steps as the event moves away from the ETA, reaching 0.00 at three hours. Confusing destruction with a faction-specific capture earns 0.75 outcome credit; predicting a change when none occurs earns 0.00.</p>
-        <aside class="method-callout"><strong>Headline score</strong><span>Average outcome credit × timing credit across every scoreable prediction.</span></aside>
+        <p>Each bet defines a probability distribution over when its named event will occur. CRPS compares that cumulative forecast with the observed API transition interval at every minute through ETA + 3 hours. Lower is better; 0 minutes is perfect.</p>
+        <aside class="method-callout"><strong>Headline score</strong><span>Mean event-time CRPS in minutes across every scoreable prediction.</span></aside>
       </section>
 
       <section id="forecast" class="scoring-section">
@@ -52,7 +52,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <article class="rule-card"><strong>2</strong><h3>Allowed events</h3><p><b>Captured</b> means ownership completes a change to the opposing faction. <b>Destroyed</b> means a faction-owned base becomes neutral—demolished and not yet rebuilt.</p></article>
           <article class="rule-card"><strong>1–5</strong><h3>Evidence references</h3><p>Each call cites cutoff-safe metrics and rates their relevance from 1–10. Evidence ratings are shown for auditability, but are not judged or added to the score.</p></article>
         </div>
-        <p class="method-note">A neutral base must be forecast as captured by Wardens or captured by Colonials; generic CAPTURED is retained only for legacy bets. A same-faction capture call is treated as a model error, removed from the bet set, and shown in the round as a dropped bet rather than scored. Each prediction also includes an exact UTC minute and confidence from 0.00 to 1.00. Rank records the model’s priority, but does not change a prediction’s weight.</p>
+        <p class="method-note">Each prediction includes confidence from 0.00 to 1.00—the probability that the named outcome happens by ETA + 3 hours—and <code>sigma_minutes</code> from 15 to 180—the standard deviation of event time conditional on it happening. A same-faction capture call is dropped as a model error. Rank records priority but does not change weight.</p>
       </section>
 
       <section id="settlement" class="scoring-section">
@@ -61,33 +61,23 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <article class="rule-card"><h3>Finite deadline</h3><p>Each prediction remains open through <code>ETA + 3 hours</code>. We look for the first physical ownership transition for that base after the round cutoff and before that deadline.</p></article>
           <article class="rule-card"><h3>Destruction before capture</h3><p>A faction-owned base normally becomes neutral before an enemy rebuild completes. If the model called a faction-specific capture, we wait through the deadline for that follow-up. The named enemy capture earns full outcome credit; destruction without a completed capture earns 0.75. Invalid same-faction capture calls are dropped and explained on the round page.</p></article>
         </div>
-        <p class="method-note">If no transition occurs by the deadline and observation coverage is adequate, the prediction is a miss. The forecast is never left open forever and is never assigned an infinite ETA error.</p>
+        <p class="method-note">If no transition occurs by the deadline and coverage is adequate, the observed cumulative event curve stays at zero. CRPS then penalizes the probability the model assigned to an event that did not happen; no artificial infinite ETA is needed.</p>
       </section>
 
       <section id="timing" class="scoring-section">
-        <div class="scoring-section__heading"><p class="kicker">03</p><h2>Timing credit</h2></div>
-        <p>The public API does not reveal the exact event second. Polling tells us that a change happened between the last observation and the first observation showing it. We therefore treat that span as the event’s observed interval.</p>
+        <div class="scoring-section__heading"><p class="kicker">03</p><h2>The event-time distribution</h2></div>
+        <p>The conditional event time is modeled as a Normal distribution centered on the model’s ETA with standard deviation <code>sigma_minutes</code>. It is truncated to the scoring window. Confidence supplies its total probability mass; the remaining mass means no qualifying event by the deadline.</p>
         <div class="formula-block">
-          <span>distance</span>
-          <strong>0 when the ETA is inside the observed interval; otherwise, minutes to its nearest edge</strong>
-          <span>timing component</span>
-          <strong>max(0, 1 − ceil(distance ÷ 15) ÷ 12)</strong>
+          <span>forecast curve</span>
+          <strong>F(t) = confidence × truncated Normal CDF(t; ETA, sigma)</strong>
+          <span>CRPS</span>
+          <strong>integral from cutoff to ETA + 3h of (F(t) − observed cumulative event(t))² dt</strong>
         </div>
-        <div class="credit-scale" aria-label="Timing credit examples">
-          <span><b>Inside interval</b><strong>1.00</strong></span>
-          <span><b>15 min</b><strong>0.92</strong></span>
-          <span><b>30 min</b><strong>0.83</strong></span>
-          <span><b>1 hour</b><strong>0.67</strong></span>
-          <span><b>90 min</b><strong>0.50</strong></span>
-          <span><b>2 hours</b><strong>0.33</strong></span>
-          <span><b>2h 30m</b><strong>0.17</strong></span>
-          <span><b>3+ hours</b><strong>0.00</strong></span>
-        </div>
-        <p class="method-caption">This is deliberately a 15-minute scale: asking for an exact minute makes the forecast concrete, but scoring does not pretend the API observed that minute exactly.</p>
+        <p class="method-caption">The API gives an interval rather than an exact event second. We average the observed event time uniformly across that interval, so the score respects the collection cadence without pretending to know more than was observed.</p>
       </section>
 
       <section id="outcome" class="scoring-section">
-        <div class="scoring-section__heading"><p class="kicker">04</p><h2>Outcome and combined credit</h2></div>
+        <div class="scoring-section__heading"><p class="kicker">04</p><h2>Outcome handling</h2></div>
         <div class="outcome-table" role="table" aria-label="Outcome credit table">
           <div class="outcome-table__row outcome-table__head" role="row"><span>Prediction vs. observation</span><span>Outcome credit</span></div>
           <div class="outcome-table__row" role="row"><span>Captured by named faction / Named faction capture</span><strong class="score-value">1.00</strong></div>
@@ -95,23 +85,23 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <div class="outcome-table__row" role="row"><span>Faction capture / Destroyed, or Destroyed / Faction capture</span><strong class="score-value">0.75</strong></div>
           <div class="outcome-table__row" role="row"><span>No qualifying transition by the deadline</span><strong class="score-value score-value--miss">0.00</strong></div>
         </div>
-        <div class="formula-block formula-block--compact"><span>prediction credit</span><strong>outcome credit × timing component</strong></div>
+        <div class="formula-block formula-block--compact"><span>observed curve height</span><strong>1.00 for the named outcome · 0.75 for capture/destruction confusion · 0.00 for no qualifying outcome</strong></div>
         <div class="worked-example">
           <p class="kicker">Worked example</p>
-          <h3>Correct capture, observed one hour late</h3>
-          <p><code>1.00 outcome × 0.67 timing = 0.67 prediction credit</code></p>
+          <h3>Correct capture, but later than expected</h3>
+          <p>The forecast CDF rises near the ETA while the observed curve rises one hour later. The squared area between those curves is the bet’s CRPS in minutes.</p>
         </div>
       </section>
 
       <section id="aggregation" class="scoring-section">
-        <div class="scoring-section__heading"><p class="kicker">05</p><h2>Leaderboard and confidence</h2></div>
+        <div class="scoring-section__heading"><p class="kicker">05</p><h2>Leaderboard and historical sigma</h2></div>
         <div class="rule-grid rule-grid--two">
-          <article class="rule-card"><h3>Headline forecast score</h3><p>The leaderboard is the arithmetic mean of prediction credit across all scoreable predictions for a model, reported from 0.00 to 1.00. Every prediction has equal weight. Open and censored predictions are excluded.</p></article>
-          <article class="rule-card"><h3>Confidence calibration</h3><p>We also retain a Brier-style squared error: <code>(confidence − prediction credit)²</code>. Lower is better. Because partial credit can be fractional rather than binary, this is an auxiliary calibration diagnostic—not the headline ranking score.</p></article>
+          <article class="rule-card"><h3>Mean CRPS</h3><p>The leaderboard is the arithmetic mean CRPS in minutes across scoreable bets. Every bet has equal weight. Lower is better; open and censored bets are excluded.</p></article>
+          <article class="rule-card"><h3>Legacy forecasts</h3><p>Older bets did not contain sigma. Their timing uncertainty is deterministically inferred as <code>max(15, 180 × (1 − confidence))</code> minutes and labeled as inferred. Their original confidence is preserved.</p></article>
         </div>
         <div class="worked-example">
-          <p class="kicker">Continuing the example</p>
-          <p>At 0.80 stated confidence and 0.67 prediction credit, the calibration error is <code>(0.80 − 0.6667)² ≈ 0.0178</code>.</p>
+          <p class="kicker">Why retain confidence too?</p>
+          <p>Confidence answers “does this named outcome happen by the deadline?” Sigma answers “if it happens, how tightly can I locate its time?” CRPS evaluates both in one forecast distribution.</p>
         </div>
       </section>
 
@@ -120,9 +110,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <p>A prediction is <b>censored</b> when the observations cannot support a fair result. Censored is a completed settlement state, but it contributes neither credit nor a miss to the model average.</p>
         <ul class="rationale-list">
           <li><strong>Missing coverage.</strong> A gap greater than two expected polling intervals—currently 30 minutes—means we may have missed or badly localized a transition.</li>
-          <li><strong>Ambiguous transition interval.</strong> For a coarse interval, we score only when every possible event time in that interval produces the same timing credit. Otherwise we censor it.</li>
+          <li><strong>Ambiguous transition interval.</strong> Normal polling intervals are integrated directly. A gap larger than the coverage tolerance is censored because it no longer localizes the event fairly.</li>
           <li><strong>War boundary.</strong> If a war ends before a prediction’s ETA-plus-three-hour scoring window closes, and no qualifying transition was already observed, the prediction is censored rather than treated as a miss.</li>
-          <li><strong>Certain coarse miss.</strong> A wide interval can still receive zero when even its closest possible event time is outside the credit window.</li>
         </ul>
       </section>
 
@@ -131,14 +120,14 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <ol class="rationale-list rationale-list--numbered">
           <li><strong>Make every claim falsifiable.</strong> A named base, event, exact ETA, and confidence is more informative than “something may happen in 24 hours.”</li>
           <li><strong>Force short- and longer-range judgment.</strong> The four-within-6h plus four-from-6–24h split prevents a model from filling a round only with safer, vague next-day bets.</li>
-          <li><strong>Match scoring precision to observation precision.</strong> Fifteen-minute steps respect the collection cadence while retaining a clear reward for being closer.</li>
+          <li><strong>Match scoring precision to observation precision.</strong> Interval-aware CRPS uses the whole API observation interval rather than inventing an exact event minute.</li>
           <li><strong>Recognize the structure of Foxhole captures.</strong> Destroyed and captured are distinct outcomes, but both correctly anticipate loss of the current owner; the 0.75 rule captures that shared information.</li>
-          <li><strong>Close every fair bet.</strong> The three-hour grace window permits near misses while ensuring non-events eventually become zero rather than remaining unresolved indefinitely.</li>
+          <li><strong>Close every fair bet.</strong> The three-hour grace window ensures non-events receive a finite probabilistic penalty rather than remaining unresolved indefinitely.</li>
           <li><strong>Avoid subjective grading.</strong> Evidence and relevance ratings remain visible for human review, while numerical settlement depends only on prospective forecasts and official API observations.</li>
         </ol>
       </section>
 
-      <p class="method-version">Current protocol: <code>event_outcome_v4</code>. A new war receives a two-hour telemetry warm-up before forecasting begins. Historical rounds made under older protocols remain archived but do not enter either current-protocol score view.</p>
+      <p class="method-version">Current protocol: <code>event_outcome_v5_crps</code>. Existing event-outcome rounds are rescored with inferred sigma; new rounds ask the model for sigma directly. A new war receives a two-hour telemetry warm-up before forecasting begins.</p>
     </main>
 
     <footer><div class="page-width"><strong>FOXHOLE FORECAST</strong><a href={basePath}>Live dashboard</a></div></footer>

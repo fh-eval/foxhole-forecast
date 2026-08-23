@@ -76,6 +76,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC",
       }).format(new Date(value)) + " UTC" : "an unknown time";
       const formatDate = (value) => value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value)) + " UTC" : "—";
+      const duration = (minutes) => minutes == null ? "—" : minutes < 60 ? `${Math.round(minutes)}m` : `${(minutes / 60).toFixed(1)}h`;
+      const crps = (minutes) => minutes == null || !Number.isFinite(Number(minutes)) ? "—" : `${Number(minutes).toFixed(2)}m`;
       const evidenceValue = (item) => {
         if (item.value == null) return "value unavailable";
         if (String(item.metric_id).includes("ratio_")) return `${Number(item.value).toFixed(2)}×`;
@@ -96,7 +98,9 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 
       function predictionHeadline(bet) {
         const line = element("p", "prediction-headline");
-        const confidence = element("strong", "prediction-headline__confidence", `${decimal(bet.confidence)} confidence`);
+        const sigmaSource = bet.sigma_source === "inferred_from_confidence" ? " (inferred)" : "";
+        const sigma = bet.sigma_minutes == null ? "" : ` · σ ${duration(Number(bet.sigma_minutes))}${sigmaSource}`;
+        const confidence = element("strong", "prediction-headline__confidence", `${decimal(bet.confidence)} confidence${sigma}`);
         line.append(confidence, document.createTextNode(": "), baseIdentity(bet));
         if (bet.predicted_outcome === "DESTROYED") {
           line.append(document.createTextNode(" will be destroyed at "));
@@ -140,9 +144,9 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       function predictionResult(bet) {
         const result = element("div", "prediction-result");
         result.append(element("small", `status status--${bet.status}`, predictionStatus(bet)));
-        if (["hit", "partial", "miss"].includes(bet.status) && bet.timing_credit != null) {
+        if (["hit", "partial", "miss"].includes(bet.status) && bet.crps_minutes != null) {
           const badge = element("span", `prediction-score prediction-score--${bet.status}`);
-          badge.append(element("span", "prediction-score__label", "Score"), element("strong", "", decimal(bet.timing_credit)));
+          badge.append(element("span", "prediction-score__label", "CRPS"), element("strong", "", crps(bet.crps_minutes)));
           result.append(badge);
         }
         return result;
@@ -165,6 +169,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             && bet.base_type
             && bet.current_team
             && bet.confidence != null
+            && bet.sigma_minutes != null
             && bet.eta_utc
             && Array.isArray(bet.evidence)
             && bet.evidence.length > 0

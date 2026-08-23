@@ -31,6 +31,7 @@ class ValidationTests(unittest.TestCase):
                     "base_id": f"base-{index}",
                     "outcome": "DESTROYED",
                     "confidence": 0.6,
+                    "sigma_minutes": 60,
                     "eta_utc": (
                         f"2026-01-01T0{index}:00:00Z"
                         if index <= 4

@@ -4,7 +4,13 @@ import unittest
 from datetime import UTC, datetime, timedelta
 
 from foxhole_forecast.config import Settings
-from foxhole_forecast.scoring import _outcome_credit, _timing_credit, settle_run
+from foxhole_forecast.scoring import (
+    _event_time_crps_minutes,
+    _outcome_credit,
+    _prediction_sigma_minutes,
+    _timing_credit,
+    settle_run,
+)
 from foxhole_forecast.storage import isoformat
 
 
@@ -171,6 +177,10 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(bet["state_credit"], 0.75)
         self.assertEqual(bet["timing_credit"], 0.75)
         self.assertAlmostEqual(bet["brier"], 0.0025)
+        self.assertEqual(bet["sigma_source"], "inferred_from_confidence")
+        self.assertEqual(bet["sigma_minutes"], 36.0)
+        self.assertIsNotNone(bet["crps_minutes"])
+        self.assertEqual(settlement["protocol"], "event_outcome_v5_crps")
 
     def test_timed_prediction_is_censored_when_war_ends_before_window_closes(self) -> None:
         settings = Settings.load()
@@ -201,6 +211,67 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(_timing_credit(180), 0)
         self.assertEqual(_outcome_credit("WARDENS", "CAPTURED", "NONE"), 0.75)
         self.assertEqual(_outcome_credit("NONE", "CAPTURED", "WARDENS"), 1)
+
+    def test_legacy_sigma_is_inferred_without_changing_confidence(self) -> None:
+        self.assertEqual(
+            _prediction_sigma_minutes({"confidence": 0.5}),
+            (90.0, "inferred_from_confidence"),
+        )
+        self.assertEqual(
+            _prediction_sigma_minutes(
+                {"confidence": 0.5, "sigma_minutes": 45}
+            ),
+            (45.0, "model"),
+        )
+
+    def test_crps_rewards_sharp_correct_forecast_and_calibrated_non_event(self) -> None:
+        cutoff = datetime(2026, 1, 1, tzinfo=UTC)
+        eta = cutoff + timedelta(hours=2)
+        deadline = eta + timedelta(hours=3)
+        observed_start = eta - timedelta(minutes=7.5)
+        observed_end = eta + timedelta(minutes=7.5)
+        sharp = _event_time_crps_minutes(
+            cutoff=cutoff,
+            deadline=deadline,
+            eta=eta,
+            sigma_minutes=15,
+            confidence=0.95,
+            observed_start=observed_start,
+            observed_end=observed_end,
+            outcome_credit=1,
+        )
+        diffuse = _event_time_crps_minutes(
+            cutoff=cutoff,
+            deadline=deadline,
+            eta=eta,
+            sigma_minutes=120,
+            confidence=0.95,
+            observed_start=observed_start,
+            observed_end=observed_end,
+            outcome_credit=1,
+        )
+        low_confidence_non_event = _event_time_crps_minutes(
+            cutoff=cutoff,
+            deadline=deadline,
+            eta=eta,
+            sigma_minutes=60,
+            confidence=0.2,
+            observed_start=None,
+            observed_end=None,
+            outcome_credit=0,
+        )
+        high_confidence_non_event = _event_time_crps_minutes(
+            cutoff=cutoff,
+            deadline=deadline,
+            eta=eta,
+            sigma_minutes=60,
+            confidence=0.9,
+            observed_start=None,
+            observed_end=None,
+            outcome_credit=0,
+        )
+        self.assertLess(sharp, diffuse)
+        self.assertLess(low_confidence_non_event, high_confidence_non_event)
 
     def test_faction_specific_and_self_capture_outcomes(self) -> None:
         self.assertEqual(

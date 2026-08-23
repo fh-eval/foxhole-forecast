@@ -43,7 +43,7 @@ def _behavior_summary(
             continue
         predictions = round_record.get("predictions", [])
         if (
-            round_record.get("protocol") != "event_outcome_v4"
+            round_record.get("protocol") != "event_outcome_v5_crps"
             or not 1 <= len(predictions) <= predictions_per_round
         ):
             continue
@@ -56,7 +56,7 @@ def _behavior_summary(
             bet
             for bet in bets
             if bet.get("status") in {"hit", "partial", "miss"}
-            and bet.get("timing_credit") is not None
+            and bet.get("crps_minutes") is not None
         ]
         confidences = [float(bet["confidence"]) for bet in bets]
         immediate_leads = _lead_minutes(bets, "IMMEDIATE")
@@ -66,7 +66,8 @@ def _behavior_summary(
             for bet in scoreable
             if bet.get("eta_error_minutes") is not None
         ]
-        credits = [float(bet["timing_credit"]) for bet in scoreable]
+        crps_values = [float(bet["crps_minutes"]) for bet in scoreable]
+        sigmas = [float(bet["sigma_minutes"]) for bet in bets if bet.get("sigma_minutes") is not None]
         calibration = [
             (float(bet["confidence"]) - float(bet["timing_credit"])) ** 2
             for bet in scoreable
@@ -77,8 +78,9 @@ def _behavior_summary(
                 "model_label": labels[series],
                 "published_bets": len(bets),
                 "scoreable_bets": len(scoreable),
-                "score": _mean(credits),
+                "crps_minutes": _mean(crps_values),
                 "confidence": _mean(confidences),
+                "sigma_minutes": _mean(sigmas),
                 "immediate_lead_minutes": _median(immediate_leads),
                 "extended_lead_minutes": _median(extended_leads),
                 "eta_error_minutes": _median(eta_errors),
@@ -212,6 +214,8 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                 "predicted_outcome": predicted_outcome,
                 "settlement_outcome": bet.get("outcome"),
                 "confidence": bet["confidence"],
+                "sigma_minutes": bet.get("sigma_minutes"),
+                "sigma_source": bet.get("sigma_source"),
                 "eta_utc": bet["eta_utc"],
                 "evidence": [
                     _present_evidence(item, metric_lookup)
@@ -222,6 +226,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                 "eta_error_min_minutes": bet.get("eta_error_min_minutes"),
                 "eta_error_max_minutes": bet.get("eta_error_max_minutes"),
                 "brier": bet["brier"],
+                "crps_minutes": bet.get("crps_minutes"),
                 "state_credit": bet.get("state_credit"),
                 "timing_credit": bet.get("timing_credit"),
                 "settlement_reason": bet.get("settlement_reason"),
@@ -253,6 +258,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                 "settlement_status": settlement.get("status", "not_available"),
                 "timing_score_pct": settlement.get("timing_score_pct"),
                 "event_brier": settlement.get("event_brier"),
+                "mean_crps_minutes": settlement.get("mean_crps_minutes"),
                 "predictions": presented_round_bets,
             }
             participant_key = (war_id, round_slot, series)
@@ -287,13 +293,10 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
             models.append(score)
     models.sort(
         key=lambda row: (
-            row.get("timing_score_pct") is None
-            and row.get("brier_skill_score") is None,
-            -(
-                row.get("timing_score_pct")
-                if row.get("timing_score_pct") is not None
-                else row.get("brier_skill_score") or -10**9
-            ),
+            row.get("mean_crps_minutes") is None,
+            row.get("mean_crps_minutes")
+            if row.get("mean_crps_minutes") is not None
+            else float("inf"),
         )
     )
     base_forecasts: list[dict[str, Any]] = []
@@ -341,7 +344,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
         ),
     }
     output = {
-        "schema_version": 8,
+        "schema_version": 9,
         "generated_at": isoformat(),
         "war": latest.get("war"),
         "last_collected_at": latest.get("observed_at"),
@@ -364,18 +367,21 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
         "rounds": rounds[:500],
         "base_forecasts": base_forecasts[:500],
         "methodology": {
-            "current_protocol": "event_outcome_v4",
+            "current_protocol": "event_outcome_v5_crps",
             "predictions_per_round": 8,
             "new_war_warmup_hours": current_settings.minimum_forecast_history_hours,
             "tranches": {
                 "immediate": "ETA within 6 hours",
                 "extended": "ETA 6-24 hours",
             },
-            "partial_credit_window_minutes": 180,
+            "scoring_window_after_eta_minutes": 180,
+            "crps_integration_step_minutes": 1,
             "neutral_alternative_state_credit": 0.75,
             "horizons_hours": [1, 6, 24],
             "omitted_probability": 0,
             "timing_precision_minutes": 15,
+            "sigma_minutes": {"minimum": 15, "maximum": 180},
+            "legacy_sigma_rule": "max(15, 180 * (1 - confidence))",
             "data_source": "Official Foxhole War API, with a provenance-tagged one-time FoxholeStats history backfill",
             "settlement_source": "Official Foxhole War API only",
         },

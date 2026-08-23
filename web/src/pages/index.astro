@@ -53,7 +53,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <div class="section-heading">
           <div><p class="kicker">Performance and behavior</p><h2>How the models think</h2></div>
           <div class="score-heading-controls">
-            <p>Score measures what the model got right. Confidence, target horizon, ETA error, and calibration describe how it tends to make those calls. Credits and probabilities use one consistent 0.00–1.00 scale.</p>
+            <p>CRPS measures the full probability distribution over event time. Confidence, timing uncertainty, target horizon, and ETA error show how each model tends to make its calls. Lower CRPS is better.</p>
             <div class="segmented" role="group" aria-label="Score history scope">
               <button class="active" data-score-scope="current">Current war</button>
               <button data-score-scope="all">All wars</button>
@@ -66,12 +66,12 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
               <tr>
                 <th>Rank</th>
                 <th>Model</th>
-                <th>Forecast score<small>Mean earned credit ↑</small></th>
+                <th>CRPS<small>Mean error in minutes ↓</small></th>
                 <th>Confidence<small>Mean stated</small></th>
+                <th>Timing uncertainty<small>Mean sigma ↓</small></th>
                 <th>Typical 0–6h target<small>Median after cutoff</small></th>
                 <th>Typical 6–24h target<small>Median after cutoff</small></th>
                 <th>ETA error<small>Median matched event ↓</small></th>
-                <th>Calibration<small>Mean squared gap ↓</small></th>
                 <th>Results<small>Hit / partial / miss</small></th>
               </tr>
             </thead>
@@ -80,11 +80,11 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <p id="score-empty" class="empty-state" hidden>No model has completed a full round under the current protocol yet.</p>
         </div>
         <dl id="score-guide" class="score-guide">
-          <div><dt>Forecast score</dt><dd>Average outcome × timing credit for scoreable bets. 1.00 is perfect.</dd></div>
-          <div><dt>Confidence</dt><dd>The model’s average stated confidence across all published bets, including open bets.</dd></div>
+          <div><dt>CRPS</dt><dd>Average squared distance between the forecast event-time CDF and what happened, integrated in minutes. Lower is better; 0 is perfect.</dd></div>
+          <div><dt>Confidence</dt><dd>Probability that the named outcome occurs by ETA + 3 hours.</dd></div>
+          <div><dt>Timing uncertainty</dt><dd>Mean standard deviation around the ETA. Historical values are inferred from confidence; new values come from the model.</dd></div>
           <div><dt>Typical targets</dt><dd>Median ETA lead is reported separately inside the required 0–6h and 6–24h tranches, so the imposed timeline does not blur model behavior.</dd></div>
           <div><dt>ETA error</dt><dd>Median distance from the ETA to a matched transition interval; no-event misses are not measurable here.</dd></div>
-          <div><dt>Calibration</dt><dd>Average squared gap between confidence and earned credit. Lower means confidence better matches results.</dd></div>
           <div><dt>Censored</dt><dd>Settled without a score because observation coverage could not support a fair result.</dd></div>
         </dl>
       </section>
@@ -202,6 +202,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             && bet.base_type
             && bet.current_team
             && bet.confidence != null
+            && bet.sigma_minutes != null
             && bet.eta_utc
             && Array.isArray(bet.evidence)
             && bet.evidence.length > 0
@@ -219,17 +220,19 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         if (minutes == null) return "—";
         return minutes < 60 ? `${Math.round(minutes)}m` : `${(minutes / 60).toFixed(1)}h`;
       };
+      const crps = (minutes) => minutes == null || !Number.isFinite(Number(minutes)) ? "—" : `${Number(minutes).toFixed(2)}m`;
 
       function modelBehavior(model, rounds) {
         const bets = rounds.filter((round) => round.series_id === model.series_id).flatMap((round) => round.predictions || []);
         const scoreable = bets.filter((bet) => predictionScoreValue(bet) != null);
         const confidences = bets.map((bet) => Number(bet.confidence)).filter(Number.isFinite);
+        const sigmas = bets.map((bet) => Number(bet.sigma_minutes)).filter(Number.isFinite);
         const leadMinutes = (tranche) => bets
           .filter((bet) => bet.tranche === tranche)
           .map((bet) => (new Date(bet.eta_utc) - new Date(bet.cutoff || rounds.find((round) => round.run_id === bet.run_id)?.cutoff)) / 60000)
           .filter((value) => Number.isFinite(value) && value >= 0);
         const etaErrors = scoreable.filter((bet) => bet.eta_error_minutes != null).map((bet) => Number(bet.eta_error_minutes)).filter(Number.isFinite);
-        const credits = scoreable.map((bet) => Number(bet.timing_credit));
+        const crpsValues = scoreable.map((bet) => Number(bet.crps_minutes));
         const calibrationErrors = scoreable
           .map((bet) => (Number(bet.confidence) - Number(bet.timing_credit)) ** 2)
           .filter(Number.isFinite);
@@ -240,8 +243,9 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           scoreable,
           publishedCount: bets.length,
           scoreableCount: scoreable.length,
-          score: mean(credits),
+          crpsMinutes: mean(crpsValues),
           confidence: mean(confidences),
+          sigmaMinutes: mean(sigmas),
           immediateLeadMinutes: median(leadMinutes("IMMEDIATE")),
           extendedLeadMinutes: median(leadMinutes("EXTENDED")),
           etaErrorMinutes: median(etaErrors),
@@ -276,8 +280,9 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             model,
             publishedCount: summary.published_bets,
             scoreableCount: summary.scoreable_bets,
-            score: summary.score,
+            crpsMinutes: summary.crps_minutes,
             confidence: summary.confidence,
+            sigmaMinutes: summary.sigma_minutes,
             immediateLeadMinutes: summary.immediate_lead_minutes,
             extendedLeadMinutes: summary.extended_lead_minutes,
             etaErrorMinutes: summary.eta_error_minutes,
@@ -290,8 +295,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             open: summary.open,
           } : modelBehavior(model, rounds);
         }).sort((a, b) =>
-          (a.score == null) - (b.score == null)
-          || (b.score ?? -1) - (a.score ?? -1)
+          (a.crpsMinutes == null) - (b.crpsMinutes == null)
+          || (a.crpsMinutes ?? Infinity) - (b.crpsMinutes ?? Infinity)
           || (a.calibration ?? Infinity) - (b.calibration ?? Infinity)
           || String(a.model.label).localeCompare(String(b.model.label))
         );
@@ -310,12 +315,12 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           row.append(
             element("td", "score-table__rank", String(index + 1).padStart(2, "0")),
             modelCell,
-            metricCell(decimal(behavior.score), `${behavior.scoreableCount} scoreable bets`, "score-table__primary"),
+            metricCell(crps(behavior.crpsMinutes), `${behavior.scoreableCount} scoreable bets`, "score-table__primary"),
             metricCell(decimal(behavior.confidence), `${behavior.publishedCount} published bets`),
+            metricCell(duration(behavior.sigmaMinutes), "conditional standard deviation"),
             metricCell(duration(behavior.immediateLeadMinutes), "within required tranche"),
             metricCell(duration(behavior.extendedLeadMinutes), "within required tranche"),
             metricCell(duration(behavior.etaErrorMinutes), `${behavior.matched} matched transitions`),
-            metricCell(decimal(behavior.calibration), "lower is better"),
             resultsCell,
           );
           rows.append(row);
@@ -481,7 +486,9 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       function predictionHeadline(bet) {
         const line = element("p", "prediction-headline");
         const predictedOutcome = bet.predicted_outcome || (typeof bet.outcome === "string" ? bet.outcome : null);
-        const confidence = element("strong", "prediction-headline__confidence", `${decimal(bet.confidence)} confidence`);
+        const sigmaSource = bet.sigma_source === "inferred_from_confidence" ? " (inferred)" : "";
+        const sigma = bet.sigma_minutes == null ? "" : ` · σ ${duration(Number(bet.sigma_minutes))}${sigmaSource}`;
+        const confidence = element("strong", "prediction-headline__confidence", `${decimal(bet.confidence)} confidence${sigma}`);
         line.append(confidence, document.createTextNode(": "));
         if (predictedOutcome) {
           line.append(baseIdentity(bet));
@@ -554,8 +561,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       }
 
       function predictionScoreValue(bet) {
-        if (!["hit", "partial", "miss"].includes(bet.status) || bet.timing_credit == null) return null;
-        const value = Number(bet.timing_credit);
+        if (!["hit", "partial", "miss"].includes(bet.status) || bet.crps_minutes == null) return null;
+        const value = Number(bet.crps_minutes);
         return Number.isFinite(value) ? value : null;
       }
 
@@ -566,8 +573,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         if (score != null) {
           const badge = element("span", `prediction-score prediction-score--${bet.status}`);
           badge.append(
-            element("span", "prediction-score__label", "Score"),
-            element("strong", "", score.toFixed(2)),
+            element("span", "prediction-score__label", "CRPS"),
+            element("strong", "", crps(score)),
           );
           result.append(badge);
         }

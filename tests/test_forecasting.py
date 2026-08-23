@@ -98,8 +98,10 @@ class ForecastBudgetTests(unittest.TestCase):
         self.assertIn('"required":["war_summary"]', messages[1]["content"])
 
     def test_provider_schema_hides_internal_self_capture_outcome(self) -> None:
-        outcome_enum = forecast_schema(Settings.load())["properties"]["predictions"]["items"]["properties"]["outcome"]["enum"]
+        prediction_schema = forecast_schema(Settings.load())["properties"]["predictions"]["items"]
+        outcome_enum = prediction_schema["properties"]["outcome"]["enum"]
         self.assertNotIn("SELF_CAPTURE", outcome_enum)
+        self.assertIn("sigma_minutes", prediction_schema["required"])
 
     def test_same_faction_capture_is_dropped_before_validation(self) -> None:
         value = {

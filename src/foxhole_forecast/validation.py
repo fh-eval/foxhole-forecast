@@ -95,6 +95,15 @@ def validate_forecast(value: dict[str, Any], packet: dict[str, Any], settings: S
             or not 0 <= confidence <= 1
         ):
             raise ValidationError(f"Invalid confidence for {identifier}")
+        sigma = row.get("sigma_minutes")
+        if (
+            not isinstance(sigma, int)
+            or isinstance(sigma, bool)
+            or not 15 <= sigma <= 180
+        ):
+            raise ValidationError(
+                f"sigma_minutes for {identifier} must be an integer from 15 to 180"
+            )
         try:
             eta = parse_time(row["eta_utc"])
         except (KeyError, TypeError, ValueError) as error:

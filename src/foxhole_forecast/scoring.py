@@ -10,6 +10,11 @@ from .config import DATA_DIR, Settings
 from .storage import isoformat, parse_time, read_json, read_jsonl, write_json
 
 
+MIN_SIGMA_MINUTES = 15.0
+MAX_SIGMA_MINUTES = 180.0
+CRPS_STEP_MINUTES = 1.0
+
+
 def _war_end(wars: dict[str, dict[str, Any]], war_id: str) -> datetime | None:
     value = wars.get(war_id, {}).get("ended_at")
     return parse_time(value) if value else None
@@ -169,6 +174,7 @@ def _settle_timed_run(
     for prediction in run["forecast"]["predictions"]:
         eta = parse_time(prediction["eta_utc"])
         bet_deadline = eta + timedelta(hours=3)
+        sigma_minutes, sigma_source = _prediction_sigma_minutes(prediction)
         matching = [
             event
             for event in transitions
@@ -339,6 +345,28 @@ def _settle_timed_run(
             status = "censored"
             outcome = None
             settlement_reason = "insufficient_observation_coverage"
+        crps_minutes: float | None = None
+        if outcome is not None:
+            observed_start = (
+                parse_time(matched["observed_from"])
+                if matched is not None and state_credit is not None
+                else None
+            )
+            observed_end = (
+                parse_time(matched["observed_to"])
+                if matched is not None and state_credit is not None
+                else None
+            )
+            crps_minutes = _event_time_crps_minutes(
+                cutoff=cutoff,
+                deadline=bet_deadline,
+                eta=eta,
+                sigma_minutes=sigma_minutes,
+                confidence=float(prediction["confidence"]),
+                observed_start=observed_start,
+                observed_end=observed_end,
+                outcome_credit=float(state_credit or 0.0),
+            )
         settled.append(
             {
                 **prediction,
@@ -351,6 +379,11 @@ def _settle_timed_run(
                     round((prediction["confidence"] - outcome) ** 2, 8)
                     if outcome is not None
                     else None
+                ),
+                "sigma_minutes": sigma_minutes,
+                "sigma_source": sigma_source,
+                "crps_minutes": (
+                    round(crps_minutes, 8) if crps_minutes is not None else None
                 ),
                 "eta_error_minutes": (
                     round(eta_error, 2) if eta_error is not None else None
@@ -375,10 +408,11 @@ def _settle_timed_run(
     resolved = [row for row in settled if row["outcome"] is not None]
     timing_values = [row["timing_credit"] for row in resolved]
     brier_values = [row["brier"] for row in resolved]
+    crps_values = [row["crps_minutes"] for row in resolved]
     return {
-        "schema_version": 3,
+        "schema_version": 4,
         "protocol": (
-            "event_outcome_v4"
+            "event_outcome_v5_crps"
             if all("outcome" in row for row in run["forecast"]["predictions"])
             else "timed_transition_v3"
         ),
@@ -401,6 +435,9 @@ def _settle_timed_run(
         ),
         "event_brier": (
             round(statistics.fmean(brier_values), 8) if brier_values else None
+        ),
+        "mean_crps_minutes": (
+            round(statistics.fmean(crps_values), 8) if crps_values else None
         ),
         "timed_predictions": settled,
     }
@@ -437,6 +474,90 @@ def _transition_is_covered(
 def _timing_credit(distance_minutes: float) -> float:
     blocks = math.ceil(max(0.0, distance_minutes - 1e-9) / 15)
     return max(0.0, 1.0 - blocks / 12)
+
+
+def _prediction_sigma_minutes(prediction: dict[str, Any]) -> tuple[float, str]:
+    """Return model sigma or a deterministic compatibility value for old bets."""
+    supplied = prediction.get("sigma_minutes")
+    if (
+        isinstance(supplied, (int, float))
+        and not isinstance(supplied, bool)
+        and MIN_SIGMA_MINUTES <= float(supplied) <= MAX_SIGMA_MINUTES
+    ):
+        return float(supplied), "model"
+    confidence = min(1.0, max(0.0, float(prediction.get("confidence", 0.0))))
+    inferred = max(MIN_SIGMA_MINUTES, MAX_SIGMA_MINUTES * (1.0 - confidence))
+    return round(inferred, 8), "inferred_from_confidence"
+
+
+def _normal_cdf(value: float) -> float:
+    return 0.5 * (1.0 + math.erf(value / math.sqrt(2.0)))
+
+
+def _event_time_crps_minutes(
+    *,
+    cutoff: datetime,
+    deadline: datetime,
+    eta: datetime,
+    sigma_minutes: float,
+    confidence: float,
+    observed_start: datetime | None,
+    observed_end: datetime | None,
+    outcome_credit: float,
+) -> float:
+    """Finite-window CRPS for event probability and conditional Normal timing.
+
+    The forecast CDF reaches ``confidence`` at the deadline; the remaining
+    mass represents no qualifying event. API interval uncertainty is averaged
+    uniformly over the observed transition interval.
+    """
+    horizon = max(0.0, (deadline - cutoff).total_seconds() / 60)
+    if horizon == 0:
+        return 0.0
+    mean = (eta - cutoff).total_seconds() / 60
+    sigma = min(MAX_SIGMA_MINUTES, max(MIN_SIGMA_MINUTES, sigma_minutes))
+    probability = min(1.0, max(0.0, confidence))
+    lower_cdf = _normal_cdf(-mean / sigma)
+    upper_cdf = _normal_cdf((horizon - mean) / sigma)
+    normalizer = max(1e-12, upper_cdf - lower_cdf)
+
+    interval_start = (
+        max(0.0, (observed_start - cutoff).total_seconds() / 60)
+        if observed_start is not None
+        else None
+    )
+    interval_end = (
+        min(horizon, (observed_end - cutoff).total_seconds() / 60)
+        if observed_end is not None
+        else None
+    )
+    credit = min(1.0, max(0.0, outcome_credit))
+    steps = max(1, math.ceil(horizon / CRPS_STEP_MINUTES))
+    width = horizon / steps
+    total = 0.0
+    for index in range(steps):
+        minute = (index + 0.5) * width
+        conditional_cdf = (
+            _normal_cdf((minute - mean) / sigma) - lower_cdf
+        ) / normalizer
+        forecast_cdf = probability * min(1.0, max(0.0, conditional_cdf))
+        observed_probability = 0.0
+        if interval_start is not None and interval_end is not None:
+            if interval_end <= interval_start:
+                observed_probability = 1.0 if minute >= interval_end else 0.0
+            elif minute >= interval_end:
+                observed_probability = 1.0
+            elif minute > interval_start:
+                observed_probability = (minute - interval_start) / (
+                    interval_end - interval_start
+                )
+        # E[(F - credit * I{T <= t})^2] over the API event interval.
+        total += (
+            forecast_cdf**2
+            - 2.0 * credit * forecast_cdf * observed_probability
+            + credit**2 * observed_probability
+        ) * width
+    return max(0.0, total)
 
 
 def _certain_interval_timing_credit(
@@ -644,6 +765,7 @@ def aggregate_scores(
         eta_errors: list[float] = []
         event_briers: list[float] = []
         timing_credits: list[float] = []
+        crps_values: list[float] = []
         hits = partials = misses = open_bets = censored_bets = 0
         for row in complete:
             for horizon in row.get("horizons", {}).values():
@@ -670,6 +792,8 @@ def aggregate_scores(
                     event_briers.append(bet["brier"])
                 if bet.get("timing_credit") is not None:
                     timing_credits.append(bet["timing_credit"])
+                if bet.get("crps_minutes") is not None:
+                    crps_values.append(bet["crps_minutes"])
         total_n = sum(value[1] for value in horizon_values)
         ibs = sum(value[0] * value[1] for value in horizon_values) / total_n if total_n else None
         baseline = sum(value[2] * value[3] for value in horizon_values) / total_n if total_n else None
@@ -695,6 +819,16 @@ def aggregate_scores(
                 "open_event_bets": open_bets,
                 "censored_event_bets": censored_bets,
                 "event_brier": round(statistics.fmean(event_briers), 8) if event_briers else None,
+                "mean_crps_minutes": (
+                    round(statistics.fmean(crps_values), 8)
+                    if crps_values
+                    else None
+                ),
+                "median_crps_minutes": (
+                    round(statistics.median(crps_values), 8)
+                    if crps_values
+                    else None
+                ),
                 "timing_score_pct": (
                     round(100 * statistics.fmean(timing_credits), 2)
                     if timing_credits
@@ -709,12 +843,12 @@ def aggregate_scores(
         )
     models.sort(
         key=lambda row: (
-            row["timing_score_pct"] is None and row["brier_skill_score"] is None,
-            -(
-                row["timing_score_pct"]
-                if row["timing_score_pct"] is not None
-                else row["brier_skill_score"] or 0.0
-            ),
+            row["mean_crps_minutes"] is None
+            and row["timing_score_pct"] is None
+            and row["brier_skill_score"] is None,
+            row["mean_crps_minutes"]
+            if row["mean_crps_minutes"] is not None
+            else float("inf"),
         )
     )
     return {"schema_version": 1, "generated_at": isoformat(now), "models": models}

@@ -40,6 +40,7 @@ def forecast_schema(settings: Settings) -> dict[str, Any]:
             "base_id",
             "outcome",
             "confidence",
+            "sigma_minutes",
             "eta_utc",
             "evidence",
         ],
@@ -59,6 +60,11 @@ def forecast_schema(settings: Settings) -> dict[str, Any]:
                 ],
             },
             "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "sigma_minutes": {
+                "type": "integer",
+                "minimum": 15,
+                "maximum": 180,
+            },
             "eta_utc": {"type": "string"},
             "evidence": {
                 "type": "array",

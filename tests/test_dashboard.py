@@ -19,14 +19,16 @@ class DashboardTests(unittest.TestCase):
         def round_for(war_id: str, credit: float) -> dict:
             return {
                 "war_id": war_id,
-                "protocol": "event_outcome_v4",
+                "protocol": "event_outcome_v5_crps",
                 "series_id": "model-1",
                 "model_label": "Model One",
                 "predictions": [
                     {
                         "status": "hit" if credit else "miss",
                         "timing_credit": credit,
+                        "crps_minutes": 1 - credit,
                         "confidence": 0.5,
+                        "sigma_minutes": 90,
                         "tranche": "IMMEDIATE",
                         "cutoff": "2026-01-01T00:00:00Z",
                         "eta_utc": "2026-01-01T02:00:00Z",
@@ -39,9 +41,9 @@ class DashboardTests(unittest.TestCase):
 
         current = _behavior_summary(rounds, "war-2", 1)[0]
         all_time = _behavior_summary(rounds, None, 1)[0]
-        self.assertEqual(current["score"], 1)
+        self.assertEqual(current["crps_minutes"], 0)
         self.assertEqual(current["published_bets"], 1)
-        self.assertEqual(all_time["score"], 0.5)
+        self.assertEqual(all_time["crps_minutes"], 0.5)
         self.assertEqual(all_time["published_bets"], 2)
 
     def test_forecast_status_respects_war_end_and_history_warmup(self) -> None:
