@@ -90,6 +90,31 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <div><dt>ETA error</dt><dd>Median distance from the ETA to a matched transition interval; no-event misses are not measurable here.</dd></div>
           <div><dt>Censored</dt><dd>Settled without a score because observation coverage could not support a fair result.</dd></div>
         </dl>
+        <div class="selection-heading">
+          <div><p class="kicker">Base selection</p><h3>Can the model pick where the map will move?</h3></div>
+          <p>Capture rates judge the bases the model selected, independent of confidence. Lift compares those selections with every strategic base available at the same cutoff and observed through the same deadline.</p>
+        </div>
+        <div class="table-shell">
+          <table class="score-table selection-table" aria-describedby="selection-guide">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Short captures<small>Selected 0–6h bases</small></th>
+                <th>Long captures<small>Selected 6–24h bases</small></th>
+                <th>Any transition<small>Captured or destroyed</small></th>
+                <th>Exact outcome<small>Named result matched</small></th>
+                <th>Capture lift<small>Model rate ÷ field rate</small></th>
+                <th>Top-ranked captures<small>Ranks #1 and #5</small></th>
+              </tr>
+            </thead>
+            <tbody id="selection-rows" aria-live="polite"></tbody>
+          </table>
+        </div>
+        <dl id="selection-guide" class="score-guide">
+          <div><dt>Capture</dt><dd>The selected base reached Warden or Colonial ownership by that bet’s deadline. A correct destruction call can still be a good exact outcome without counting as a capture.</dd></div>
+          <div><dt>Any transition</dt><dd>The selected base was captured or destroyed. This measures whether the model found an active base even if it named the wrong result.</dd></div>
+          <div><dt>Capture lift</dt><dd>1.00× matches the capture rate of all strategic bases available at those cutoffs and deadlines. Above 1.00× indicates useful selection; below 1.00× trails the field.</dd></div>
+        </dl>
       </section>
 
       <section id="war-data" class="section-block">
@@ -224,6 +249,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         return minutes < 60 ? `${Math.round(minutes)}m` : `${(minutes / 60).toFixed(1)}h`;
       };
       const crps = (minutes) => minutes == null || !Number.isFinite(Number(minutes)) ? "—" : `${Number(minutes).toFixed(2)}m`;
+      const percentage = (value) => value == null || !Number.isFinite(Number(value)) ? "—" : `${(100 * Number(value)).toFixed(1)}%`;
+      const ratio = (value) => value == null || !Number.isFinite(Number(value)) ? "—" : `${Number(value).toFixed(2)}×`;
 
       function modelBehavior(model, rounds) {
         const bets = rounds.filter((round) => round.series_id === model.series_id).flatMap((round) => round.predictions || []);
@@ -250,6 +277,20 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             - (scoreConfig.short_weight ?? 0.5) * shortCrpsMinutes / (scoreConfig.short_crps_scale_minutes ?? 540)
             - (scoreConfig.long_weight ?? 0.5) * longCrpsMinutes / (scoreConfig.long_crps_scale_minutes ?? 1620))));
         const count = (status) => bets.filter((bet) => bet.status === status).length;
+        const selectionBets = scoreable.filter((bet) => bet.selection_capture_observed != null);
+        const selectionGroup = (predicate) => selectionBets.filter(predicate);
+        const selectionRate = (items, field) => items.length
+          ? items.filter((bet) => Boolean(bet[field])).length / items.length
+          : null;
+        const shortSelection = selectionGroup((bet) => bet.tranche === "IMMEDIATE");
+        const longSelection = selectionGroup((bet) => bet.tranche === "EXTENDED");
+        const topSelection = selectionGroup((bet) => [1, 5].includes(Number(bet.rank)));
+        const captureBaselines = selectionBets
+          .filter((bet) => bet.selection_capture_baseline != null)
+          .map((bet) => Number(bet.selection_capture_baseline))
+          .filter(Number.isFinite);
+        const captureRate = selectionRate(selectionBets, "selection_capture_observed");
+        const captureBaselineRate = mean(captureBaselines);
         return {
           model,
           bets,
@@ -272,6 +313,23 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           misses: count("miss"),
           censored: count("censored"),
           open: count("open"),
+          shortCaptureRate: selectionRate(shortSelection, "selection_capture_observed"),
+          shortCaptureHits: shortSelection.filter((bet) => Boolean(bet.selection_capture_observed)).length,
+          shortCaptureBets: shortSelection.length,
+          longCaptureRate: selectionRate(longSelection, "selection_capture_observed"),
+          longCaptureHits: longSelection.filter((bet) => Boolean(bet.selection_capture_observed)).length,
+          longCaptureBets: longSelection.length,
+          transitionRate: selectionRate(selectionBets, "selection_transition_observed"),
+          transitionHits: selectionBets.filter((bet) => Boolean(bet.selection_transition_observed)).length,
+          exactOutcomeRate: selectionRate(selectionBets, "selection_exact_outcome"),
+          exactOutcomeHits: selectionBets.filter((bet) => Boolean(bet.selection_exact_outcome)).length,
+          selectionScoredBets: selectionBets.length,
+          captureRate,
+          captureBaselineRate,
+          captureLift: captureRate != null && captureBaselineRate > 0 ? captureRate / captureBaselineRate : null,
+          topRankCaptureRate: selectionRate(topSelection, "selection_capture_observed"),
+          topRankCaptureHits: topSelection.filter((bet) => Boolean(bet.selection_capture_observed)).length,
+          topRankCaptureBets: topSelection.length,
         };
       }
 
@@ -283,8 +341,10 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 
       function renderScores(models, rounds, summaries = []) {
         const rows = document.querySelector("#score-rows");
+        const selectionRows = document.querySelector("#selection-rows");
         const empty = document.querySelector("#score-empty");
         rows.replaceChildren();
+        selectionRows.replaceChildren();
         empty.hidden = models.length > 0;
         if (!models.length) {
           return;
@@ -312,6 +372,23 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             misses: summary.misses,
             censored: summary.censored,
             open: summary.open,
+            shortCaptureRate: summary.short_capture_rate,
+            shortCaptureHits: summary.short_capture_hits,
+            shortCaptureBets: summary.short_capture_bets,
+            longCaptureRate: summary.long_capture_rate,
+            longCaptureHits: summary.long_capture_hits,
+            longCaptureBets: summary.long_capture_bets,
+            transitionRate: summary.transition_rate,
+            transitionHits: summary.transition_hits,
+            exactOutcomeRate: summary.exact_outcome_rate,
+            exactOutcomeHits: summary.exact_outcome_hits,
+            selectionScoredBets: summary.selection_scored_bets,
+            captureRate: summary.capture_rate,
+            captureBaselineRate: summary.capture_baseline_rate,
+            captureLift: summary.capture_lift,
+            topRankCaptureRate: summary.top_rank_capture_rate,
+            topRankCaptureHits: summary.top_rank_capture_hits,
+            topRankCaptureBets: summary.top_rank_capture_bets,
           } : modelBehavior(model, rounds);
         }).sort((a, b) =>
           (a.forecastScore == null) - (b.forecastScore == null)
@@ -346,6 +423,20 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             resultsCell,
           );
           rows.append(row);
+
+          const selectionRow = document.createElement("tr");
+          const selectionModel = element("td", "score-table__model");
+          selectionModel.append(element("strong", "", behavior.model.label || behavior.model.series_id));
+          selectionRow.append(
+            selectionModel,
+            metricCell(percentage(behavior.shortCaptureRate), `${behavior.shortCaptureHits}/${behavior.shortCaptureBets} selected bases`),
+            metricCell(percentage(behavior.longCaptureRate), `${behavior.longCaptureHits}/${behavior.longCaptureBets} selected bases`),
+            metricCell(percentage(behavior.transitionRate), `${behavior.transitionHits}/${behavior.selectionScoredBets} changed`),
+            metricCell(percentage(behavior.exactOutcomeRate), `${behavior.exactOutcomeHits}/${behavior.selectionScoredBets} exact calls`),
+            metricCell(ratio(behavior.captureLift), `${percentage(behavior.captureRate)} model · ${percentage(behavior.captureBaselineRate)} field`, "score-table__primary"),
+            metricCell(percentage(behavior.topRankCaptureRate), `${behavior.topRankCaptureHits}/${behavior.topRankCaptureBets} ranks #1 and #5`),
+          );
+          selectionRows.append(selectionRow);
         });
       }
 

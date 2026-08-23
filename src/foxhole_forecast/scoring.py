@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from .config import DATA_DIR, Settings
-from .score_metrics import summarize_crps
+from .score_metrics import summarize_crps, summarize_selection
 from .storage import isoformat, parse_time, read_json, read_jsonl, write_json
 
 
@@ -59,7 +59,7 @@ def settle_run(
 ) -> dict[str, Any]:
     if "predictions" in run.get("forecast", {}):
         return _settle_timed_run(
-            run, events, collector_runs, settings, now, war_end
+            run, cohort, events, collector_runs, settings, now, war_end
         )
 
     cutoff = parse_time(run["cutoff"])
@@ -150,6 +150,7 @@ def settle_run(
 
 def _settle_timed_run(
     run: dict[str, Any],
+    cohort: dict[str, Any],
     events: list[dict[str, Any]],
     collector_runs: list[dict[str, Any]],
     settings: Settings,
@@ -157,6 +158,7 @@ def _settle_timed_run(
     war_end: datetime | None = None,
 ) -> dict[str, Any]:
     cutoff = parse_time(run["cutoff"])
+    eligible_base_ids = set(cohort.get("strategic_base_ids", []))
     deadline = max(
         parse_time(prediction["eta_utc"]) + timedelta(hours=3)
         for prediction in run["forecast"]["predictions"]
@@ -182,6 +184,32 @@ def _settle_timed_run(
             if event.get("base_id") == prediction["base_id"]
             and parse_time(event["observed_to"]) <= bet_deadline
         ]
+        window_transitions = [
+            event
+            for event in transitions
+            if event.get("base_id") in eligible_base_ids
+            and parse_time(event["observed_to"]) <= bet_deadline
+        ]
+        transition_base_ids = {
+            event["base_id"] for event in window_transitions
+        }
+        capture_base_ids = {
+            event["base_id"]
+            for event in window_transitions
+            if event.get("to_team") in {"WARDENS", "COLONIALS"}
+        }
+        selection_transition_observed = prediction["base_id"] in transition_base_ids
+        selection_capture_observed = prediction["base_id"] in capture_base_ids
+        transition_baseline = (
+            len(transition_base_ids) / len(eligible_base_ids)
+            if eligible_base_ids
+            else None
+        )
+        capture_baseline = (
+            len(capture_base_ids) / len(eligible_base_ids)
+            if eligible_base_ids
+            else None
+        )
         first = min(matching, key=lambda row: row["observed_to"]) if matching else None
         outcome: float | None
         eta_error: float | None = None
@@ -401,6 +429,25 @@ def _settle_timed_run(
                 "state_credit": (
                     round(state_credit, 8) if state_credit is not None else None
                 ),
+                "selection_transition_observed": (
+                    selection_transition_observed if outcome is not None else None
+                ),
+                "selection_capture_observed": (
+                    selection_capture_observed if outcome is not None else None
+                ),
+                "selection_exact_outcome": (
+                    state_credit == 1.0 if outcome is not None else None
+                ),
+                "selection_transition_baseline": (
+                    round(transition_baseline, 8)
+                    if outcome is not None and transition_baseline is not None
+                    else None
+                ),
+                "selection_capture_baseline": (
+                    round(capture_baseline, 8)
+                    if outcome is not None and capture_baseline is not None
+                    else None
+                ),
                 "settlement_reason": settlement_reason,
                 "matched_transition": matched,
             }
@@ -411,7 +458,7 @@ def _settle_timed_run(
     brier_values = [row["brier"] for row in resolved]
     crps_values = [row["crps_minutes"] for row in resolved]
     return {
-        "schema_version": 4,
+        "schema_version": 5,
         "protocol": (
             "event_outcome_v5_crps"
             if all("outcome" in row for row in run["forecast"]["predictions"])
@@ -803,6 +850,7 @@ def aggregate_scores(
         skill = 100 * (1 - ibs / baseline) if ibs is not None and baseline and baseline > 0 else None
         identity = labels[series]
         crps_summary = summarize_crps(scored_bets)
+        selection_summary = summarize_selection(scored_bets)
         models.append(
             {
                 "series_id": series,
@@ -829,6 +877,7 @@ def aggregate_scores(
                 "short_scoreable_bets": crps_summary["short_scoreable_bets"],
                 "long_scoreable_bets": crps_summary["long_scoreable_bets"],
                 "forecast_score": crps_summary["forecast_score"],
+                **selection_summary,
                 "median_crps_minutes": (
                     round(statistics.median(crps_values), 8)
                     if crps_values
@@ -857,7 +906,7 @@ def aggregate_scores(
             else float("inf"),
         )
     )
-    return {"schema_version": 2, "generated_at": isoformat(now), "models": models}
+    return {"schema_version": 3, "generated_at": isoformat(now), "models": models}
 
 
 def _within(values: list[float], threshold: float) -> float | None:

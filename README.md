@@ -23,6 +23,8 @@ forecast score = 100 * [1 - 0.5(short CRPS / 540) - 0.5(long CRPS / 1620)]
 
 The fixed 540- and 1,620-minute scales are the maximum short and long scoring windows. The 0-100 forecast score gives each timeline equal weight and is not percent accuracy. Open and censored bets are excluded, and the score remains pending until a model has a scored bet in both timelines. Evidence relevance is preserved for audit and display, not treated as truth by an LLM judge.
 
+The dashboard separately reports capture precision, any-transition precision, exact-outcome precision, top-ranked capture rate, and capture lift. Capture lift compares the model's selected bases with all strategic bases available at the same round cutoff and observed through the same bet deadlines, so quiet and chaotic periods receive a matched baseline.
+
 A result is censored instead of guessed when collector coverage has a gap longer than two polling intervals or an ownership transition straddles a cutoff/deadline. Because the API is sampled every 15 minutes, event time is an observation interval rather than an exact instant.
 
 ## Repository layout

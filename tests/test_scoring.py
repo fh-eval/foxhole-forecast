@@ -180,6 +180,11 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(bet["sigma_source"], "inferred_from_confidence")
         self.assertEqual(bet["sigma_minutes"], 36.0)
         self.assertIsNotNone(bet["crps_minutes"])
+        self.assertTrue(bet["selection_transition_observed"])
+        self.assertFalse(bet["selection_capture_observed"])
+        self.assertFalse(bet["selection_exact_outcome"])
+        self.assertEqual(bet["selection_transition_baseline"], 1)
+        self.assertEqual(bet["selection_capture_baseline"], 0)
         self.assertEqual(settlement["protocol"], "event_outcome_v5_crps")
 
     def test_timed_prediction_is_censored_when_war_ends_before_window_closes(self) -> None:

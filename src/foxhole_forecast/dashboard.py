@@ -9,7 +9,7 @@ from typing import Any
 from .config import DATA_DIR, ROOT, Settings
 from .domain import strategic_base_type
 from .packets import build_scout_packet
-from .score_metrics import CRPS_SCALE_MINUTES, summarize_crps
+from .score_metrics import CRPS_SCALE_MINUTES, summarize_crps, summarize_selection
 from .storage import isoformat, parse_time, read_json, read_jsonl, write_json
 from .war_lifecycle import war_ended_at, war_is_active
 
@@ -55,6 +55,7 @@ def _behavior_summary(
     for series, bets in by_series.items():
         scoreable = [bet for bet in bets if bet.get("crps_minutes") is not None]
         crps_summary = summarize_crps(scoreable)
+        selection_summary = summarize_selection(scoreable)
         confidences = [float(bet["confidence"]) for bet in bets]
         immediate_leads = _lead_minutes(bets, "IMMEDIATE")
         extended_leads = _lead_minutes(bets, "EXTENDED")
@@ -70,6 +71,7 @@ def _behavior_summary(
                 "model_label": labels[series],
                 "published_bets": len(bets),
                 **crps_summary,
+                **selection_summary,
                 "confidence": _mean(confidences),
                 "sigma_minutes": _mean(sigmas),
                 "immediate_lead_minutes": _median(immediate_leads),
@@ -238,6 +240,19 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                 "crps_minutes": bet.get("crps_minutes"),
                 "state_credit": bet.get("state_credit"),
                 "timing_credit": bet.get("timing_credit"),
+                "selection_transition_observed": bet.get(
+                    "selection_transition_observed"
+                ),
+                "selection_capture_observed": bet.get(
+                    "selection_capture_observed"
+                ),
+                "selection_exact_outcome": bet.get("selection_exact_outcome"),
+                "selection_transition_baseline": bet.get(
+                    "selection_transition_baseline"
+                ),
+                "selection_capture_baseline": bet.get(
+                    "selection_capture_baseline"
+                ),
                 "settlement_reason": bet.get("settlement_reason"),
             }
             presented_round_bets.append(presented)
@@ -356,7 +371,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
         ),
     }
     output = {
-        "schema_version": 10,
+        "schema_version": 11,
         "generated_at": isoformat(),
         "war": latest.get("war"),
         "last_collected_at": latest.get("observed_at"),
@@ -396,6 +411,14 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                 "short_crps_scale_minutes": CRPS_SCALE_MINUTES["IMMEDIATE"],
                 "long_crps_scale_minutes": CRPS_SCALE_MINUTES["EXTENDED"],
                 "requires_scored_bets_in_both_tranches": True,
+            },
+            "base_selection": {
+                "capture": "Selected base reached faction ownership by its scoring deadline",
+                "transition": "Selected base had any physical ownership transition by its scoring deadline",
+                "exact_outcome": "Observed outcome exactly matched the model's named outcome",
+                "top_ranks": [1, 5],
+                "baseline": "Share of all strategic bases available at the round cutoff captured during the same bet window",
+                "lift": "Model capture rate divided by the matched eligible-base baseline",
             },
             "neutral_alternative_state_credit": 0.75,
             "horizons_hours": [1, 6, 24],

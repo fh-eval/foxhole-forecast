@@ -32,6 +32,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <a href="#timing">Timing</a>
         <a href="#outcome">Outcome</a>
         <a href="#aggregation">Leaderboard</a>
+        <a href="#selection">Base selection</a>
         <a href="#censoring">Censoring</a>
         <a href="#rationale">Rationale</a>
       </div>
@@ -112,8 +113,19 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         </div>
       </section>
 
+      <section id="selection" class="scoring-section">
+        <div class="scoring-section__heading"><p class="kicker">06</p><h2>Base-selection diagnostics</h2></div>
+        <p>CRPS judges the complete probability forecast. Selection diagnostics ask the simpler operational question: did the model spend one of its eight picks on a base where something happened?</p>
+        <div class="rule-grid rule-grid--two">
+          <article class="rule-card"><h3>Capture and transition rates</h3><p>Capture rate is the share of scored selections that reached Warden or Colonial ownership by the bet deadline. Transition rate also counts destruction to neutral. Exact-outcome rate requires the observation to match the model’s named result.</p></article>
+          <article class="rule-card"><h3>Top-ranked picks</h3><p>Ranks 1 and 5 are the model’s highest-priority short and long calls. Their capture rate shows whether its strongest selections outperform the rest of its list.</p></article>
+        </div>
+        <div class="formula-block formula-block--compact"><span>capture lift</span><strong>model capture rate ÷ matched eligible-base capture rate</strong></div>
+        <p class="method-caption">The baseline is recalculated prospectively for every scored bet: it is the fraction of all strategic bases available at that round’s cutoff that were captured by the same deadline. A lift of 1.00× matches the field, 2.00× finds captures twice as often, and 0.50× finds them half as often. This adjusts for quiet versus chaotic periods without using model confidence.</p>
+      </section>
+
       <section id="censoring" class="scoring-section">
-        <div class="scoring-section__heading"><p class="kicker">06</p><h2>When we decline to score</h2></div>
+        <div class="scoring-section__heading"><p class="kicker">07</p><h2>When we decline to score</h2></div>
         <p>A prediction is <b>censored</b> when the observations cannot support a fair result. Censored is a completed settlement state, but it contributes neither credit nor a miss to the model average.</p>
         <ul class="rationale-list">
           <li><strong>Missing coverage.</strong> A gap greater than two expected polling intervals—currently 30 minutes—means we may have missed or badly localized a transition.</li>
@@ -123,7 +135,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       </section>
 
       <section id="rationale" class="scoring-section">
-        <div class="scoring-section__heading"><p class="kicker">07</p><h2>Why score it this way?</h2></div>
+        <div class="scoring-section__heading"><p class="kicker">08</p><h2>Why score it this way?</h2></div>
         <ol class="rationale-list rationale-list--numbered">
           <li><strong>Make every claim falsifiable.</strong> A named base, event, exact ETA, and confidence is more informative than “something may happen in 24 hours.”</li>
           <li><strong>Force and balance short- and longer-range judgment.</strong> The four-within-6h plus four-from-6–24h split prevents a model from filling a round only with safer, vague next-day bets. Fixed timeline scales keep longer CRPS integration windows from dominating the topline score.</li>
