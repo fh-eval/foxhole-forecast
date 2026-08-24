@@ -2,30 +2,6 @@
 import "../styles/global.css";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
-const scoutExample = JSON.stringify({
-  war_summary: "FIELD DESK · Day 113 — Oarbreaker remains the busiest front...",
-  selected_regions: ["OarbreakerHex", "ClahstraHex", "MooringCountyHex"],
-}, null, 2);
-const forecastExample = JSON.stringify({
-  predictions: [{
-    rank: 1,
-    base_id: "OarbreakerHex:example",
-    outcome: "CAPTURED_BY_COLONIALS",
-    eta_utc: "2026-08-24T08:15:00Z",
-    confidence: 0.62,
-    sigma_minutes: 45,
-    evidence: [{ metric_id: "region.OarbreakerHex.totalEnlistments.rate_1h_per_hour", relevance: 8 }],
-  }],
-}, null, 2);
-const adviceExample = JSON.stringify({
-  strategic_advice: {
-    colonial_reinforce: {
-      base_id: "OarbreakerHex:example",
-      reason: "Recent pressure and ownership changes make this a fragile point.",
-      evidence: [{ metric_id: "region.OarbreakerHex.wardenCasualties.rate_1h_per_hour", relevance: 7 }],
-    },
-  },
-}, null, 2);
 ---
 
 <!doctype html>
@@ -79,20 +55,23 @@ const adviceExample = JSON.stringify({
 
       <section class="prompt-example-section" aria-labelledby="examples-title">
         <div class="scoring-section__heading"><p class="kicker">Illustrative, trimmed examples</p><h2 id="examples-title">What the model actually returns</h2></div>
-        <p class="method-caption">Below is the shape of the exchange, with fictional values. The forecast response actually contains both the predictions and the advice blocks shown separately here. Trimmed for readability — the full prompt files are linked at the bottom.</p>
+        <p class="method-caption">Here is the exchange in human terms, with fictional values. The model is not being asked to produce a mysterious score: it is asked to explain what it sees, choose where to look, then make a small set of timed calls.</p>
         <div class="prompt-example-grid">
-          <details class="prompt-example" open>
-            <summary>Scout reply</summary>
-            <pre><code>{scoutExample}</code></pre>
-          </details>
-          <details class="prompt-example">
-            <summary>Forecast reply</summary>
-            <pre><code>{forecastExample}</code></pre>
-          </details>
-          <details class="prompt-example">
-            <summary>Friendly tips</summary>
-            <pre><code>{adviceExample}</code></pre>
-          </details>
+          <article class="prompt-example">
+            <div class="prompt-example__top"><span>01 · Scout</span><strong>Make sense of the map</strong></div>
+            <p>The model starts with the same frozen war report as every other model. It writes a brief in newspaper style and names the regions that deserve a closer look.</p>
+            <div class="prompt-example__output"><small>Example dispatch</small><blockquote>“FIELD DESK · Day 113 — Oarbreaker remains the busiest front, with pressure building around its eastern approaches.”</blockquote><small>Regions selected for a closer look</small><div class="prompt-chips"><span>Oarbreaker</span><span>Clahstra</span><span>Mooring County</span></div></div>
+          </article>
+          <article class="prompt-example">
+            <div class="prompt-example__top"><span>02 · Forecast</span><strong>Commit to eight calls</strong></div>
+            <p>After the deeper regional report arrives, the model must name a base, say what will happen, choose an exact time, and show how sure it is.</p>
+            <div class="prompt-example__output"><small>Example call</small><p class="prompt-call"><strong>62% confidence</strong>: Oarbreaker Base will be captured by the Colonials at <strong>08:15 UTC</strong>.</p><small>Why it said that</small><div class="prompt-evidence"><span>Enlistment activity rising</span><span>Recent ownership pressure</span></div></div>
+          </article>
+          <article class="prompt-example">
+            <div class="prompt-example__top"><span>03 · Advice</span><strong>Explain the strategy</strong></div>
+            <p>The same response includes four friendly recommendations: one reinforce choice and one attack choice for each faction. These are informative, not bets.</p>
+            <div class="prompt-example__output"><small>Example recommendation</small><p class="prompt-call"><strong>Colonials should reinforce</strong> Oarbreaker because recent pressure and ownership changes make it a fragile point.</p><small>Kept for comparison</small><p class="prompt-example__note">We can compare this reasoning with what happened next, but we do not pretend the model’s advice caused players to act.</p></div>
+          </article>
         </div>
       </section>
 
