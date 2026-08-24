@@ -9,7 +9,7 @@ from typing import Any
 from .config import DATA_DIR, ROOT, Settings
 from .domain import strategic_base_type
 from .packets import build_scout_packet
-from .score_metrics import CRPS_SCALE_MINUTES, summarize_crps, summarize_selection
+from .score_metrics import summarize_crps, summarize_selection
 from .storage import isoformat, parse_time, read_json, read_jsonl, write_json
 from .war_lifecycle import war_ended_at, war_is_active
 
@@ -262,6 +262,11 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                 run["cutoff"], current_settings.forecast_interval_hours
             )
             war_id = run.get("war_id") or cohort.get("war_id", "unknown-war")
+            presented_advice = _present_strategic_advice(
+                run.get("forecast", {}).get("strategic_advice"),
+                cutoff_bases,
+                metric_lookup,
+            )
             round_record = {
                 "round_id": f"{war_id}:{round_slot}",
                 "round_slot": round_slot,
@@ -284,6 +289,11 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                 "event_brier": settlement.get("event_brier"),
                 "mean_crps_minutes": settlement.get("mean_crps_minutes"),
                 "predictions": presented_round_bets,
+                **(
+                    {"strategic_advice": presented_advice}
+                    if presented_advice is not None
+                    else {}
+                ),
             }
             participant_key = (war_id, round_slot, series)
             previous = rounds_by_participant.get(participant_key)
@@ -371,7 +381,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
         ),
     }
     output = {
-        "schema_version": 11,
+        "schema_version": 12,
         "generated_at": isoformat(),
         "war": latest.get("war"),
         "last_collected_at": latest.get("observed_at"),
@@ -403,14 +413,10 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
             },
             "scoring_window_after_eta_minutes": 180,
             "crps_integration_step_minutes": 1,
-            "forecast_score": {
-                "range": [0, 100],
-                "higher_is_better": True,
-                "short_weight": 0.5,
-                "long_weight": 0.5,
-                "short_crps_scale_minutes": CRPS_SCALE_MINUTES["IMMEDIATE"],
-                "long_crps_scale_minutes": CRPS_SCALE_MINUTES["EXTENDED"],
-                "requires_scored_bets_in_both_tranches": True,
+            "actionable_exact_outcome": {
+                "definition": "The named outcome occurred within 180 minutes of the model ETA",
+                "denominator": "Every scoreable bet; false alarms, wrong outcomes, and badly timed outcomes are misses",
+                "split_by_tranche": True,
             },
             "base_selection": {
                 "capture": "Selected base reached faction ownership by its scoring deadline",
@@ -622,6 +628,39 @@ def _present_evidence(
             else metric.get("observed_at")
         ),
     }
+
+
+def _present_strategic_advice(
+    advice: Any,
+    base_lookup: dict[str, dict[str, Any]],
+    metric_lookup: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]] | None:
+    if not isinstance(advice, dict):
+        return None
+    presented: dict[str, dict[str, Any]] = {}
+    for key, recommendation in advice.items():
+        if not isinstance(recommendation, dict):
+            continue
+        advice_base = base_lookup.get(recommendation.get("base_id"), {})
+        presented[key] = {
+            **recommendation,
+            "base_name": recommendation.get("base_name")
+            or advice_base.get("name")
+            or recommendation.get("base_id"),
+            "base_type": recommendation.get("base_type")
+            or advice_base.get("base_type")
+            or strategic_base_type(advice_base.get("icon_type")),
+            "map_name": recommendation.get("map_name")
+            or advice_base.get("map_name"),
+            "current_team": recommendation.get("current_team")
+            or advice_base.get("current_owner")
+            or advice_base.get("team"),
+            "evidence": [
+                _present_evidence(item, metric_lookup)
+                for item in recommendation.get("evidence", [])
+            ],
+        }
+    return presented
 
 
 def _metric_label(metric_id: str) -> str:

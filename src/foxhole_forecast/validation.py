@@ -119,3 +119,59 @@ def validate_forecast(value: dict[str, Any], packet: dict[str, Any], settings: S
             relevance = item.get("relevance")
             if not isinstance(relevance, int) or isinstance(relevance, bool) or not 1 <= relevance <= 10:
                 raise ValidationError("Evidence relevance must be an integer from 1 to 10")
+
+    # Historical forecasts predate this field, so validation remains backward
+    # compatible even though the provider-facing schema requires it going forward.
+    advice = value.get("strategic_advice")
+    if advice is None:
+        return
+    if not isinstance(advice, dict):
+        raise ValidationError("strategic_advice must be an object")
+    advice_owners = {
+        "colonial_reinforce": "COLONIALS",
+        "colonial_attack": "WARDENS",
+        "warden_reinforce": "WARDENS",
+        "warden_attack": "COLONIALS",
+    }
+    for key, expected_owner in advice_owners.items():
+        recommendation = advice.get(key)
+        if not isinstance(recommendation, dict):
+            raise ValidationError(f"strategic_advice.{key} must be an object")
+        identifier = recommendation.get("base_id")
+        if identifier not in bases:
+            raise ValidationError(f"strategic_advice.{key} contains an unknown base_id")
+        owner = bases[identifier].get(
+            "current_owner", bases[identifier].get("team")
+        )
+        if owner != expected_owner:
+            raise ValidationError(
+                f"strategic_advice.{key} must select a {expected_owner}-owned base"
+            )
+        reason = recommendation.get("reason")
+        if (
+            not isinstance(reason, str)
+            or not reason.strip()
+            or not 10 <= len(reason.split()) <= 120
+        ):
+            raise ValidationError(
+                f"strategic_advice.{key}.reason must contain 10-120 words"
+            )
+        cited = recommendation.get("evidence")
+        if not isinstance(cited, list) or not 1 <= len(cited) <= 3:
+            raise ValidationError(
+                f"strategic_advice.{key} requires 1-3 evidence references"
+            )
+        for item in cited:
+            if item.get("metric_id") not in metrics:
+                raise ValidationError(
+                    f"Unknown strategic advice evidence metric: {item.get('metric_id')}"
+                )
+            relevance = item.get("relevance")
+            if (
+                not isinstance(relevance, int)
+                or isinstance(relevance, bool)
+                or not 1 <= relevance <= 10
+            ):
+                raise ValidationError(
+                    "Strategic advice evidence relevance must be an integer from 1 to 10"
+                )

@@ -9,6 +9,7 @@ from foxhole_forecast.dashboard import (
     _metric_label,
     _predicted_outcome,
     _present_evidence,
+    _present_strategic_advice,
     _round_slot,
 )
 from foxhole_forecast.forecasting import _freeze_evidence
@@ -49,6 +50,41 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(all_time["crps_minutes"], 0.5)
         self.assertEqual(all_time["published_bets"], 2)
 
+    def test_behavior_summary_scopes_actionable_outcomes_by_war(self) -> None:
+        def round_for(war_id: str, eta_error: float | None) -> dict:
+            return {
+                "war_id": war_id,
+                "protocol": "event_outcome_v5_crps",
+                "series_id": "model-1",
+                "model_label": "Model One",
+                "predictions": [
+                    {
+                        "status": "partial",
+                        "crps_minutes": 10,
+                        "confidence": 0.5,
+                        "sigma_minutes": 90,
+                        "tranche": "IMMEDIATE",
+                        "cutoff": "2026-01-01T00:00:00Z",
+                        "eta_utc": "2026-01-01T02:00:00Z",
+                        "eta_error_minutes": eta_error,
+                        "selection_capture_observed": True,
+                        "selection_transition_observed": True,
+                        "selection_exact_outcome": True,
+                    }
+                ],
+            }
+
+        rounds = [round_for("war-1", 181), round_for("war-2", 180)]
+
+        current = _behavior_summary(rounds, "war-2", 1)[0]
+        all_time = _behavior_summary(rounds, None, 1)[0]
+        self.assertEqual(current["actionable_exact_outcome_hits"], 1)
+        self.assertEqual(current["actionable_exact_outcome_bets"], 1)
+        self.assertEqual(current["actionable_exact_outcome_rate"], 1)
+        self.assertEqual(all_time["actionable_exact_outcome_hits"], 1)
+        self.assertEqual(all_time["actionable_exact_outcome_bets"], 2)
+        self.assertEqual(all_time["actionable_exact_outcome_rate"], 0.5)
+
     def test_forecast_status_respects_war_end_and_history_warmup(self) -> None:
         active = {"warId": "war-1", "winner": "NONE"}
         ended = {"warId": "war-1", "winner": "WARDENS"}
@@ -88,7 +124,14 @@ class DashboardTests(unittest.TestCase):
                     "base_id": "base-1",
                     "evidence": [{"metric_id": metric_id, "relevance": 6}],
                 }
-            ]
+            ],
+            "strategic_advice": {
+                "warden_reinforce": {
+                    "base_id": "base-1",
+                    "reason": "Hold this base.",
+                    "evidence": [{"metric_id": metric_id, "relevance": 8}],
+                }
+            },
         }
         packet = {
             "strategic_bases": [
@@ -118,6 +161,41 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(prediction["icon_type"], 45)
         self.assertEqual(prediction["base_type"], "Relic Base")
         self.assertEqual(prediction["evidence"][0]["value"], 42)
+        advice = frozen["strategic_advice"]["warden_reinforce"]
+        self.assertEqual(advice["base_name"], "Test Base")
+        self.assertEqual(advice["current_team"], "WARDENS")
+        self.assertEqual(advice["evidence"][0]["value"], 42)
+
+    def test_strategic_advice_is_presented_with_readable_frozen_evidence(self) -> None:
+        metric_id = "region.TestHex.totalEnlistments.rate_1h_per_hour"
+        advice = {
+            "warden_reinforce": {
+                "base_id": "base-1",
+                "reason": "Activity is rising.",
+                "evidence": [
+                    {"metric_id": metric_id, "relevance": 8, "value": 42}
+                ],
+            }
+        }
+
+        presented = _present_strategic_advice(
+            advice,
+            {
+                "base-1": {
+                    "name": "Test Base",
+                    "base_type": "Relic Base",
+                    "map_name": "TestHex",
+                    "current_owner": "WARDENS",
+                }
+            },
+            {},
+        )
+
+        self.assertEqual(presented["warden_reinforce"]["base_name"], "Test Base")
+        self.assertEqual(
+            presented["warden_reinforce"]["evidence"][0]["label"],
+            "Test · Enlistments rate, last 1h (per hour)",
+        )
 
     def test_war_api_snapshot_summarizes_current_official_inputs(self) -> None:
         latest = {

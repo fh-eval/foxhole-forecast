@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import statistics
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 
 SHORT_TRANCHE = "IMMEDIATE"
@@ -67,6 +67,9 @@ def summarize_selection(
     short = [bet for bet in scored if bet.get("tranche") == SHORT_TRANCHE]
     long = [bet for bet in scored if bet.get("tranche") == LONG_TRANCHE]
     top_ranked = [bet for bet in scored if bet.get("rank") in {1, 5}]
+    transitioned = [
+        bet for bet in scored if bet.get("selection_transition_observed") is True
+    ]
     capture_baselines = [
         float(bet["selection_capture_baseline"])
         for bet in scored
@@ -87,6 +90,26 @@ def summarize_selection(
         **_rate_fields("long_capture", long, "selection_capture_observed"),
         **_rate_fields("transition", scored, "selection_transition_observed"),
         **_rate_fields("exact_outcome", scored, "selection_exact_outcome"),
+        **_rate_fields(
+            "actionable_exact_outcome",
+            scored,
+            _is_actionable_exact_outcome,
+        ),
+        **_rate_fields(
+            "short_actionable_exact_outcome",
+            short,
+            _is_actionable_exact_outcome,
+        ),
+        **_rate_fields(
+            "long_actionable_exact_outcome",
+            long,
+            _is_actionable_exact_outcome,
+        ),
+        **_rate_fields(
+            "transition_exact_outcome",
+            transitioned,
+            "selection_exact_outcome",
+        ),
         **_rate_fields("top_rank_capture", top_ranked, "selection_capture_observed"),
         "capture_baseline_rate": _round(baseline_rate),
         "capture_lift": _round(capture_lift),
@@ -101,19 +124,42 @@ def _round(value: float | None) -> float | None:
     return round(value, 8) if value is not None else None
 
 
-def _boolean_rate(bets: list[dict[str, Any]], field: str) -> float | None:
+def _is_actionable_exact_outcome(bet: dict[str, Any]) -> bool:
+    """Return whether a bet named the exact event within three hours of its ETA."""
+    if bet.get("selection_exact_outcome") is not True:
+        return False
+    eta_error = bet.get("eta_error_minutes")
+    if eta_error is not None:
+        return float(eta_error) <= 180.0
+    # Historical interval-only settlements can provide bounds instead of one
+    # distance. Count them only when the entire possible interval is timely.
+    eta_error_max = bet.get("eta_error_max_minutes")
+    return eta_error_max is not None and float(eta_error_max) <= 180.0
+
+
+def _boolean_rate(
+    bets: list[dict[str, Any]], field: str | Callable[[dict[str, Any]], bool]
+) -> float | None:
     return (
-        sum(bool(bet.get(field)) for bet in bets) / len(bets)
+        sum(_field_value(bet, field) for bet in bets) / len(bets)
         if bets
         else None
     )
 
 
 def _rate_fields(
-    prefix: str, bets: list[dict[str, Any]], field: str
+    prefix: str,
+    bets: list[dict[str, Any]],
+    field: str | Callable[[dict[str, Any]], bool],
 ) -> dict[str, float | int | None]:
     return {
         f"{prefix}_rate": _round(_boolean_rate(bets, field)),
-        f"{prefix}_hits": sum(bool(bet.get(field)) for bet in bets),
+        f"{prefix}_hits": sum(_field_value(bet, field) for bet in bets),
         f"{prefix}_bets": len(bets),
     }
+
+
+def _field_value(
+    bet: dict[str, Any], field: str | Callable[[dict[str, Any]], bool]
+) -> bool:
+    return bool(field(bet)) if callable(field) else bool(bet.get(field))

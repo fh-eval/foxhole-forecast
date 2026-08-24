@@ -101,6 +101,26 @@ class ValidationTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             validate_forecast(value, self.packet, self.settings)
 
+    def test_strategic_advice_uses_faction_appropriate_packet_bases(self) -> None:
+        value = copy.deepcopy(self.valid)
+        metric_id = self.packet["selected_metrics"][0]["metric_id"]
+        def recommendation(base_id: str) -> dict:
+            return {
+                "base_id": base_id,
+                "reason": "Recent public activity makes this base a useful priority, although the supplied evidence remains limited and uncertain.",
+                "evidence": [{"metric_id": metric_id, "relevance": 7}],
+            }
+        value["strategic_advice"] = {
+            "colonial_reinforce": recommendation("base-2"),
+            "colonial_attack": recommendation("base-1"),
+            "warden_reinforce": recommendation("base-1"),
+            "warden_attack": recommendation("base-2"),
+        }
+        validate_forecast(value, self.packet, self.settings)
+        value["strategic_advice"]["colonial_attack"] = recommendation("base-2")
+        with self.assertRaisesRegex(ValidationError, "WARDENS-owned"):
+            validate_forecast(value, self.packet, self.settings)
+
 
 if __name__ == "__main__":
     unittest.main()

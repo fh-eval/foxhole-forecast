@@ -74,10 +74,37 @@ def forecast_schema(settings: Settings) -> dict[str, Any]:
             },
         },
     }
+    recommendation = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["base_id", "reason", "evidence"],
+        "properties": {
+            "base_id": {"type": "string"},
+            "reason": {"type": "string"},
+            "evidence": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "items": evidence,
+            },
+        },
+    }
+    advice_keys = [
+        "colonial_reinforce",
+        "colonial_attack",
+        "warden_reinforce",
+        "warden_attack",
+    ]
+    strategic_advice = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": advice_keys,
+        "properties": {key: recommendation for key in advice_keys},
+    }
     return {
         "type": "object",
         "additionalProperties": False,
-        "required": ["predictions"],
+        "required": ["predictions", "strategic_advice"],
         "properties": {
             "predictions": {
                 "type": "array",
@@ -85,5 +112,6 @@ def forecast_schema(settings: Settings) -> dict[str, Any]:
                 "maxItems": settings.forecast_base_limit,
                 "items": prediction,
             },
+            "strategic_advice": strategic_advice,
         },
     }

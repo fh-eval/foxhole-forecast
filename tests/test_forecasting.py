@@ -92,6 +92,8 @@ class ForecastBudgetTests(unittest.TestCase):
         self.assertIn("dispatch from an earlier war is never provided", SCOUT_SYSTEM)
         self.assertIn("opening edition", SCOUT_SYSTEM)
         self.assertIn("exactly eight ranked bets", FORECAST_SYSTEM)
+        self.assertIn("colonial_reinforce", FORECAST_SYSTEM)
+        self.assertIn("warden_attack", FORECAST_SYSTEM)
         self.assertIn("{error}", CORRECTION_USER)
 
     def test_json_schema_is_visible_in_model_prompt(self) -> None:
@@ -109,6 +111,17 @@ class ForecastBudgetTests(unittest.TestCase):
         outcome_enum = prediction_schema["properties"]["outcome"]["enum"]
         self.assertNotIn("SELF_CAPTURE", outcome_enum)
         self.assertIn("sigma_minutes", prediction_schema["required"])
+        advice_schema = forecast_schema(Settings.load())["properties"]["strategic_advice"]
+        self.assertEqual(
+            set(advice_schema["required"]),
+            {
+                "colonial_reinforce",
+                "colonial_attack",
+                "warden_reinforce",
+                "warden_attack",
+            },
+        )
+        self.assertIn("strategic_advice", forecast_schema(Settings.load())["required"])
 
     def test_same_faction_capture_is_dropped_before_validation(self) -> None:
         value = {

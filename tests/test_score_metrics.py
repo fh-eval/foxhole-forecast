@@ -53,6 +53,7 @@ class ScoreMetricsTests(unittest.TestCase):
                 "rank": 1,
                 "tranche": "IMMEDIATE",
                 "crps_minutes": 12,
+                "eta_error_minutes": 15,
                 "selection_capture_observed": True,
                 "selection_transition_observed": True,
                 "selection_exact_outcome": True,
@@ -62,6 +63,7 @@ class ScoreMetricsTests(unittest.TestCase):
                 "rank": 2,
                 "tranche": "IMMEDIATE",
                 "crps_minutes": 20,
+                "eta_error_minutes": 240,
                 "selection_capture_observed": False,
                 "selection_transition_observed": True,
                 "selection_exact_outcome": True,
@@ -71,6 +73,7 @@ class ScoreMetricsTests(unittest.TestCase):
                 "rank": 5,
                 "tranche": "EXTENDED",
                 "crps_minutes": 30,
+                "eta_error_minutes": None,
                 "selection_capture_observed": True,
                 "selection_transition_observed": True,
                 "selection_exact_outcome": False,
@@ -85,9 +88,66 @@ class ScoreMetricsTests(unittest.TestCase):
         self.assertEqual(summary["long_capture_rate"], 1)
         self.assertEqual(summary["transition_rate"], 1)
         self.assertAlmostEqual(summary["exact_outcome_rate"], 2 / 3)
+        self.assertEqual(summary["actionable_exact_outcome_hits"], 1)
+        self.assertEqual(summary["actionable_exact_outcome_bets"], 3)
+        self.assertAlmostEqual(summary["actionable_exact_outcome_rate"], 1 / 3)
+        self.assertEqual(summary["short_actionable_exact_outcome_hits"], 1)
+        self.assertEqual(summary["short_actionable_exact_outcome_bets"], 2)
+        self.assertEqual(summary["long_actionable_exact_outcome_hits"], 0)
+        self.assertEqual(summary["long_actionable_exact_outcome_bets"], 1)
+        self.assertEqual(summary["transition_exact_outcome_hits"], 2)
+        self.assertEqual(summary["transition_exact_outcome_bets"], 3)
+        self.assertAlmostEqual(summary["transition_exact_outcome_rate"], 2 / 3)
         self.assertEqual(summary["top_rank_capture_rate"], 1)
         self.assertAlmostEqual(summary["capture_baseline_rate"], 1 / 3)
         self.assertEqual(summary["capture_lift"], 2)
+
+    def test_actionable_exact_outcome_keeps_all_scoreable_bets_in_denominator(self) -> None:
+        bets = [
+            {
+                "tranche": "IMMEDIATE",
+                "crps_minutes": 10,
+                "eta_error_minutes": 180,
+                "selection_capture_observed": True,
+                "selection_transition_observed": True,
+                "selection_exact_outcome": True,
+            },
+            {
+                "tranche": "IMMEDIATE",
+                "crps_minutes": 20,
+                "eta_error_minutes": 181,
+                "selection_capture_observed": True,
+                "selection_transition_observed": True,
+                "selection_exact_outcome": True,
+            },
+            {
+                "tranche": "EXTENDED",
+                "crps_minutes": 30,
+                "eta_error_minutes": None,
+                "selection_capture_observed": False,
+                "selection_transition_observed": False,
+                "selection_exact_outcome": False,
+            },
+            {
+                "tranche": "EXTENDED",
+                "crps_minutes": None,
+                "eta_error_minutes": 10,
+                "selection_capture_observed": None,
+                "selection_transition_observed": None,
+                "selection_exact_outcome": None,
+            },
+        ]
+
+        summary = summarize_selection(bets)
+
+        self.assertEqual(summary["actionable_exact_outcome_hits"], 1)
+        self.assertEqual(summary["actionable_exact_outcome_bets"], 3)
+        self.assertAlmostEqual(summary["actionable_exact_outcome_rate"], 1 / 3)
+        self.assertEqual(summary["short_actionable_exact_outcome_rate"], 0.5)
+        self.assertEqual(summary["long_actionable_exact_outcome_rate"], 0)
+        self.assertEqual(summary["transition_exact_outcome_hits"], 2)
+        self.assertEqual(summary["transition_exact_outcome_bets"], 2)
+        self.assertEqual(summary["transition_exact_outcome_rate"], 1)
 
 
 if __name__ == "__main__":

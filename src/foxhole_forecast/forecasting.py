@@ -434,6 +434,24 @@ def _freeze_evidence(
             if metric:
                 evidence["value"] = metric.get("value")
                 evidence["observed_at"] = metric.get("observed_at")
+    advice = frozen.get("strategic_advice")
+    if isinstance(advice, dict):
+        for recommendation in advice.values():
+            if not isinstance(recommendation, dict):
+                continue
+            base = bases.get(recommendation.get("base_id"), {})
+            recommendation["current_team"] = base.get(
+                "current_owner", base.get("team")
+            )
+            recommendation["base_name"] = base.get("name")
+            recommendation["map_name"] = base.get("map_name")
+            recommendation["icon_type"] = base.get("icon_type")
+            recommendation["base_type"] = base.get("base_type")
+            for evidence in recommendation.get("evidence", []):
+                metric = metrics.get(evidence.get("metric_id"))
+                if metric:
+                    evidence["value"] = metric.get("value")
+                    evidence["observed_at"] = metric.get("observed_at")
     for base in frozen.get("base_forecasts", []):
         for event in base.get("events", []):
             for evidence in event.get("evidence", []):

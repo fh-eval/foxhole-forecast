@@ -1,0 +1,106 @@
+---
+import "../styles/global.css";
+
+const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content="A beginner-friendly walkthrough of the Foxhole Forecast prompt and evidence flow." />
+    <title>Prompt Flow · Foxhole Forecast</title>
+  </head>
+  <body>
+    <header class="method-masthead">
+      <div class="masthead__eyebrow">PROMPT FLOW · SAME CUTOFF, FROZEN EVIDENCE, OBSERVED RESULTS</div>
+      <div class="method-hero page-width">
+        <div>
+          <p class="kicker">Inside one forecast round</p>
+          <h1>From scout packet<br /><span>to settlement</span></h1>
+          <p class="sublede">This is the data path behind a round. It separates what a model saw, what it recommended, what it predicted, and what the public API later observed.</p>
+        </div>
+        <a class="method-back" href={basePath}>← Return to dashboard</a>
+      </div>
+    </header>
+
+    <nav class="section-nav" aria-label="Prompt flow navigation">
+      <div class="page-width">
+        <a href={basePath}>Live dashboard</a>
+        <a href={`${basePath}predictions/`}>Round history</a>
+        <a href={`${basePath}history/`}>Summary archive</a>
+      </div>
+    </nav>
+
+    <main class="prompt-flow-page page-width">
+      <section class="method-intro prompt-flow-intro">
+        <p class="kicker">The basic idea</p>
+        <p>Every model gets a time-stamped snapshot, not a live feed. It first writes a short war-desk dispatch and chooses regions worth inspecting. It then receives detailed history for those regions and makes eight timed predictions plus four separate strategic recommendations.</p>
+        <aside class="method-callout"><strong>Important distinction</strong><span>The eight predictions are scored. Recommendations are neutral, unscored adviser notes. Players did not see or act on them, so later activity cannot prove that a recommendation caused anything.</span></aside>
+      </section>
+
+      <section class="flow-section" aria-labelledby="flow-title">
+        <div class="scoring-section__heading"><p class="kicker">01–07</p><h2 id="flow-title">One round, step by step</h2></div>
+        <div class="flow-timeline">
+          <article class="flow-step"><span>01</span><div><h3>Scout packet</h3><p>At a shared UTC cutoff, the model sees the public whole-map packet: ownership, recent base events, casualty pace, and enlistment activity.</p><small>Same cutoff for every participating model.</small></div></article>
+          <article class="flow-step"><span>02</span><div><h3>Newspaper summary + region choices</h3><p>The scout writes a compact, neutral newspaper-style summary and selects up to six regions whose detailed history might help with base-ownership forecasts.</p><small>This summary is archived as a model briefing.</small></div></article>
+          <article class="flow-step"><span>03</span><div><h3>Detailed packet</h3><p>The model receives deeper, cutoff-safe history for exactly those selected regions. It does not get to add facts from after the cutoff.</p><small>Region selection is itself part of what we can inspect.</small></div></article>
+          <article class="flow-step"><span>04</span><div><h3>Eight timed predictions</h3><p>The model names eight different strategic bases, what should happen, an exact UTC ETA, a chance, a timing spread, and cited evidence.</p><small>Ranks 1–4 target the next six hours; ranks 5–8 target 6–24 hours after cutoff.</small></div></article>
+          <article class="flow-step"><span>05</span><div><h3>Four strategic recommendations</h3><p>It also suggests one base for each neutral prompt: Colonial reinforce, Colonial attack, Warden reinforce, and Warden attack. These are advisory notes, not scoreable bets.</p><small>Recommendations carry their own reason and evidence.</small></div></article>
+          <article class="flow-step"><span>06</span><div><h3>Evidence frozen</h3><p>The prediction, recommendation, cutoff, evidence IDs, and model response are retained. Later information cannot be edited into the original call.</p><small>That is what makes a forecast prospective rather than hindsight.</small></div></article>
+          <article class="flow-step"><span>07</span><div><h3>15-minute observations and settlement</h3><p>We continue polling the official API. Ownership transitions are observed in intervals, then the eight predictions are scored against those observations and their deadlines.</p><small>Recommendations can be compared descriptively with later enlistment, casualty, and ownership activity—but not treated as causal.</small></div></article>
+        </div>
+      </section>
+
+      <section class="prompt-example-section" aria-labelledby="examples-title">
+        <div class="scoring-section__heading"><p class="kicker">Illustrative, trimmed examples</p><h2 id="examples-title">What the model actually returns</h2></div>
+        <p class="method-caption">The examples below show the shape of the exchange with fictional values. The forecast response contains both the predictions and strategic-advice blocks shown separately here. They are intentionally shortened; the exact prompt files remain available in the repository.</p>
+        <div class="prompt-example-grid">
+          <details class="prompt-example" open>
+            <summary>Scout response</summary>
+            <pre><code>&#123;
+  "war_summary": "FIELD DESK · Day 113 — Oarbreaker remains the busiest front...",
+  "selected_regions": ["OarbreakerHex", "ClahstraHex", "MooringCountyHex"]
+&#125;</code></pre>
+          </details>
+          <details class="prompt-example">
+            <summary>Forecast response</summary>
+            <pre><code>&#123;
+  "predictions": [{
+    "rank": 1,
+    "base_id": "OarbreakerHex:example",
+    "outcome": "CAPTURED_BY_COLONIALS",
+    "eta_utc": "2026-08-24T08:15:00Z",
+    "confidence": 0.62,
+    "sigma_minutes": 45,
+    "evidence": [{"metric_id": "region.OarbreakerHex.totalEnlistments.rate_1h_per_hour", "relevance": 8}]
+  &#125;]
+&#125;</code></pre>
+          </details>
+          <details class="prompt-example">
+            <summary>Strategic recommendations</summary>
+            <pre><code>&#123;
+  "strategic_advice": {
+    "colonial_reinforce": {
+      "base_id": "OarbreakerHex:example",
+      "reason": "Recent pressure and ownership changes make this a fragile point.",
+      "evidence": [{"metric_id": "region.OarbreakerHex.wardenCasualties.rate_1h_per_hour", "relevance": 7}]
+    &#125;
+  &#125;
+&#125;</code></pre>
+          </details>
+        </div>
+      </section>
+
+      <section class="prompt-access-section" aria-labelledby="prompt-access-title">
+        <div class="scoring-section__heading"><p class="kicker">Full source text</p><h2 id="prompt-access-title">Read the exact prompts</h2></div>
+        <p>The live page keeps examples readable, while the repository remains the source of truth for the full markdown, including output rules and validation constraints.</p>
+        <div class="prompt-links"><a href="https://github.com/fh-eval/foxhole-forecast/blob/main/prompts/scout.md" rel="noreferrer">Open full scout prompt ↗</a><a href="https://github.com/fh-eval/foxhole-forecast/blob/main/prompts/forecast.md" rel="noreferrer">Open full forecast prompt ↗</a><a href="https://github.com/fh-eval/foxhole-forecast/tree/main/prompts" rel="noreferrer">Browse all prompt versions ↗</a></div>
+        <p class="method-caption">The prompt asks for facts supported by the packet. It does not grant access to player communications, hidden inventories, or an in-game computer-use agent.</p>
+      </section>
+    </main>
+
+    <footer><div class="page-width"><strong>FOXHOLE FORECAST</strong><a href={basePath}>Live dashboard</a></div></footer>
+  </body>
+</html>

@@ -9,52 +9,42 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
-    <meta name="description" content="Browse open and resolved Foxhole Forecast model predictions." />
-    <title>Prediction Browser · Foxhole Forecast</title>
+    <meta name="description" content="History of Foxhole Forecast prediction rounds, grouped by war and shared three-hour round." />
+    <title>Round History · Foxhole Forecast</title>
   </head>
   <body>
     <header class="method-masthead">
-      <div class="masthead__eyebrow">CURRENT PROTOCOL · OPEN AND RESOLVED BETS</div>
+      <div class="masthead__eyebrow">PROSPECTIVE ROUND HISTORY · SHARED THREE-HOUR CUTOFFS</div>
       <div class="method-hero prediction-hero page-width">
         <div>
-          <p class="kicker">Prediction browser</p>
-          <h1>Every call<br /><span>on the board</span></h1>
-          <p class="sublede">Filter the current evaluation by settlement state and model. The table scrolls independently so the archive can grow without taking over the main dashboard.</p>
+          <p class="kicker">Prediction round history</p>
+          <h1>Every round<br /><span>on record</span></h1>
+          <p class="sublede">The archive is organized the way the experiment ran: by war, then by one shared three-hour UTC round. Open a round to compare each model’s briefing, ranked calls, evidence, and settlement.</p>
         </div>
         <a class="method-back" href={basePath}>← Return to dashboard</a>
       </div>
     </header>
 
-    <nav class="section-nav" aria-label="Prediction navigation">
+    <nav class="section-nav" aria-label="Round history navigation">
       <div class="page-width">
         <a href={basePath}>Live dashboard</a>
-        <a href={`${basePath}#rounds`}>Prediction rounds</a>
-        <a href={`${basePath}scoring/`}>Scoring details</a>
+        <a href={`${basePath}history/`}>Summary archive</a>
+        <a href={`${basePath}#scoreboard`}>Adviser scorecard</a>
       </div>
     </nav>
 
     <main class="prediction-page page-width">
-      <section class="section-block prediction-browser-section">
+      <section class="section-block prediction-browser-section round-history-section">
         <div class="section-heading section-heading--controls">
-          <div><p class="kicker">Current event-outcome protocol</p><h2>Model calls</h2></div>
+          <div><p class="kicker">Newest first</p><h2>Shared prediction rounds</h2></div>
           <div class="prediction-controls">
-            <div class="segmented" role="group" aria-label="Prediction status">
-              <button class="active" data-bet-view="open">Open</button>
-              <button data-bet-view="resolved">Resolved</button>
-            </div>
-            <label class="select-label">Model <select id="prediction-model"><option value="all">All models</option></select></label>
+            <label class="select-label">War <select id="round-war"><option value="all">All wars</option></select></label>
+            <label class="select-label">Model <select id="round-model"><option value="all">All models</option></select></label>
           </div>
         </div>
-        <p class="plain-note"><strong>Reading a call:</strong> the percentage is the model's claimed chance that its named outcome happens by the deadline. The timing spread shows how tightly it placed the event. Resolved calls show whole forecast error (CRPS), where lower is better and zero is perfect.</p>
-        <p class="prediction-browser__summary" id="prediction-summary">Loading predictions…</p>
-        <div class="table-shell prediction-browser">
-          <table>
-            <thead><tr><th>Model</th><th>Prediction and supporting evidence</th><th>Result / score</th></tr></thead>
-            <tbody id="prediction-rows"></tbody>
-          </table>
-          <p id="prediction-empty" class="empty-state" hidden>No predictions in this view yet.</p>
-        </div>
-        <p class="method-version">Predictions are read from the same canonical eight-bet model entries used by the leaderboard. The static dataset retains the 500 most recent entries; the dashboard groups participants into shared three-hour UTC rounds.</p>
+        <p class="plain-note"><strong>Why group them?</strong> Every participating model received the same round cutoff. Comparing models inside that shared window is more informative than reading an unstructured stream of individual bets.</p>
+        <p class="prediction-browser__summary" id="round-summary">Loading round history…</p>
+        <div id="round-history" class="round-history-list"></div>
       </section>
     </main>
 
@@ -62,22 +52,15 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 
     <script>
       // @ts-nocheck
-      const element = (tag, className, text) => {
-        const value = document.createElement(tag);
-        if (className) value.className = className;
-        if (text !== undefined) value.textContent = String(text);
-        return value;
-      };
+      const element = (tag, className, text) => { const value = document.createElement(tag); if (className) value.className = className; if (text !== undefined) value.textContent = String(text); return value; };
       const percentage = (value) => value == null || !Number.isFinite(Number(value)) ? "—" : `${(100 * Number(value)).toFixed(1)}%`;
       const number = (value) => new Intl.NumberFormat().format(Number(value) || 0);
       const eventLabel = (value) => String(value || "").replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
       const teamLabel = (value) => value === "NONE" ? "Neutral / destroyed" : eventLabel(value);
       const regionLabel = (value) => String(value || "Unknown region").replace(/Hex$/, "").replace(/([a-z])([A-Z])/g, "$1 $2");
-      const predictionTime = (value) => value ? new Intl.DateTimeFormat(undefined, {
-        month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC",
-      }).format(new Date(value)) + " UTC" : "an unknown time";
       const formatDate = (value) => value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value)) + " UTC" : "—";
-      const duration = (minutes) => minutes == null ? "—" : minutes < 60 ? `${Math.round(minutes)}m` : `${(minutes / 60).toFixed(1)}h`;
+      const predictionTime = (value) => value ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC" }).format(new Date(value)) + " UTC" : "an unknown time";
+      const duration = (minutes) => minutes == null ? "—" : Number(minutes) < 60 ? `${Math.round(Number(minutes))}m` : `${(Number(minutes) / 60).toFixed(1)}h`;
       const crps = (minutes) => minutes == null || !Number.isFinite(Number(minutes)) ? "—" : `${Number(minutes).toFixed(2)}m`;
       const evidenceValue = (item) => {
         if (item.value == null) return "value unavailable";
@@ -85,39 +68,20 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const formatted = number(item.value);
         return String(item.metric_id).includes(".delta_") && Number(item.value) > 0 ? `+${formatted}` : formatted;
       };
-      const evidenceChip = (item) => {
-        const chip = element("span", "evidence-chip", `${item.label || item.metric_id}: ${evidenceValue(item)} · relevance ${item.relevance}/10`);
-        if (item.observed_at) chip.title = `Metric observed ${formatDate(item.observed_at)}`;
-        return chip;
-      };
+      const evidenceChip = (item) => { const chip = element("span", "evidence-chip", `${item.label || item.metric_id}: ${evidenceValue(item)} · relevance ${item.relevance}/10`); if (item.observed_at) chip.title = `Metric observed ${formatDate(item.observed_at)}`; return chip; };
       const factionName = (team) => element("span", `faction-name faction-name--${String(team || "none").toLowerCase()}`, teamLabel(team));
-      const baseIdentity = (bet) => element(
-        "strong",
-        `base-identity base-identity--${String(bet.current_team || "none").toLowerCase()}`,
-        `${bet.base_type || "Strategic Base"} ${bet.base_name || "Unknown base"}`,
-      );
+      const baseIdentity = (bet) => element("strong", `base-identity base-identity--${String(bet.current_team || "none").toLowerCase()}`, `${bet.base_type || "Strategic Base"} ${bet.base_name || "Unknown base"}`);
 
       function predictionHeadline(bet) {
         const line = element("p", "prediction-headline");
-        const sigmaSource = bet.sigma_source === "inferred_from_confidence" ? " (inferred)" : "";
-        const sigma = bet.sigma_minutes == null ? "" : ` · timing spread ${duration(Number(bet.sigma_minutes))}${sigmaSource}`;
-        const confidence = element("strong", "prediction-headline__confidence", `${percentage(bet.confidence)} chance${sigma}`);
-        line.append(confidence, document.createTextNode(": "), baseIdentity(bet));
-        if (bet.predicted_outcome === "DESTROYED") {
-          line.append(document.createTextNode(" will be destroyed at "));
-        } else if (bet.predicted_outcome === "SELF_CAPTURE") {
-          line.append(document.createTextNode(" will be destroyed (predicted faction would capture its own base) at "));
-        } else {
+        const outcome = bet.predicted_outcome || bet.outcome;
+        const spread = bet.sigma_minutes == null ? "" : ` · timing spread ${duration(bet.sigma_minutes)}${bet.sigma_source === "inferred_from_confidence" ? " (inferred)" : ""}`;
+        line.append(element("strong", "prediction-headline__confidence", `${percentage(bet.confidence)} chance${spread}`), document.createTextNode(": "), baseIdentity(bet));
+        if (outcome === "DESTROYED" || outcome === "SELF_CAPTURE") line.append(document.createTextNode(outcome === "SELF_CAPTURE" ? " will be destroyed (self-capture protocol) at " : " will be destroyed at "));
+        else {
           line.append(document.createTextNode(" will be captured by "));
-          const predictedFaction = bet.predicted_outcome === "CAPTURED_BY_WARDENS"
-            ? "WARDENS"
-            : bet.predicted_outcome === "CAPTURED_BY_COLONIALS"
-              ? "COLONIALS"
-              : null;
-          if (predictedFaction) line.append(factionName(predictedFaction));
-          else if (bet.current_team === "WARDENS") line.append(factionName("COLONIALS"));
-          else if (bet.current_team === "COLONIALS") line.append(factionName("WARDENS"));
-          else line.append(factionName("WARDENS"), document.createTextNode(" or "), factionName("COLONIALS"));
+          const faction = outcome === "CAPTURED_BY_WARDENS" ? "WARDENS" : outcome === "CAPTURED_BY_COLONIALS" ? "COLONIALS" : bet.current_team === "WARDENS" ? "COLONIALS" : bet.current_team === "COLONIALS" ? "WARDENS" : null;
+          if (faction) line.append(factionName(faction)); else line.append(factionName("WARDENS"), document.createTextNode(" or "), factionName("COLONIALS"));
           line.append(document.createTextNode(" at "));
         }
         line.append(element("time", "prediction-headline__time", predictionTime(bet.eta_utc)), document.createTextNode("."));
@@ -130,8 +94,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const evidence = element("div", "evidence-list");
         (items || []).forEach((item) => evidence.append(evidenceChip(item)));
         if (!items?.length) evidence.append(element("span", "evidence-empty", "No supporting evidence retained."));
-        wrapper.append(evidence);
-        return wrapper;
+        wrapper.append(evidence); return wrapper;
       }
 
       function predictionStatus(bet) {
@@ -139,123 +102,101 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         if (bet.status === "censored") return "Not scored · missing observations";
         if (bet.crps_minutes != null && bet.settlement_reason === "no_transition_by_deadline") return "Scored · no qualifying transition by deadline";
         if (bet.crps_minutes != null && bet.settlement_reason === "observed_transition") {
-          const observation = Number(bet.state_credit) === 1
-            ? "named outcome observed"
-            : Number(bet.state_credit) > 0
-              ? "related outcome observed"
-              : "different outcome observed";
-          const timing = bet.eta_error_minutes != null ? ` · ${bet.eta_error_minutes}m from ETA` : "";
-          return `Scored · ${observation}${timing}`;
+          const observation = Number(bet.state_credit) === 1 ? "named outcome observed" : Number(bet.state_credit) > 0 ? "related outcome observed" : "different outcome observed";
+          return `Scored · ${observation}${bet.eta_error_minutes != null ? ` · ${bet.eta_error_minutes}m from ETA` : ""}`;
         }
         if (bet.crps_minutes != null) return "Scored";
-        return eventLabel(bet.status);
+        return eventLabel(bet.status || "open");
       }
 
       function predictionResult(bet) {
         const result = element("div", "prediction-result");
-        const scored = bet.crps_minutes != null;
-        result.append(element("small", `status status--${scored ? "scored" : bet.status}`, predictionStatus(bet)));
-        if (scored) {
-          const badge = element("span", "prediction-score prediction-score--scored");
-          badge.append(element("span", "prediction-score__label", "Forecast error · CRPS"), element("strong", "", crps(bet.crps_minutes)));
-          result.append(badge);
-        }
+        result.append(element("small", `status status--${bet.crps_minutes != null ? "scored" : bet.status || "open"}`, predictionStatus(bet)));
+        if (bet.crps_minutes != null) { const badge = element("span", "prediction-score prediction-score--scored"); badge.append(element("span", "prediction-score__label", "Whole forecast error · CRPS"), element("strong", "", crps(bet.crps_minutes))); result.append(badge); }
         return result;
       }
 
-      let dashboard = null;
-      let betView = "open";
-      let modelFilter = "all";
-      let visibleSeries = new Set();
-
-      function isCompleteCurrentRound(round) {
-        const expected = dashboard?.methodology?.predictions_per_round ?? 8;
-        const predictions = round.predictions || [];
-        return round.protocol === dashboard?.methodology?.current_protocol
-          && predictions.length >= 1
-          && predictions.length <= expected
-          && predictions.every((bet) =>
-            ["CAPTURED", "CAPTURED_BY_WARDENS", "CAPTURED_BY_COLONIALS", "DESTROYED", "SELF_CAPTURE"].includes(bet.predicted_outcome)
-            && bet.base_name
-            && bet.base_type
-            && bet.current_team
-            && bet.confidence != null
-            && bet.sigma_minutes != null
-            && bet.eta_utc
-            && Array.isArray(bet.evidence)
-            && bet.evidence.length > 0
-          );
+      function renderBet(bet) {
+        const row = element("article", "round-bet");
+        const meta = element("div", "round-bet__meta");
+        meta.append(element("span", "", `#${bet.rank ?? "—"} · ${bet.tranche === "IMMEDIATE" ? "Next 6 hours" : bet.tranche === "EXTENDED" ? "Next day" : eventLabel(bet.tranche)} · ${regionLabel(bet.map_name)}`), predictionResult(bet));
+        row.append(meta, predictionHeadline(bet), supportingEvidence(bet.evidence)); return row;
       }
 
-      function renderPredictions() {
-        const rows = document.querySelector("#prediction-rows");
-        const empty = document.querySelector("#prediction-empty");
-        const summary = document.querySelector("#prediction-summary");
-        rows.replaceChildren();
-        const currentRounds = (dashboard.rounds || []).filter(isCompleteCurrentRound);
-        const dropped = currentRounds.reduce((total, round) => total + (round.dropped_predictions?.length || 0), 0);
-        const allBets = currentRounds.flatMap((round) =>
-          (round.predictions || []).map((bet) => ({
-            ...bet,
-            war_number: round.war_number,
-            round_slot: round.round_slot,
-          }))
-        );
-        const bets = allBets.filter((bet) =>
-          visibleSeries.has(bet.series_id)
-          && bet.predicted_outcome
-          && (betView === "open" ? bet.status === "open" : bet.status !== "open")
-          && (modelFilter === "all" || bet.series_id === modelFilter)
-        );
-        empty.hidden = bets.length > 0;
-        summary.textContent = `${number(bets.length)} ${betView} predictions${dropped ? ` · ${dropped} model error bet${dropped === 1 ? "" : "s"} dropped` : ""} · generated ${formatDate(dashboard.generated_at)}`;
-        bets.forEach((bet) => {
-          const row = document.createElement("tr");
-          const modelCell = element("td", "prediction-browser__model");
-          modelCell.append(
-            element("strong", "", bet.model_label),
-            element("small", "", `${bet.war_number ? `War ${bet.war_number} · ` : ""}${regionLabel(bet.map_name)} · ${formatDate(bet.cutoff)}`),
-          );
-          const predictionCell = element("td", "prediction-cell");
-          predictionCell.append(predictionHeadline(bet), supportingEvidence(bet.evidence));
-          const resultCell = element("td", "result-cell");
-          resultCell.append(predictionResult(bet));
-          row.append(modelCell, predictionCell, resultCell);
-          rows.append(row);
+      function renderStrategicAdvice(advice) {
+        if (!advice || typeof advice !== "object") return null;
+        const items = Object.entries(advice).filter(([, value]) => value && (value.base_name || value.base_id));
+        if (!items.length) return null;
+        const section = element("section", "strategic-advice");
+        section.append(element("small", "strategic-advice__label", "Strategic adviser note · separate from scored predictions"));
+        const list = element("div", "strategic-advice__grid");
+        items.forEach(([key, item]) => {
+          const card = element("article", "strategic-advice__item");
+          card.append(element("strong", "", eventLabel(key).replace("Colonial ", "Colonial: ").replace("Warden ", "Warden: ")), element("h4", "", `${item.base_type || "Strategic Base"} ${item.base_name || item.base_id}`), element("p", "", item.reason || "No reason retained."));
+          if (item.map_name || item.current_team) card.append(element("small", "", `${regionLabel(item.map_name)} · currently ${teamLabel(item.current_team)}`));
+          if (Array.isArray(item.evidence) && item.evidence.length) { const evidence = element("div", "evidence-list"); item.evidence.forEach((entry) => evidence.append(evidenceChip(entry))); card.append(evidence); }
+          list.append(card);
+        });
+        section.append(list); return section;
+      }
+
+      let dashboard = null; let warFilter = "all"; let modelFilter = "all";
+      const usableRound = (round) => Array.isArray(round.predictions) && round.predictions.length > 0 && round.predictions.some((bet) => bet.base_name && bet.eta_utc);
+
+      function roundGroups() {
+        const groups = new Map();
+        (dashboard.rounds || []).filter(usableRound).forEach((round) => {
+          if (warFilter !== "all" && String(round.war_id) !== warFilter) return;
+          const key = `${round.war_id || "unknown"}:${round.round_slot || round.cutoff}`;
+          if (!groups.has(key)) groups.set(key, { key, warId: round.war_id, warNumber: round.war_number, slot: round.round_slot || round.cutoff, end: round.round_end, participants: [] });
+          if (modelFilter === "all" || round.series_id === modelFilter) groups.get(key).participants.push(round);
+        });
+        const grouped = [...groups.values()].filter((group) => group.participants.length); const warSlots = new Map();
+        grouped.forEach((group) => { const key = String(group.warId || "unknown"); if (!warSlots.has(key)) warSlots.set(key, []); warSlots.get(key).push(group.slot); });
+        grouped.forEach((group) => { const slots = [...new Set(warSlots.get(String(group.warId || "unknown")))].sort((a, b) => new Date(a) - new Date(b)); group.roundNumber = slots.indexOf(group.slot) + 1; group.participants.sort((a, b) => String(a.model_label).localeCompare(String(b.model_label))); });
+        return grouped.sort((a, b) => new Date(b.slot) - new Date(a.slot));
+      }
+
+      function renderHistory() {
+        const list = document.querySelector("#round-history"); const summary = document.querySelector("#round-summary"); list.replaceChildren();
+        const groups = roundGroups();
+        summary.textContent = `${number(groups.length)} shared round${groups.length === 1 ? "" : "s"} · ${number(groups.reduce((count, group) => count + group.participants.length, 0))} model-round entries · newest first`;
+        if (!groups.length) { list.append(element("p", "empty-state", "No prediction rounds match these filters.")); return; }
+        const warGroups = new Map();
+        groups.forEach((group) => { const key = String(group.warId || "unknown"); if (!warGroups.has(key)) warGroups.set(key, { warNumber: group.warNumber, rounds: [] }); warGroups.get(key).rounds.push(group); });
+        [...warGroups.values()].forEach((war, warIndex) => {
+          const warSection = element("section", "round-war-archive");
+          const warHeading = element("div", "war-archive__heading"); warHeading.append(element("p", "kicker", "Filed by war"), element("h3", "", `War ${war.warNumber || "—"}`), element("span", "", `${war.rounds.length} shared rounds`)); warSection.append(warHeading);
+          const warList = element("div", "round-history-list");
+          war.rounds.forEach((group, index) => {
+          const details = element("details", "archive-round"); if (warIndex === 0 && index === 0 && warFilter === "all" && modelFilter === "all") details.open = true;
+          const summaryRow = element("summary", "archive-round__summary"); const resolved = group.participants.flatMap((round) => round.predictions || []).filter((bet) => bet.status && bet.status !== "open").length; const total = group.participants.reduce((count, round) => count + (round.predictions || []).length, 0); const end = group.end ? new Date(group.end) : new Date(new Date(group.slot).getTime() + 3 * 60 * 60 * 1000);
+          summaryRow.append(element("strong", "", `War ${group.warNumber || "—"} · Round ${String(group.roundNumber).padStart(2, "0")}`), element("time", "", `${formatDate(group.slot)}–${formatDate(end)}`), element("span", "status status--open", `${group.participants.length} models · ${resolved}/${total} calls resolved`));
+          const body = element("div", "archive-round__body");
+          group.participants.forEach((round) => {
+            const participant = element("details", "round-model"); const participantSummary = element("summary", "round-model__summary"); const resolvedCount = (round.predictions || []).filter((bet) => bet.status && bet.status !== "open").length;
+            participantSummary.append(element("strong", "", round.model_label || "Unknown model"), element("time", "", `Cutoff ${formatDate(round.cutoff)}`), element("span", `status status--${round.settlement_status || "open"}`, `${resolvedCount}/${round.predictions?.length || 0} resolved`));
+            const participantBody = element("div", "round-model__body"); participantBody.append(element("p", "briefing__copy", round.war_summary || "No briefing was retained for this round."), element("p", "region-list", (round.selected_regions || []).join(" · ") || "No selected regions"));
+            const advice = renderStrategicAdvice(round.strategic_advice); if (advice) participantBody.append(advice);
+            const bets = element("div", "round__bets"); (round.predictions || []).forEach((bet) => bets.append(renderBet(bet))); participantBody.append(bets); participant.append(participantSummary, participantBody); body.append(participant);
+          });
+          details.append(summaryRow, body); warList.append(details);
+          });
+          warSection.append(warList); list.append(warSection);
         });
       }
 
       async function boot() {
         try {
-          const base = import.meta.env.BASE_URL.replace(/\/?$/, "/");
-          const response = await fetch(`${base}data/dashboard.json`, { cache: "no-store" });
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          dashboard = await response.json();
-          const currentRounds = (dashboard.rounds || []).filter(isCompleteCurrentRound);
-          visibleSeries = new Set(currentRounds.map((round) => round.series_id));
-          const models = (dashboard.models || []).filter((model) => visibleSeries.has(model.series_id));
-          const select = document.querySelector("#prediction-model");
-          models.forEach((model) => {
-            const option = element("option", "", model.label || model.series_id);
-            option.value = model.series_id;
-            select.append(option);
-          });
-          select.addEventListener("change", () => { modelFilter = select.value; renderPredictions(); });
-          document.querySelector("#generated-at").textContent = `Generated ${formatDate(dashboard.generated_at)}`;
-          renderPredictions();
-        } catch (error) {
-          const empty = document.querySelector("#prediction-empty");
-          empty.textContent = `Prediction data could not be loaded: ${error.message}`;
-          empty.hidden = false;
-          document.querySelector("#prediction-summary").textContent = "Dataset unavailable";
-        }
+          const base = import.meta.env.BASE_URL.replace(/\/?$/, "/"); const response = await fetch(`${base}data/dashboard.json`, { cache: "no-store" }); if (!response.ok) throw new Error(`HTTP ${response.status}`); dashboard = await response.json();
+          const rounds = (dashboard.rounds || []).filter(usableRound); const warSelect = document.querySelector("#round-war"); const modelSelect = document.querySelector("#round-model"); const wars = new Map(); const models = new Map();
+          rounds.forEach((round) => { wars.set(String(round.war_id), `War ${round.war_number || "—"}`); models.set(round.series_id, round.model_label || round.series_id); });
+          [...wars.entries()].sort((a, b) => b[1].localeCompare(a[1], undefined, { numeric: true })).forEach(([value, label]) => { const option = element("option", "", label); option.value = value; warSelect.append(option); });
+          [...models.entries()].sort((a, b) => a[1].localeCompare(b[1])).forEach(([value, label]) => { const option = element("option", "", label); option.value = value; modelSelect.append(option); });
+          warSelect.addEventListener("change", () => { warFilter = warSelect.value; renderHistory(); }); modelSelect.addEventListener("change", () => { modelFilter = modelSelect.value; renderHistory(); });
+          document.querySelector("#generated-at").textContent = `Generated ${formatDate(dashboard.generated_at)}`; renderHistory();
+        } catch (error) { document.querySelector("#round-summary").textContent = `Round history unavailable: ${error.message}`; }
       }
-
-      document.querySelectorAll("[data-bet-view]").forEach((button) => button.addEventListener("click", () => {
-        betView = button.dataset.betView;
-        document.querySelectorAll("[data-bet-view]").forEach((item) => item.classList.toggle("active", item === button));
-        if (dashboard) renderPredictions();
-      }));
       boot();
     </script>
   </body>

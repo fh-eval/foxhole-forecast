@@ -13,3 +13,12 @@ For every bet, copy one value exactly from that base's own `valid_outcomes`. Her
 `confidence` is the probability from 0.00 to 1.00 that the exact named outcome happens by three hours after your ETA. `sigma_minutes` is your timing uncertainty conditional on that event happening: give the standard deviation in minutes of a Normal event-time distribution centered on your ETA. It must be an integer from 15 to 180. Use a smaller sigma only when you can locate the event time tightly; confidence and sigma measure different uncertainties.
 
 Use only supplied metric IDs as evidence and rate each metric's relevance from 1 to 10. Please return only the requested JSON.
+
+After making the eight bets, give four short, symmetric strategic recommendations using bases from the supplied packet:
+
+- `colonial_reinforce`: one Colonial-owned base the Colonials should reinforce, and why.
+- `colonial_attack`: one Warden-owned base the Colonials should attack, and why.
+- `warden_reinforce`: one Warden-owned base the Wardens should reinforce, and why.
+- `warden_attack`: one Colonial-owned base the Wardens should attack, and why.
+
+For each recommendation, copy the exact `base_id`, write a concise reason, and cite 1-3 supplied metric IDs with relevance ratings in the same format as prediction evidence. You may choose a base from your eight bets, but you do not have to. Use only the packet. Do not invent stockpiles, troop movements, tactics, intentions, or intelligence the public data does not contain. These recommendations are collected as qualitative strategic-adviser evidence; they do not replace or alter the eight scoreable predictions, and we do not treat an unacted-upon recommendation as objectively proven right or wrong.

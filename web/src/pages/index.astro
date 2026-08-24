@@ -47,11 +47,12 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <a href="#war-data">Current war</a>
         <a href="#rounds">Prediction rounds</a>
         <a href="#briefings">Latest calls</a>
-        <a href={`${basePath}predictions/`}>Prediction browser</a>
-        <a href="#history">Track record</a>
+        <a href="#probability">CRPS details</a>
+        <a href={`${basePath}predictions/`}>Round history</a>
+        <a href={`${basePath}history/`}>Summary archive</a>
+        <a href={`${basePath}prompt-flow/`}>Prompt flow</a>
         <a href="#limitations">Limits</a>
         <a href="#method">Method</a>
-        <a href={`${basePath}scoring/`}>Scoring details</a>
       </div>
     </nav>
 
@@ -76,9 +77,9 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 
       <section id="scoreboard" class="section-block">
         <div class="section-heading">
-          <div><p class="kicker">First look</p><h2>What has each model shown so far?</h2></div>
+          <div><p class="kicker">First look</p><h2>Can the model pick where the map will move?</h2></div>
           <div class="score-heading-controls">
-            <p>Use this as a starting point, not a verdict. More settled calls make comparisons more useful; an early leader may simply have less evidence behind it.</p>
+            <p>This is the strategic-adviser question: did the model spend its limited calls on bases where something happened, name the result, and get close enough in time to be useful?</p>
             <div class="segmented" role="group" aria-label="Score history scope">
               <button class="active" data-score-scope="current">Current war</button>
               <button data-score-scope="all">All wars</button>
@@ -86,69 +87,27 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           </div>
         </div>
         <div class="adviser-guide">
-          <div><strong>Whole forecast</strong><span>Did the model assign probability to the right event at roughly the right time?</span></div>
-          <div><strong>Where it looks</strong><span>Did its chosen bases get captured more often than comparable bases in the field?</span></div>
-          <div><strong>How certain it sounds</strong><span>What chance and timing spread did it claim? Confidence describes the model; it is not proof that the model is calibrated.</span></div>
+          <div><strong>Found action</strong><span>The selected base changed ownership or became neutral before the call closed.</span></div>
+          <div><strong>Useful timed call</strong><span>The exact named result happened within three hours either side of the model’s ETA.</span></div>
+          <div><strong>Named the result</strong><span>Among bases that moved, did the model correctly distinguish the faction capture from destruction?</span></div>
         </div>
         <div class="compact-leaderboard">
-          <div class="subheading"><h3>Compact adviser comparison</h3><span>Plain-language view</span></div>
+          <div class="subheading"><h3>Strategic-adviser evidence</h3><span>Descriptive profiles, not one overall rank</span></div>
           <div class="table-caption table-caption--equation">
-            <p class="kicker">The two equations behind this table</p>
-            <p><strong>Whole forecast error (CRPS) = ∫ [forecast probability by time t − observed result by time t]² dt</strong></p>
-            <span>This adds up the disagreement between the model's probability-and-time curve and what the API observed. Lower is better; zero is perfect.</span>
-            <p><strong>Forecast quality = 100 × [1 − ½(near-term error ÷ 540) − ½(next-day error ÷ 1,620)]</strong></p>
-            <span>This turns the two errors into a readable index with equal weight for both horizons. Higher is better, but this number is not percent accuracy.</span>
+            <p class="kicker">The main success test</p>
+            <p><strong>Useful timed-call rate = exact named outcomes within ±3 hours of ETA ÷ all scoreable calls</strong></p>
+            <span>False alarms, wrong outcomes, and otherwise-correct events more than three hours early or late remain misses. Calls we cannot fairly score are excluded and shown in the sample column.</span>
           </div>
           <div class="table-shell">
             <table class="adviser-table" aria-label="Compact adviser comparison">
-              <thead><tr><th>Model</th><th>Overall quality<small>0–100 · higher is better</small></th><th>Scored calls</th><th>Near term<small>0–6 hours</small></th><th>Next day<small>6–24 hours</small></th><th>Finds captures<small>vs. field</small></th></tr></thead>
+              <thead><tr><th>Model</th><th>Useful timed calls<small>exact result within ±3h</small></th><th>Found action<small>any base movement</small></th><th>Named result<small>exact, given movement</small></th><th>Strongest picks<small>ranks #1 and #5 captured</small></th><th>Evidence<small>how much data</small></th></tr></thead>
               <tbody id="adviser-rows" aria-live="polite"></tbody>
             </table>
           </div>
           <p id="adviser-empty" class="empty-state" hidden>No model has completed a full round under the current protocol yet.</p>
         </div>
         <details class="progressive-detail">
-          <summary>Show the full scoring table and technical measures</summary>
-        <div class="table-caption table-caption--equation table-caption--detail">
-          <p class="kicker">Same score, more detail</p>
-          <p><strong>Overall forecast quality = 100 × [1 − ½(near-term error ÷ 540) − ½(next-day error ÷ 1,620)]</strong></p>
-          <span>The technical table below shows the ingredients behind the compact comparison.</span>
-        </div>
-        <div class="table-shell">
-          <table class="score-table" aria-describedby="score-guide">
-            <thead>
-              <tr>
-                <th>Rank</th>
-                <th>Model</th>
-                <th>Overall quality<small>Balanced score · higher ↑</small></th>
-                <th>Near-term forecast error<small>CRPS · 0–6h calls · lower ↓</small></th>
-                <th>Next-day forecast error<small>CRPS · 6–24h calls · lower ↓</small></th>
-                <th>Claimed chance<small>Mean confidence</small></th>
-                <th>Claimed timing spread<small>Mean sigma</small></th>
-                <th>Typical near-term target<small>Median after cutoff</small></th>
-                <th>Typical next-day target<small>Median after cutoff</small></th>
-                <th>Timing error<small>Matched events · lower ↓</small></th>
-                <th>Call status<small>Scored / not scored / open</small></th>
-              </tr>
-            </thead>
-            <tbody id="score-rows" aria-live="polite"></tbody>
-          </table>
-          <p id="score-empty" class="empty-state" hidden>No model has completed a full round under the current protocol yet.</p>
-        </div>
-        <dl id="score-guide" class="score-guide">
-          <div><dt>Overall forecast quality <span>(balanced CRPS)</span></dt><dd>A 0–100 summary of outcome and timing quality, giving both horizons equal weight. Higher is better; it is not percent accuracy.</dd></div>
-          <div><dt>Near-term / next-day error <span>(CRPS)</span></dt><dd>Average distance between a model’s probability curve and what the API observed. Lower is better; 0 minutes is perfect. Use these to see a model’s preferred horizon.</dd></div>
-          <div><dt>Stated chance <span>(confidence)</span></dt><dd>The model’s chance that its named outcome happens by the deadline. Compare it with outcomes over many calls; a high average alone is not proof of calibration.</dd></div>
-          <div><dt>Timing window <span>(sigma)</span></dt><dd>How spread out the model says its event time might be. A wider window admits uncertainty; a narrow one is a stronger, riskier claim.</dd></div>
-          <div><dt>Typical targets</dt><dd>The median time each model aims for in the two required horizons. This helps describe its style, not whether it was right.</dd></div>
-          <div><dt>Timing error <span>(ETA error)</span></dt><dd>How far a matched event landed from the model’s ETA. Use it to judge whether a model is useful for planning a response.</dd></div>
-          <div><dt>Not scored <span>(censored)</span></dt><dd>Observations were incomplete, so we do not turn missing data into either credit or a miss.</dd></div>
-        </dl>
-        </details>
-        <div class="selection-heading">
-          <div><p class="kicker">A second test</p><h3>Can the model pick where the map will move?</h3></div>
-          <p>This is the operational question: did a model spend one of its picks on a base where something happened? It is separate from confidence and from the exact timing score.</p>
-        </div>
+          <summary>Show the full base-selection breakdown</summary>
         <div class="table-caption table-caption--equation">
           <p class="kicker">The comparison with the field</p>
           <p><strong>Finds captures vs. field = model capture rate ÷ eligible-field capture rate</strong></p>
@@ -176,6 +135,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <div><dt>Exact outcome</dt><dd>The selected base did exactly what the model named. This is stricter than finding a base where anything happened.</dd></div>
           <div><dt>Finds action vs. field <span>(capture lift)</span></dt><dd>1.00× matches comparable strategic bases available at the cutoff; 1.40× finds captures 40% more often. Use this to judge where the model spends its attention.</dd></div>
         </dl>
+        </details>
       </section>
 
       <section class="section-block evidence-caution" aria-labelledby="evidence-caution-title">
@@ -186,7 +146,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <div class="limitations-grid">
           <article><h3>Samples differ</h3><p>Models have different numbers of scored, open, unscored, dropped, and failed calls. Read every rate with its hit and sample counts.</p></article>
           <article><h3>Rounds are related</h3><p>Several models may forecast the same front repeatedly. A collection of bets from one war is not the same as many independent experiments.</p></article>
-          <article><h3>Timing has a catch</h3><p>Simple ETA error exists only when an event was matched. Whole forecast error (CRPS) is the fairer overview because it also retains confident calls where nothing happened.</p></article>
+          <article><h3>Timing has a catch</h3><p>Simple ETA error exists only when an event was matched. The useful-call rate keeps false alarms in view, while CRPS later shows whether the model’s stated probabilities were appropriately cautious.</p></article>
         </div>
       </section>
 
@@ -229,12 +189,42 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <div id="briefing-list" class="briefing-list"></div>
       </section>
 
-      <section id="history" class="section-block">
-        <div class="section-heading section-heading--controls">
-          <div><p class="kicker">Look for consistency</p><h2>Model track record</h2></div>
-          <label class="select-label">Model <select id="history-model"></select></label>
+      <section id="probability" class="section-block">
+        <div class="section-heading">
+          <div><p class="kicker">Probability and timing diagnostics</p><h2>Were its probabilities honest?</h2></div>
+          <p>This technical view comes after the adviser evidence because a cautious model can earn good probability scores without being especially good at choosing bases. CRPS remains useful; it simply answers a narrower question.</p>
         </div>
-        <ol id="history-list" class="history-list"></ol>
+        <div class="table-caption table-caption--equation">
+          <p class="kicker">Whole forecast error</p>
+          <p><strong>CRPS = ∫ [forecast probability by time t − observed result by time t]² dt</strong></p>
+          <span>This adds up disagreement between the model’s probability-and-time curve and what the API observed. Lower is better; zero is perfect. Near-term and next-day calls stay separate because their time windows differ.</span>
+        </div>
+        <div class="table-shell">
+          <table class="score-table probability-table" aria-describedby="score-guide">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Near-term forecast error<small>CRPS · 0–6h calls · lower ↓</small></th>
+                <th>Next-day forecast error<small>CRPS · 6–24h calls · lower ↓</small></th>
+                <th>Claimed chance<small>Mean confidence</small></th>
+                <th>Claimed timing spread<small>Mean sigma</small></th>
+                <th>Typical near-term target<small>Median after cutoff</small></th>
+                <th>Typical next-day target<small>Median after cutoff</small></th>
+                <th>Matched timing error<small>Matched events only · lower ↓</small></th>
+                <th>Call status<small>Scored / not scored / open</small></th>
+              </tr>
+            </thead>
+            <tbody id="score-rows" aria-live="polite"></tbody>
+          </table>
+          <p id="score-empty" class="empty-state" hidden>No model has scoreable probability forecasts under the current protocol yet.</p>
+        </div>
+        <dl id="score-guide" class="score-guide">
+          <div><dt>Near-term / next-day error <span>(CRPS)</span></dt><dd>The average whole-forecast error in minutes. Lower is better, but this does not by itself show whether the model selected strategically useful bases.</dd></div>
+          <div><dt>Stated chance <span>(confidence)</span></dt><dd>The model’s probability that its named outcome happens by the deadline. A low-confidence non-event can score well even though it was not useful advice.</dd></div>
+          <div><dt>Timing window <span>(sigma)</span></dt><dd>How spread out the model says the event time might be. A narrow window is a stronger and riskier timing claim.</dd></div>
+          <div><dt>Matched timing error <span>(ETA error)</span></dt><dd>Distance from ETA only when a relevant transition occurred. It excludes false alarms, so never read it alone.</dd></div>
+          <div><dt>Not scored <span>(censored)</span></dt><dd>Observation coverage was incomplete or the war ended before a fair result was possible.</dd></div>
+        </dl>
       </section>
 
       <section id="limitations" class="section-block limitations">
@@ -256,7 +246,16 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <article><span>02</span><h3>Forecast</h3><p>Each model scouts six regions, then makes eight ranked calls: four for the next six hours and four for the following 6–24 hours.</p></article>
           <article><span>03</span><h3>Settle</h3><p>Later API observations tell us whether each call’s named outcome happened and how close its timing was. Near-term and next-day performance count equally.</p></article>
         </div>
-        <a class="method-link" href={`${basePath}scoring/`}>Read the complete scoring method and rationale →</a>
+        <details class="progressive-detail method-detail">
+          <summary>Show settlement rules and edge cases</summary>
+          <div class="rule-grid rule-grid--two">
+            <article class="rule-card"><h3>When a call closes</h3><p>Each prediction stays open until three hours after its ETA. No qualifying transition by then is a scored miss when observation coverage is adequate.</p></article>
+            <article class="rule-card"><h3>What counts as close</h3><p>The named faction capture or destruction receives full outcome credit. Confusing capture with destruction receives 0.75 because the model still anticipated loss of the current owner.</p></article>
+            <article class="rule-card"><h3>Why timing is an interval</h3><p>Fifteen-minute polling tells us that an event happened between two observations, not its exact second. Scoring averages over that observed interval.</p></article>
+            <article class="rule-card"><h3>When we do not score</h3><p>Missing coverage, an ambiguous transition interval, or a war ending before the scoring window closes can leave a prediction unscored rather than turning missing evidence into a miss.</p></article>
+          </div>
+        </details>
+        <a class="method-link" href={`${basePath}prompt-flow/`}>See the exact prompt and evidence flow →</a>
         <p class="fine-print">Foxhole Forecast is an independent, non-commercial experiment. Foxhole is developed by Siege Camp. Model summaries are predictions, not gameplay advice.</p>
       </section>
     </main>
@@ -272,7 +271,6 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         return value;
       };
       const formatDate = (value) => value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value)) + " UTC" : "—";
-      const decimal = (value) => value == null || !Number.isFinite(Number(value)) ? "—" : Number(value).toFixed(2);
       const number = (value) => new Intl.NumberFormat().format(Number(value) || 0);
       const eventLabel = (value) => String(value || "").replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
       const trancheLabel = (value) => value === "IMMEDIATE"
@@ -336,6 +334,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       const crps = (minutes) => minutes == null || !Number.isFinite(Number(minutes)) ? "—" : `${Number(minutes).toFixed(2)}m`;
       const percentage = (value) => value == null || !Number.isFinite(Number(value)) ? "—" : `${(100 * Number(value)).toFixed(1)}%`;
       const ratio = (value) => value == null || !Number.isFinite(Number(value)) ? "—" : `${Number(value).toFixed(2)}×`;
+      const firstDefined = (...values) => values.find((value) => value != null);
 
       function modelBehavior(model, rounds) {
         const bets = rounds.filter((round) => round.series_id === model.series_id).flatMap((round) => round.predictions || []);
@@ -355,12 +354,6 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const longCrpsValues = trancheCrps("EXTENDED");
         const shortCrpsMinutes = mean(shortCrpsValues);
         const longCrpsMinutes = mean(longCrpsValues);
-        const scoreConfig = dashboard?.methodology?.forecast_score || {};
-        const forecastScore = shortCrpsMinutes == null || longCrpsMinutes == null
-          ? null
-          : Math.max(0, Math.min(100, 100 * (1
-            - (scoreConfig.short_weight ?? 0.5) * shortCrpsMinutes / (scoreConfig.short_crps_scale_minutes ?? 540)
-            - (scoreConfig.long_weight ?? 0.5) * longCrpsMinutes / (scoreConfig.long_crps_scale_minutes ?? 1620))));
         const count = (status) => bets.filter((bet) => bet.status === status).length;
         const selectionBets = scoreable.filter((bet) => bet.selection_capture_observed != null);
         const selectionGroup = (predicate) => selectionBets.filter(predicate);
@@ -370,6 +363,14 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const shortSelection = selectionGroup((bet) => bet.tranche === "IMMEDIATE");
         const longSelection = selectionGroup((bet) => bet.tranche === "EXTENDED");
         const topSelection = selectionGroup((bet) => [1, 5].includes(Number(bet.rank)));
+        const transitioned = selectionGroup((bet) => bet.selection_transition_observed === true);
+        const actionable = selectionGroup((bet) => {
+          if (bet.selection_exact_outcome !== true) return false;
+          if (bet.eta_error_minutes != null) return Number(bet.eta_error_minutes) <= 180;
+          return bet.eta_error_max_minutes != null && Number(bet.eta_error_max_minutes) <= 180;
+        });
+        const shortActionable = actionable.filter((bet) => bet.tranche === "IMMEDIATE");
+        const longActionable = actionable.filter((bet) => bet.tranche === "EXTENDED");
         const captureBaselines = selectionBets
           .filter((bet) => bet.selection_capture_baseline != null)
           .map((bet) => Number(bet.selection_capture_baseline))
@@ -382,7 +383,6 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           scoreable,
           publishedCount: bets.length,
           scoreableCount: scoreable.length,
-          forecastScore,
           shortCrpsMinutes,
           longCrpsMinutes,
           shortScoreableCount: shortCrpsValues.length,
@@ -415,6 +415,18 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           topRankCaptureRate: selectionRate(topSelection, "selection_capture_observed"),
           topRankCaptureHits: topSelection.filter((bet) => Boolean(bet.selection_capture_observed)).length,
           topRankCaptureBets: topSelection.length,
+          actionableExact3hHits: actionable.length,
+          actionableExact3hBets: selectionBets.length,
+          actionableExact3hRate: selectionBets.length ? actionable.length / selectionBets.length : null,
+          actionableExact3hShortHits: shortActionable.length,
+          actionableExact3hShortBets: shortSelection.length,
+          actionableExact3hShortRate: shortSelection.length ? shortActionable.length / shortSelection.length : null,
+          actionableExact3hLongHits: longActionable.length,
+          actionableExact3hLongBets: longSelection.length,
+          actionableExact3hLongRate: longSelection.length ? longActionable.length / longSelection.length : null,
+          transitionExactHits: transitioned.filter((bet) => bet.selection_exact_outcome === true).length,
+          transitionExactBets: transitioned.length,
+          transitionExactRate: selectionRate(transitioned, "selection_exact_outcome"),
         };
       }
 
@@ -451,7 +463,6 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             model,
             publishedCount: summary.published_bets,
             scoreableCount: summary.scoreable_bets,
-            forecastScore: summary.forecast_score,
             shortCrpsMinutes: summary.short_crps_minutes,
             longCrpsMinutes: summary.long_crps_minutes,
             shortScoreableCount: summary.short_scoreable_bets,
@@ -484,25 +495,36 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             topRankCaptureRate: summary.top_rank_capture_rate,
             topRankCaptureHits: summary.top_rank_capture_hits,
             topRankCaptureBets: summary.top_rank_capture_bets,
+            actionableExact3hHits: firstDefined(summary.actionable_exact_outcome_hits, summary.exact_outcome_hits),
+            actionableExact3hBets: firstDefined(summary.actionable_exact_outcome_bets, summary.selection_scored_bets),
+            actionableExact3hRate: firstDefined(summary.actionable_exact_outcome_rate, summary.exact_outcome_rate),
+            actionableExact3hShortHits: summary.short_actionable_exact_outcome_hits,
+            actionableExact3hShortBets: summary.short_actionable_exact_outcome_bets,
+            actionableExact3hShortRate: summary.short_actionable_exact_outcome_rate,
+            actionableExact3hLongHits: summary.long_actionable_exact_outcome_hits,
+            actionableExact3hLongBets: summary.long_actionable_exact_outcome_bets,
+            actionableExact3hLongRate: summary.long_actionable_exact_outcome_rate,
+            transitionExactHits: firstDefined(summary.transition_exact_outcome_hits, summary.exact_outcome_hits),
+            transitionExactBets: firstDefined(summary.transition_exact_outcome_bets, summary.transition_hits),
+            transitionExactRate: firstDefined(summary.transition_exact_outcome_rate, summary.exact_outcome_rate),
           } : modelBehavior(model, rounds);
         }).sort((a, b) =>
-          (a.forecastScore == null) - (b.forecastScore == null)
-          || (b.forecastScore ?? -Infinity) - (a.forecastScore ?? -Infinity)
-          || (a.shortCrpsMinutes ?? Infinity) - (b.shortCrpsMinutes ?? Infinity)
-          || (a.longCrpsMinutes ?? Infinity) - (b.longCrpsMinutes ?? Infinity)
+          (a.actionableExact3hRate == null) - (b.actionableExact3hRate == null)
+          || (b.actionableExact3hRate ?? -Infinity) - (a.actionableExact3hRate ?? -Infinity)
+          || (b.transitionRate ?? -Infinity) - (a.transitionRate ?? -Infinity)
           || String(a.model.label).localeCompare(String(b.model.label))
         );
-        behaviors.forEach((behavior, index) => {
+        behaviors.forEach((behavior) => {
           const adviserRow = document.createElement("tr");
           const adviserModel = element("td", "adviser-table__model");
           adviserModel.append(element("strong", "", behavior.model.label || behavior.model.series_id));
           adviserRow.append(
             adviserModel,
-            adviserCell(decimal(behavior.forecastScore), behavior.forecastScore == null ? "waiting for both horizons" : "higher is better · not % accuracy", "adviser-table__primary"),
-            adviserCell(`${behavior.scoreableCount} scored`, `${behavior.open} open · ${behavior.censored} not scored`),
-            adviserCell(crps(behavior.shortCrpsMinutes), `${behavior.shortScoreableCount} calls · lower is better`),
-            adviserCell(crps(behavior.longCrpsMinutes), `${behavior.longScoreableCount} calls · lower is better`),
-            adviserCell(ratio(behavior.captureLift), behavior.captureLift == null ? "field comparison unavailable" : `${percentage(behavior.captureRate)} model · ${percentage(behavior.captureBaselineRate)} field`),
+            adviserCell(percentage(behavior.actionableExact3hRate), `${behavior.actionableExact3hHits ?? 0}/${behavior.actionableExact3hBets ?? behavior.selectionScoredBets} calls · short ${percentage(behavior.actionableExact3hShortRate)} · long ${percentage(behavior.actionableExact3hLongRate)}`, "adviser-table__primary"),
+            adviserCell(percentage(behavior.transitionRate), `${behavior.transitionHits}/${behavior.selectionScoredBets} selected bases moved`),
+            adviserCell(percentage(behavior.transitionExactRate), `${behavior.transitionExactHits ?? 0}/${behavior.transitionExactBets ?? behavior.transitionHits} moved bases named correctly`),
+            adviserCell(percentage(behavior.topRankCaptureRate), `${behavior.topRankCaptureHits}/${behavior.topRankCaptureBets} top selections captured`),
+            adviserCell(`${behavior.scoreableCount} scored`, `${behavior.publishedCount} published · ${behavior.open} open · ${behavior.censored} not scored`),
           );
           adviserRows.append(adviserRow);
 
@@ -518,10 +540,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             element("small", "", "scored / censored / open"),
           );
           row.append(
-            element("td", "score-table__rank", String(index + 1).padStart(2, "0")),
             modelCell,
-            metricCell(decimal(behavior.forecastScore), behavior.forecastScore == null ? "waiting for both timelines" : "equal short / long weight", "score-table__primary"),
-            metricCell(crps(behavior.shortCrpsMinutes), `${behavior.shortScoreableCount} scored short bets`),
+            metricCell(crps(behavior.shortCrpsMinutes), `${behavior.shortScoreableCount} scored short bets`, "score-table__primary"),
             metricCell(crps(behavior.longCrpsMinutes), `${behavior.longScoreableCount} scored long bets`),
             metricCell(percentage(behavior.confidence), `${behavior.publishedCount} published calls`),
             metricCell(duration(behavior.sigmaMinutes), "average timing spread (sigma)"),
@@ -767,6 +787,28 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         return wrapper;
       }
 
+      function renderStrategicAdvice(advice) {
+        if (!advice || typeof advice !== "object") return null;
+        const items = Object.entries(advice).filter(([, value]) => value && (value.base_name || value.base_id));
+        if (!items.length) return null;
+        const section = element("section", "strategic-advice");
+        section.append(element("small", "strategic-advice__label", "Strategic adviser recommendations · descriptive and not scored"));
+        const list = element("div", "strategic-advice__grid");
+        items.forEach(([key, item]) => {
+          const card = element("article", "strategic-advice__item");
+          card.append(
+            element("strong", "", eventLabel(key).replace("Colonial ", "Colonial: ").replace("Warden ", "Warden: ")),
+            element("h4", "", `${item.base_type || "Strategic Base"} ${item.base_name || item.base_id}`),
+            element("p", "", item.reason || "No explanation was retained."),
+          );
+          if (item.map_name || item.current_team) card.append(element("small", "", `${regionLabel(item.map_name)} · currently ${teamLabel(item.current_team)}`));
+          if (item.evidence?.length) card.append(supportingEvidence(item.evidence));
+          list.append(card);
+        });
+        section.append(list);
+        return section;
+      }
+
       function predictionStatus(bet) {
         if (bet.status === "censored" && bet.settlement_reason === "ambiguous_transition_interval") {
           return "Not scored · transition time ambiguous";
@@ -884,6 +926,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
               element("p", "briefing__copy", round.war_summary || "No briefing was retained for this round."),
               element("p", "region-list", (round.selected_regions || []).join(" · ")),
             );
+            const advice = renderStrategicAdvice(round.strategic_advice);
+            if (advice) participantBody.append(advice);
             if (round.dropped_predictions?.length) {
               const warning = element("div", "method-note");
               warning.append(element(
@@ -923,43 +967,6 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         });
       }
 
-      function setupHistory(models) {
-        const select = document.querySelector("#history-model");
-        select.replaceChildren();
-        models.forEach((model) => {
-          const option = element("option", "", model.label || model.series_id);
-          option.value = model.series_id;
-          select.append(option);
-        });
-        select.addEventListener("change", renderHistory);
-        renderHistory();
-      }
-
-      function renderHistory() {
-        const select = document.querySelector("#history-model");
-        const list = document.querySelector("#history-list");
-        list.replaceChildren();
-        const currentModels = (dashboard.models || []).filter((item) => visibleSeries.has(item.series_id));
-        const model = currentModels.find((item) => item.series_id === select.value) || currentModels[0];
-        if (!model?.history?.length) {
-          list.append(element("li", "empty-state", "No history for this model yet."));
-          return;
-        }
-        model.history.forEach((entry) => {
-          const item = element("li", "history-item");
-          const marker = element("span", `history-marker history-marker--${entry.settlement_status}`);
-          const body = element("div", "");
-          const top = element("div", "history-item__top");
-          top.append(
-            element("time", "", `${entry.war_number ? `War ${entry.war_number} · ` : ""}${formatDate(entry.cutoff)}`),
-            element("strong", "", `${entry.forecast_count} bases · ${entry.settlement_status}`),
-          );
-          body.append(top, element("p", "", entry.war_summary || `Run ${entry.status}; no summary available.`));
-          item.append(marker, body);
-          list.append(item);
-        });
-      }
-
       async function boot() {
         try {
           const base = import.meta.env.BASE_URL.replace(/\/?$/, "/");
@@ -985,7 +992,6 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           renderRounds(currentRounds);
           setupBriefingFilter(currentModels);
           renderBriefings(currentModels);
-          setupHistory(currentModels);
         } catch (error) {
           const empty = document.querySelector("#score-empty");
           empty.textContent = `Dashboard data could not be loaded: ${error.message}`;
