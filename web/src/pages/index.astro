@@ -271,6 +271,14 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         return value;
       };
       const formatDate = (value) => value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value)) + " UTC" : "—";
+      const modelFormat = (record) => {
+        const series = String(record?.series_id || "");
+        if (record?.protocol === "event_outcome_v5_crps" || series.includes("-event-v4")) return "";
+        if (record?.protocol === "timed_transition_v3" || series.includes("-timed-v3")) return " · Legacy timed format";
+        if (series.includes("war-overview-v2")) return " · Legacy war overview";
+        return " · Legacy format";
+      };
+      const modelLabel = (record) => `${record?.label || record?.model_label || record?.series_id || "Unknown model"}${modelFormat(record)}`;
       const number = (value) => new Intl.NumberFormat().format(Number(value) || 0);
       const eventLabel = (value) => String(value || "").replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
       const trancheLabel = (value) => value === "IMMEDIATE"
@@ -541,12 +549,12 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           (a.actionableExact3hRate == null) - (b.actionableExact3hRate == null)
           || (b.actionableExact3hRate ?? -Infinity) - (a.actionableExact3hRate ?? -Infinity)
           || (b.transitionRate ?? -Infinity) - (a.transitionRate ?? -Infinity)
-          || String(a.model.label).localeCompare(String(b.model.label))
+          || modelLabel(a.model).localeCompare(modelLabel(b.model))
         );
         behaviors.forEach((behavior) => {
           const adviserRow = document.createElement("tr");
           const adviserModel = element("td", "adviser-table__model");
-          adviserModel.append(element("strong", "", behavior.model.label || behavior.model.series_id));
+          adviserModel.append(element("strong", "", modelLabel(behavior.model)));
           adviserRow.append(
             adviserModel,
             adviserCell(percentage(behavior.actionableExact3hRate), `${behavior.actionableExact3hHits ?? 0}/${behavior.actionableExact3hBets ?? behavior.selectionScoredBets} calls · short ${percentage(behavior.actionableExact3hShortRate)} · long ${percentage(behavior.actionableExact3hLongRate)}`, "adviser-table__primary"),
@@ -560,7 +568,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           const row = document.createElement("tr");
           const modelCell = element("td", "score-table__model");
           modelCell.append(
-            element("strong", "", behavior.model.label || behavior.model.series_id),
+            element("strong", "", modelLabel(behavior.model)),
             element("small", "", `${behavior.model.gateway || "provider"} · ${behavior.model.returned_model || behavior.model.requested_model || behavior.model.series_id}`),
           );
           const resultsCell = element("td", "score-table__results");
@@ -583,7 +591,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 
           const selectionRow = document.createElement("tr");
           const selectionModel = element("td", "score-table__model");
-          selectionModel.append(element("strong", "", behavior.model.label || behavior.model.series_id));
+          selectionModel.append(element("strong", "", modelLabel(behavior.model)));
           selectionRow.append(
             selectionModel,
             metricCell(percentage(behavior.shortCaptureRate), `${behavior.shortCaptureHits}/${behavior.shortCaptureBets} selected bases`),
@@ -717,7 +725,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         available.forEach((model) => {
           const article = element("article", "briefing");
           const header = element("div", "briefing__header");
-          header.append(element("h3", "", model.label), element("time", "", formatDate(model.latest.cutoff)));
+          header.append(element("h3", "", modelLabel(model)), element("time", "", formatDate(model.latest.cutoff)));
           const regions = element("p", "region-list", model.latest.selected_regions?.map(regionLabel).join(" · ") || "No selected regions");
           article.append(header, briefingSummary(model.latest.war_summary), regions);
           list.append(article);
@@ -731,7 +739,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         all.value = "all";
         select.append(all);
         models.filter((model) => model.latest?.war_summary).forEach((model) => {
-          const option = element("option", "", model.label || model.series_id);
+          const option = element("option", "", modelLabel(model));
           option.value = model.series_id;
           select.append(option);
         });
@@ -906,7 +914,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         return [...groups.values()]
           .map((group) => ({
             ...group,
-            participants: group.participants.sort((a, b) => String(a.model_label).localeCompare(String(b.model_label))),
+            participants: group.participants.sort((a, b) => modelLabel(a).localeCompare(modelLabel(b))),
           }))
           .sort((a, b) => new Date(b.slot) - new Date(a.slot));
       }
@@ -946,7 +954,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             const participant = element("details", "round-model");
             const participantSummary = element("summary", "round-model__summary");
             participantSummary.append(
-              element("strong", "", round.model_label),
+              element("strong", "", modelLabel(round)),
               element("time", "", `Data cutoff ${formatDate(round.cutoff)}`),
               element("span", `status status--${round.settlement_status}`, roundResolutionLabel(round)),
             );

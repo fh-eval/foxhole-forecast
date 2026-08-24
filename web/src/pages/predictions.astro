@@ -42,7 +42,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             <label class="select-label">Model <select id="round-model"><option value="all">All models</option></select></label>
           </div>
         </div>
-        <p class="plain-note"><strong>Why group by round?</strong> Every model in a round worked from the same frozen moment. Comparing them inside that window is fair; comparing random individual calls across days is not.</p>
+        <p class="plain-note"><strong>Why group by round?</strong> Every model in a round worked from the same frozen moment. Comparing them inside that window is fair; comparing random individual calls across days is not. <span class="format-note">Older experiments remain in the archive, marked <em>Legacy format</em>; compare those with care because their prompts and scoring rules were different.</span></p>
         <p class="prediction-browser__summary" id="round-summary">Loading round history…</p>
         <div id="round-history" class="round-history-list"></div>
       </section>
@@ -68,6 +68,14 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       };
       const regionLabel = (value) => regionNames[value] || String(value || "Unknown region").replace(/Hex$/, "").replace(/([a-z])([A-Z])/g, "$1 $2");
       const formatDate = (value) => value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value)) + " UTC" : "—";
+      const modelFormat = (record) => {
+        const series = String(record?.series_id || "");
+        if (record?.protocol === "event_outcome_v5_crps" || series.includes("-event-v4")) return "";
+        if (record?.protocol === "timed_transition_v3" || series.includes("-timed-v3")) return " · Legacy timed format";
+        if (series.includes("war-overview-v2")) return " · Legacy war overview";
+        return " · Legacy format";
+      };
+      const modelLabel = (record) => `${record?.model_label || record?.label || record?.series_id || "Unknown model"}${modelFormat(record)}`;
       const predictionTime = (value) => value ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC" }).format(new Date(value)) + " UTC" : "an unknown time";
       const duration = (minutes) => minutes == null ? "—" : Number(minutes) < 60 ? `${Math.round(Number(minutes))}m` : `${(Number(minutes) / 60).toFixed(1)}h`;
       const crps = (minutes) => minutes == null || !Number.isFinite(Number(minutes)) ? "—" : `${Number(minutes).toFixed(2)}m`;
@@ -182,7 +190,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         });
         const grouped = [...groups.values()].filter((group) => group.participants.length); const warSlots = new Map();
         grouped.forEach((group) => { const key = String(group.warId || "unknown"); if (!warSlots.has(key)) warSlots.set(key, []); warSlots.get(key).push(group.slot); });
-        grouped.forEach((group) => { const slots = [...new Set(warSlots.get(String(group.warId || "unknown")))].sort((a, b) => new Date(a) - new Date(b)); group.roundNumber = slots.indexOf(group.slot) + 1; group.participants.sort((a, b) => String(a.model_label).localeCompare(String(b.model_label))); });
+        grouped.forEach((group) => { const slots = [...new Set(warSlots.get(String(group.warId || "unknown")))].sort((a, b) => new Date(a) - new Date(b)); group.roundNumber = slots.indexOf(group.slot) + 1; group.participants.sort((a, b) => modelLabel(a).localeCompare(modelLabel(b))); });
         return grouped.sort((a, b) => new Date(b.slot) - new Date(a.slot));
       }
 
@@ -204,7 +212,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           const body = element("div", "archive-round__body");
           group.participants.forEach((round) => {
             const participant = element("details", "round-model"); const participantSummary = element("summary", "round-model__summary"); const resolvedCount = (round.predictions || []).filter((bet) => bet.status && bet.status !== "open").length;
-            participantSummary.append(element("strong", "", round.model_label || "Unknown model"), element("time", "", `Cutoff ${formatDate(round.cutoff)}`), element("span", `status status--${round.settlement_status || "open"}`, `${resolvedCount}/${round.predictions?.length || 0} resolved`));
+            participantSummary.append(element("strong", "", modelLabel(round)), element("time", "", `Cutoff ${formatDate(round.cutoff)}`), element("span", `status status--${round.settlement_status || "open"}`, `${resolvedCount}/${round.predictions?.length || 0} resolved`));
             const participantBody = element("div", "round-model__body"); participantBody.append(briefingSummary(round.war_summary), element("p", "region-list", (round.selected_regions || []).map(regionLabel).join(" · ") || "No selected regions"));
             const advice = renderStrategicAdvice(round.strategic_advice); if (advice) participantBody.append(advice);
             if (round.dropped_predictions?.length) {
@@ -226,7 +234,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         try {
           const base = import.meta.env.BASE_URL.replace(/\/?$/, "/"); const response = await fetch(`${base}data/dashboard.json`, { cache: "no-store" }); if (!response.ok) throw new Error(`HTTP ${response.status}`); dashboard = await response.json();
           const rounds = (dashboard.rounds || []).filter(usableRound); const warSelect = document.querySelector("#round-war"); const modelSelect = document.querySelector("#round-model"); const wars = new Map(); const models = new Map();
-          rounds.forEach((round) => { wars.set(String(round.war_id), `War ${round.war_number || "—"}`); models.set(round.series_id, round.model_label || round.series_id); });
+          rounds.forEach((round) => { wars.set(String(round.war_id), `War ${round.war_number || "—"}`); models.set(round.series_id, modelLabel(round)); });
           [...wars.entries()].sort((a, b) => b[1].localeCompare(a[1], undefined, { numeric: true })).forEach(([value, label]) => { const option = element("option", "", label); option.value = value; warSelect.append(option); });
           [...models.entries()].sort((a, b) => a[1].localeCompare(b[1])).forEach(([value, label]) => { const option = element("option", "", label); option.value = value; modelSelect.append(option); });
           warSelect.addEventListener("change", () => { warFilter = warSelect.value; renderHistory(); }); modelSelect.addEventListener("change", () => { modelFilter = modelSelect.value; renderHistory(); });
