@@ -2,6 +2,30 @@
 import "../styles/global.css";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+const scoutExample = JSON.stringify({
+  war_summary: "FIELD DESK · Day 113 — Oarbreaker remains the busiest front...",
+  selected_regions: ["OarbreakerHex", "ClahstraHex", "MooringCountyHex"],
+}, null, 2);
+const forecastExample = JSON.stringify({
+  predictions: [{
+    rank: 1,
+    base_id: "OarbreakerHex:example",
+    outcome: "CAPTURED_BY_COLONIALS",
+    eta_utc: "2026-08-24T08:15:00Z",
+    confidence: 0.62,
+    sigma_minutes: 45,
+    evidence: [{ metric_id: "region.OarbreakerHex.totalEnlistments.rate_1h_per_hour", relevance: 8 }],
+  }],
+}, null, 2);
+const adviceExample = JSON.stringify({
+  strategic_advice: {
+    colonial_reinforce: {
+      base_id: "OarbreakerHex:example",
+      reason: "Recent pressure and ownership changes make this a fragile point.",
+      evidence: [{ metric_id: "region.OarbreakerHex.wardenCasualties.rate_1h_per_hour", relevance: 7 }],
+    },
+  },
+}, null, 2);
 ---
 
 <!doctype html>
@@ -59,36 +83,15 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <div class="prompt-example-grid">
           <details class="prompt-example" open>
             <summary>Scout response</summary>
-            <pre><code>&#123;
-  "war_summary": "FIELD DESK · Day 113 — Oarbreaker remains the busiest front...",
-  "selected_regions": ["OarbreakerHex", "ClahstraHex", "MooringCountyHex"]
-&#125;</code></pre>
+            <pre><code>{scoutExample}</code></pre>
           </details>
           <details class="prompt-example">
             <summary>Forecast response</summary>
-            <pre><code>&#123;
-  "predictions": [{
-    "rank": 1,
-    "base_id": "OarbreakerHex:example",
-    "outcome": "CAPTURED_BY_COLONIALS",
-    "eta_utc": "2026-08-24T08:15:00Z",
-    "confidence": 0.62,
-    "sigma_minutes": 45,
-    "evidence": [{"metric_id": "region.OarbreakerHex.totalEnlistments.rate_1h_per_hour", "relevance": 8}]
-  &#125;]
-&#125;</code></pre>
+            <pre><code>{forecastExample}</code></pre>
           </details>
           <details class="prompt-example">
             <summary>Strategic recommendations</summary>
-            <pre><code>&#123;
-  "strategic_advice": {
-    "colonial_reinforce": {
-      "base_id": "OarbreakerHex:example",
-      "reason": "Recent pressure and ownership changes make this a fragile point.",
-      "evidence": [{"metric_id": "region.OarbreakerHex.wardenCasualties.rate_1h_per_hour", "relevance": 7}]
-    &#125;
-  &#125;
-&#125;</code></pre>
+            <pre><code>{adviceExample}</code></pre>
           </details>
         </div>
       </section>

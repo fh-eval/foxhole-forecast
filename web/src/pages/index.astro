@@ -853,9 +853,9 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       }
 
       function roundResolutionLabel(round) {
-        const expected = dashboard?.methodology?.predictions_per_round ?? 8;
+        const valid = (round.predictions || []).length;
         const resolved = (round.predictions || []).filter((bet) => bet.status && bet.status !== "open").length;
-        return `${resolved}/${expected} Predictions Resolved`;
+        return `${resolved}/${valid} Predictions Resolved`;
       }
 
       function groupedRounds(rounds) {
@@ -891,9 +891,9 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       }
 
       function groupResolutionLabel(group) {
-        const expected = (dashboard?.methodology?.predictions_per_round ?? 8) * group.participants.length;
+        const valid = group.participants.reduce((count, round) => count + (round.predictions || []).length, 0);
         const resolved = group.participants.flatMap((round) => round.predictions || []).filter((bet) => bet.status && bet.status !== "open").length;
-        return `${resolved}/${expected} Predictions Resolved`;
+        return `${resolved}/${valid} Predictions Resolved`;
       }
 
       function renderRounds(rounds) {

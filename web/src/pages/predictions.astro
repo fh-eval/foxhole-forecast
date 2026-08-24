@@ -178,6 +178,13 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             participantSummary.append(element("strong", "", round.model_label || "Unknown model"), element("time", "", `Cutoff ${formatDate(round.cutoff)}`), element("span", `status status--${round.settlement_status || "open"}`, `${resolvedCount}/${round.predictions?.length || 0} resolved`));
             const participantBody = element("div", "round-model__body"); participantBody.append(element("p", "briefing__copy", round.war_summary || "No briefing was retained for this round."), element("p", "region-list", (round.selected_regions || []).join(" · ") || "No selected regions"));
             const advice = renderStrategicAdvice(round.strategic_advice); if (advice) participantBody.append(advice);
+            if (round.dropped_predictions?.length) {
+              const warning = element("aside", "round-warning");
+              warning.append(element("strong", "", `${round.dropped_predictions.length} model output error${round.dropped_predictions.length === 1 ? "" : "s"} excluded from this round’s prediction count.`));
+              const droppedList = element("ul", "rationale-list");
+              round.dropped_predictions.forEach((dropped) => droppedList.append(element("li", "", `#${dropped.rank ?? "—"} ${dropped.base_type || "Base"} ${dropped.base_name || dropped.base_id}: ${dropped.reason || "invalid prediction"}.`)));
+              warning.append(droppedList); participantBody.append(warning);
+            }
             const bets = element("div", "round__bets"); (round.predictions || []).forEach((bet) => bets.append(renderBet(bet))); participantBody.append(bets); participant.append(participantSummary, participantBody); body.append(participant);
           });
           details.append(summaryRow, body); warList.append(details);
