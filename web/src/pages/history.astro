@@ -55,7 +55,37 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       const element = (tag, className, text) => { const value = document.createElement(tag); if (className) value.className = className; if (text !== undefined) value.textContent = String(text); return value; };
       const number = (value) => new Intl.NumberFormat().format(Number(value) || 0);
       const formatDate = (value) => value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value)) + " UTC" : "—";
+      const regionNames = {
+        AllodsBightHex: "Allod's Bight",
+        CallahansPassageHex: "Callahan's Passage",
+        CallumsCapeHex: "Callum's Cape",
+        FishermansRowHex: "Fisherman's Row",
+        KingsCageHex: "King's Cage",
+        MorgensCrossingHex: "Morgen's Crossing",
+        ReaversPassHex: "Reaver's Pass",
+      };
+      const regionLabel = (value) => regionNames[value] || String(value || "Unknown region").replace(/Hex$/, "").replace(/([a-z])([A-Z])/g, "$1 $2");
       let dashboard = null; let warFilter = "all"; let modelFilter = "all";
+
+      function briefingSummary(text) {
+        const content = String(text || "No summary was retained for this cutoff.");
+        const wrapper = element("div", "briefing-summary");
+        const copy = element("p", "clipping__summary briefing-summary__copy", content);
+        wrapper.append(copy);
+        if (content.length <= 420) return wrapper;
+        copy.classList.add("briefing-summary__copy--collapsed");
+        const toggle = element("button", "briefing-summary__toggle", "… Read full briefing");
+        toggle.type = "button";
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.addEventListener("click", () => {
+          const expanded = toggle.getAttribute("aria-expanded") === "true";
+          toggle.setAttribute("aria-expanded", String(!expanded));
+          copy.classList.toggle("briefing-summary__copy--collapsed", expanded);
+          toggle.textContent = expanded ? "… Read full briefing" : "Show less";
+        });
+        wrapper.append(toggle);
+        return wrapper;
+      }
 
       function entries() {
         return (dashboard.models || []).flatMap((model) => (model.history || [])
@@ -81,12 +111,12 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             const mast = element("div", "clipping__masthead"); mast.append(element("strong", "", entry.model_label), element("span", "", formatDate(entry.cutoff))); clipping.append(mast);
             const status = entry.settlement_status || entry.status || "open";
             clipping.append(element("p", "clipping__kicker", `${entry.forecast_count || 0} calls · ${status}`));
-            clipping.append(element("p", "clipping__summary", entry.war_summary || "No summary was retained for this cutoff."));
+            clipping.append(briefingSummary(entry.war_summary));
             const meta = element("div", "clipping__meta");
             meta.append(element("span", "", `${(entry.selected_regions || []).length} regions selected`));
             if (entry.cost_usd != null) meta.append(element("span", "", `$${Number(entry.cost_usd).toFixed(3)} model cost`));
             clipping.append(meta);
-            if (entry.selected_regions?.length) clipping.append(element("p", "clipping__regions", entry.selected_regions.join(" · ")));
+            if (entry.selected_regions?.length) clipping.append(element("p", "clipping__regions", entry.selected_regions.map(regionLabel).join(" · ")));
             grid.append(clipping);
           });
           section.append(grid); root.append(section);

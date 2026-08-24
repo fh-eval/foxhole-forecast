@@ -663,11 +663,29 @@ def _present_strategic_advice(
     return presented
 
 
+_REGION_DISPLAY_NAMES = {
+    "AllodsBightHex": "Allod's Bight",
+    "CallahansPassageHex": "Callahan's Passage",
+    "CallumsCapeHex": "Callum's Cape",
+    "FishermansRowHex": "Fisherman's Row",
+    "KingsCageHex": "King's Cage",
+    "MorgensCrossingHex": "Morgen's Crossing",
+    "ReaversPassHex": "Reaver's Pass",
+}
+
+
+def _region_label(map_name: str) -> str:
+    return _REGION_DISPLAY_NAMES.get(
+        map_name,
+        re.sub(r"([a-z])([A-Z])", r"\1 \2", re.sub(r"Hex$", "", map_name)),
+    )
+
+
 def _metric_label(metric_id: str) -> str:
     parts = metric_id.split(".")
     if len(parts) < 4 or parts[0] != "region":
         return metric_id
-    region = re.sub(r"([a-z])([A-Z])", r"\1 \2", re.sub(r"Hex$", "", parts[1]))
+    region = _region_label(parts[1])
     field = ".".join(parts[2:])
     if field == "casualties.ratio_colonial_to_warden":
         description = "Colonial/Warden casualty ratio"

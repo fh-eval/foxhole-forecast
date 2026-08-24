@@ -279,7 +279,16 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           ? "ETA 6–24 hours"
           : eventLabel(value);
       const teamLabel = (value) => value === "NONE" ? "Neutral / destroyed" : eventLabel(value);
-      const regionLabel = (value) => String(value || "Unknown region").replace(/Hex$/, "").replace(/([a-z])([A-Z])/g, "$1 $2");
+      const regionNames = {
+        AllodsBightHex: "Allod's Bight",
+        CallahansPassageHex: "Callahan's Passage",
+        CallumsCapeHex: "Callum's Cape",
+        FishermansRowHex: "Fisherman's Row",
+        KingsCageHex: "King's Cage",
+        MorgensCrossingHex: "Morgen's Crossing",
+        ReaversPassHex: "Reaver's Pass",
+      };
+      const regionLabel = (value) => regionNames[value] || String(value || "Unknown region").replace(/Hex$/, "").replace(/([a-z])([A-Z])/g, "$1 $2");
       const predictionTime = (value) => value ? new Intl.DateTimeFormat(undefined, {
         month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC",
       }).format(new Date(value)) + " UTC" : "an unknown time";
@@ -294,6 +303,26 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         if (item.observed_at) chip.title = `Metric observed ${formatDate(item.observed_at)}`;
         return chip;
       };
+
+      function briefingSummary(text, copyClass = "briefing__copy") {
+        const content = String(text || "No briefing was retained for this round.");
+        const wrapper = element("div", "briefing-summary");
+        const copy = element("p", `${copyClass} briefing-summary__copy`, content);
+        wrapper.append(copy);
+        if (content.length <= 420) return wrapper;
+        copy.classList.add("briefing-summary__copy--collapsed");
+        const toggle = element("button", "briefing-summary__toggle", "… Read full briefing");
+        toggle.type = "button";
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.addEventListener("click", () => {
+          const expanded = toggle.getAttribute("aria-expanded") === "true";
+          toggle.setAttribute("aria-expanded", String(!expanded));
+          copy.classList.toggle("briefing-summary__copy--collapsed", expanded);
+          toggle.textContent = expanded ? "… Read full briefing" : "Show less";
+        });
+        wrapper.append(toggle);
+        return wrapper;
+      }
       let dashboard = null;
       let briefingFilter = "all";
       let scoreScope = "current";
@@ -689,8 +718,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           const article = element("article", "briefing");
           const header = element("div", "briefing__header");
           header.append(element("h3", "", model.label), element("time", "", formatDate(model.latest.cutoff)));
-          const regions = element("p", "region-list", model.latest.selected_regions?.join(" · ") || "No selected regions");
-          article.append(header, element("p", "briefing__copy", model.latest.war_summary), regions);
+          const regions = element("p", "region-list", model.latest.selected_regions?.map(regionLabel).join(" · ") || "No selected regions");
+          article.append(header, briefingSummary(model.latest.war_summary), regions);
           list.append(article);
         });
       }
@@ -729,8 +758,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const predictedOutcome = bet.predicted_outcome || (typeof bet.outcome === "string" ? bet.outcome : null);
         const sigmaSource = bet.sigma_source === "inferred_from_confidence" ? " (inferred)" : "";
         const sigma = bet.sigma_minutes == null ? "" : ` · timing spread ${duration(Number(bet.sigma_minutes))}${sigmaSource}`;
-        const confidence = element("strong", "prediction-headline__confidence", `${percentage(bet.confidence)} chance${sigma}`);
-        line.append(confidence, document.createTextNode(": "));
+        const confidence = element("strong", "prediction-headline__confidence", `${percentage(bet.confidence)} chance`);
+        line.append(confidence, document.createTextNode(`${sigma}: `));
         if (predictedOutcome) {
           line.append(baseIdentity(bet));
           if (predictedOutcome === "DESTROYED") {
@@ -923,8 +952,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             );
             const participantBody = element("div", "round-model__body");
             participantBody.append(
-              element("p", "briefing__copy", round.war_summary || "No briefing was retained for this round."),
-              element("p", "region-list", (round.selected_regions || []).join(" · ")),
+              briefingSummary(round.war_summary),
+              element("p", "region-list", (round.selected_regions || []).map(regionLabel).join(" · ")),
             );
             const advice = renderStrategicAdvice(round.strategic_advice);
             if (advice) participantBody.append(advice);

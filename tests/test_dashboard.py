@@ -289,6 +289,10 @@ class DashboardTests(unittest.TestCase):
             ),
             "Oarbreaker · Warden casualties rate change, last 1h vs prior 1h",
         )
+        self.assertEqual(
+            _metric_label("region.CallahansPassageHex.totalEnlistments.raw"),
+            "Callahan's Passage · Enlistments",
+        )
 
     def test_war_api_snapshot_reuses_the_exact_scout_region_metrics(self) -> None:
         latest = {
