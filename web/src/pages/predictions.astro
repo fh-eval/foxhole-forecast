@@ -14,12 +14,12 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
   </head>
   <body>
     <header class="method-masthead">
-      <div class="masthead__eyebrow">PROSPECTIVE ROUND HISTORY · SHARED THREE-HOUR CUTOFFS</div>
+      <div class="masthead__eyebrow">EVERY ROUND ON RECORD · SAME CUTOFF FOR EVERY MODEL</div>
       <div class="method-hero prediction-hero page-width">
         <div>
-          <p class="kicker">Prediction round history</p>
-          <h1>Every round<br /><span>on record</span></h1>
-          <p class="sublede">The archive is organized the way the experiment ran: by war, then by one shared three-hour UTC round. Open a round to compare each model’s briefing, ranked calls, evidence, and settlement.</p>
+          <p class="kicker">Round history</p>
+          <h1>Every call,<br /><span>on the record</span></h1>
+          <p class="sublede">The archive is organised the way the experiment runs: by war, then by shared three-hour round. Open any round to compare each model’s briefing, ranked calls, evidence, and how they settled.</p>
         </div>
         <a class="method-back" href={basePath}>← Return to dashboard</a>
       </div>
@@ -29,7 +29,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       <div class="page-width">
         <a href={basePath}>Live dashboard</a>
         <a href={`${basePath}history/`}>Summary archive</a>
-        <a href={`${basePath}#scoreboard`}>Adviser scorecard</a>
+        <a href={`${basePath}#scoreboard`}>The scoreboard</a>
       </div>
     </nav>
 
@@ -42,7 +42,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             <label class="select-label">Model <select id="round-model"><option value="all">All models</option></select></label>
           </div>
         </div>
-        <p class="plain-note"><strong>Why group them?</strong> Every participating model received the same round cutoff. Comparing models inside that shared window is more informative than reading an unstructured stream of individual bets.</p>
+        <p class="plain-note"><strong>Why group by round?</strong> Every model in a round worked from the same frozen moment. Comparing them inside that window is fair; comparing random individual calls across days is not.</p>
         <p class="prediction-browser__summary" id="round-summary">Loading round history…</p>
         <div id="round-history" class="round-history-list"></div>
       </section>
@@ -179,7 +179,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             const participantBody = element("div", "round-model__body"); participantBody.append(element("p", "briefing__copy", round.war_summary || "No briefing was retained for this round."), element("p", "region-list", (round.selected_regions || []).join(" · ") || "No selected regions"));
             const advice = renderStrategicAdvice(round.strategic_advice); if (advice) participantBody.append(advice);
             if (round.dropped_predictions?.length) {
-              const warning = element("aside", "round-warning");
+              const warning = element("div", "method-note");
               warning.append(element("strong", "", `${round.dropped_predictions.length} model output error${round.dropped_predictions.length === 1 ? "" : "s"} excluded from this round’s prediction count.`));
               const droppedList = element("ul", "rationale-list");
               round.dropped_predictions.forEach((dropped) => droppedList.append(element("li", "", `#${dropped.rank ?? "—"} ${dropped.base_type || "Base"} ${dropped.base_name || dropped.base_id}: ${dropped.reason || "invalid prediction"}.`)));

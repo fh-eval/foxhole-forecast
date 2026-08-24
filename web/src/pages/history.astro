@@ -14,12 +14,12 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
   </head>
   <body>
     <header class="method-masthead archive-masthead">
-      <div class="masthead__eyebrow">MODEL SUMMARY ARCHIVE · READ THE BRIEFINGS IN CONTEXT</div>
+      <div class="masthead__eyebrow">THE CLIPPINGS FILE · WHAT THE MODELS THOUGHT, WHEN THEY THOUGHT IT</div>
       <div class="method-hero page-width">
         <div>
-          <p class="kicker">Newspaper archive</p>
-          <h1>What the models<br /><span>thought then</span></h1>
-          <p class="sublede">These short summaries are the models’ cutoff-time accounts of the war. Read them as dated research notes, then compare the corresponding calls in round history.</p>
+          <p class="kicker">Summary archive</p>
+          <h1>What they said<br /><span>at the time</span></h1>
+          <p class="sublede">Before every round, each model writes a short dispatch about the state of the war. These are those dispatches, pinned to their moment — read them like dated field notes, then check the calls they accompanied in round history.</p>
         </div>
         <a class="method-back" href={basePath}>← Return to dashboard</a>
       </div>
@@ -29,7 +29,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       <div class="page-width">
         <a href={basePath}>Live dashboard</a>
         <a href={`${basePath}predictions/`}>Round history</a>
-        <a href={`${basePath}#scoreboard`}>Adviser scorecard</a>
+        <a href={`${basePath}#scoreboard`}>The scoreboard</a>
       </div>
     </nav>
 
@@ -42,7 +42,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             <label class="select-label">Model <select id="archive-model"><option value="all">All models</option></select></label>
           </div>
         </div>
-        <p class="plain-note"><strong>What this page is for:</strong> summaries show the model’s explanation and uncertainty at a particular cutoff. They are useful context, but the scored evidence is in the dated predictions.</p>
+        <p class="plain-note"><strong>Why keep these?</strong> A briefing shows what a model believed and how unsure it was at a frozen moment. Good context — but the scored evidence lives in the dated calls, not in the prose.</p>
         <p class="prediction-browser__summary" id="archive-summary">Loading summary archive…</p>
         <div id="summary-archive"></div>
       </section>

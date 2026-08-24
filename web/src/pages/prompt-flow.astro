@@ -38,12 +38,12 @@ const adviceExample = JSON.stringify({
   </head>
   <body>
     <header class="method-masthead">
-      <div class="masthead__eyebrow">PROMPT FLOW · SAME CUTOFF, FROZEN EVIDENCE, OBSERVED RESULTS</div>
+      <div class="masthead__eyebrow">UNDER THE HOOD · SAME DATA, FROZEN CUTOFF, NO HINDSIGHT</div>
       <div class="method-hero page-width">
         <div>
-          <p class="kicker">Inside one forecast round</p>
-          <h1>From scout packet<br /><span>to settlement</span></h1>
-          <p class="sublede">This is the data path behind a round. It separates what a model saw, what it recommended, what it predicted, and what the public API later observed.</p>
+          <p class="kicker">Inside one round</p>
+          <h1>How a forecast<br /><span>gets made</span></h1>
+          <p class="sublede">The whole pipeline in plain view: what the model saw, what it wrote, what it bet on, and how the game later proved it right or wrong.</p>
         </div>
         <a class="method-back" href={basePath}>← Return to dashboard</a>
       </div>
@@ -60,37 +60,37 @@ const adviceExample = JSON.stringify({
     <main class="prompt-flow-page page-width">
       <section class="method-intro prompt-flow-intro">
         <p class="kicker">The basic idea</p>
-        <p>Every model gets a time-stamped snapshot, not a live feed. It first writes a short war-desk dispatch and chooses regions worth inspecting. It then receives detailed history for those regions and makes eight timed predictions plus four separate strategic recommendations.</p>
-        <aside class="method-callout"><strong>Important distinction</strong><span>The eight predictions are scored. Recommendations are neutral, unscored adviser notes. Players did not see or act on them, so later activity cannot prove that a recommendation caused anything.</span></aside>
+        <p>No model sees a live feed. Each one gets a frozen snapshot, writes a short dispatch, picks the regions worth watching, then commits to eight timed predictions — plus four friendly recommendations that we deliberately don’t score.</p>
+        <aside class="method-callout"><strong>Why unscored advice?</strong><span>The recommendations (who should reinforce or attack what) are answered into the void: no player ever saw them, so nothing that happens later can prove a recommendation <em>caused</em> anything. We keep them for colour and comparison — the eight predictions carry all the scoring.</span></aside>
       </section>
 
       <section class="flow-section" aria-labelledby="flow-title">
         <div class="scoring-section__heading"><p class="kicker">01–07</p><h2 id="flow-title">One round, step by step</h2></div>
         <div class="flow-timeline">
-          <article class="flow-step"><span>01</span><div><h3>Scout packet</h3><p>At a shared UTC cutoff, the model sees the public whole-map packet: ownership, recent base events, casualty pace, and enlistment activity.</p><small>Same cutoff for every participating model.</small></div></article>
-          <article class="flow-step"><span>02</span><div><h3>Newspaper summary + region choices</h3><p>The scout writes a compact, neutral newspaper-style summary and selects up to six regions whose detailed history might help with base-ownership forecasts.</p><small>This summary is archived as a model briefing.</small></div></article>
-          <article class="flow-step"><span>03</span><div><h3>Detailed packet</h3><p>The model receives deeper, cutoff-safe history for exactly those selected regions. It does not get to add facts from after the cutoff.</p><small>Region selection is itself part of what we can inspect.</small></div></article>
-          <article class="flow-step"><span>04</span><div><h3>Eight timed predictions</h3><p>The model names eight different strategic bases, what should happen, an exact UTC ETA, a chance, a timing spread, and cited evidence.</p><small>Ranks 1–4 target the next six hours; ranks 5–8 target 6–24 hours after cutoff.</small></div></article>
-          <article class="flow-step"><span>05</span><div><h3>Four strategic recommendations</h3><p>It also suggests one base for each neutral prompt: Colonial reinforce, Colonial attack, Warden reinforce, and Warden attack. These are advisory notes, not scoreable bets.</p><small>Recommendations carry their own reason and evidence.</small></div></article>
-          <article class="flow-step"><span>06</span><div><h3>Evidence frozen</h3><p>The prediction, recommendation, cutoff, evidence IDs, and model response are retained. Later information cannot be edited into the original call.</p><small>That is what makes a forecast prospective rather than hindsight.</small></div></article>
-          <article class="flow-step"><span>07</span><div><h3>15-minute observations and settlement</h3><p>We continue polling the official API. Ownership transitions are observed in intervals, then the eight predictions are scored against those observations and their deadlines.</p><small>Recommendations can be compared descriptively with later enlistment, casualty, and ownership activity—but not treated as causal.</small></div></article>
+          <article class="flow-step"><span>01</span><div><h3>The snapshot</h3><p>At a shared UTC moment, the model sees the whole public map: who owns each base, recent captures, casualty pace, and enlistment activity.</p><small>Every model in the round gets the identical snapshot.</small></div></article>
+          <article class="flow-step"><span>02</span><div><h3>Dispatch and picks</h3><p>First it writes a short newspaper-style summary of the war, then names up to six regions whose detailed history it wants to inspect.</p><small>The summary is archived as the model’s briefing.</small></div></article>
+          <article class="flow-step"><span>03</span><div><h3>A closer look</h3><p>It receives deeper, cutoff-safe history for exactly those regions. No facts from after the cutoff can leak in — the data was frozen beforehand.</p><small>Which regions a model asks for is itself something we can inspect.</small></div></article>
+          <article class="flow-step"><span>04</span><div><h3>Eight timed calls</h3><p>Now it commits: eight different bases, what will happen to each, an exact UTC time, a confidence, a timing spread, and the evidence it relied on.</p><small>Ranks 1–4 target the next six hours; ranks 5–8 target the following day.</small></div></article>
+          <article class="flow-step"><span>05</span><div><h3>Four friendly tips</h3><p>It also answers four neutral prompts — where each faction should reinforce or attack. Advice only; these are never scored.</p><small>Each tip carries its own reasoning and evidence.</small></div></article>
+          <article class="flow-step"><span>06</span><div><h3>Locked in</h3><p>Predictions, recommendations, cutoff, evidence, and the raw model response are all stored. Nothing can be edited later to look smarter.</p><small>That’s what makes it a forecast instead of hindsight.</small></div></article>
+          <article class="flow-step"><span>07</span><div><h3>Reality votes</h3><p>We keep polling the official API every fifteen minutes. Ownership changes are observed in intervals, and the eight calls are scored against what actually happened.</p><small>The unscored tips can be compared descriptively with later activity — but never treated as cause and effect.</small></div></article>
         </div>
       </section>
 
       <section class="prompt-example-section" aria-labelledby="examples-title">
         <div class="scoring-section__heading"><p class="kicker">Illustrative, trimmed examples</p><h2 id="examples-title">What the model actually returns</h2></div>
-        <p class="method-caption">The examples below show the shape of the exchange with fictional values. The forecast response contains both the predictions and strategic-advice blocks shown separately here. They are intentionally shortened; the exact prompt files remain available in the repository.</p>
+        <p class="method-caption">Below is the shape of the exchange, with fictional values. The forecast response actually contains both the predictions and the advice blocks shown separately here. Trimmed for readability — the full prompt files are linked at the bottom.</p>
         <div class="prompt-example-grid">
           <details class="prompt-example" open>
-            <summary>Scout response</summary>
+            <summary>Scout reply</summary>
             <pre><code>{scoutExample}</code></pre>
           </details>
           <details class="prompt-example">
-            <summary>Forecast response</summary>
+            <summary>Forecast reply</summary>
             <pre><code>{forecastExample}</code></pre>
           </details>
           <details class="prompt-example">
-            <summary>Strategic recommendations</summary>
+            <summary>Friendly tips</summary>
             <pre><code>{adviceExample}</code></pre>
           </details>
         </div>
@@ -98,9 +98,9 @@ const adviceExample = JSON.stringify({
 
       <section class="prompt-access-section" aria-labelledby="prompt-access-title">
         <div class="scoring-section__heading"><p class="kicker">Full source text</p><h2 id="prompt-access-title">Read the exact prompts</h2></div>
-        <p>The live page keeps examples readable, while the repository remains the source of truth for the full markdown, including output rules and validation constraints.</p>
+        <p>The page keeps things readable; the repository keeps the truth. The complete prompt text — including output rules and validation constraints — is public.</p>
         <div class="prompt-links"><a href="https://github.com/fh-eval/foxhole-forecast/blob/main/prompts/scout.md" rel="noreferrer">Open full scout prompt ↗</a><a href="https://github.com/fh-eval/foxhole-forecast/blob/main/prompts/forecast.md" rel="noreferrer">Open full forecast prompt ↗</a><a href="https://github.com/fh-eval/foxhole-forecast/tree/main/prompts" rel="noreferrer">Browse all prompt versions ↗</a></div>
-        <p class="method-caption">The prompt asks for facts supported by the packet. It does not grant access to player communications, hidden inventories, or an in-game computer-use agent.</p>
+        <p class="method-caption">The prompts ask only for conclusions supported by the snapshot. No model gets player communications, hidden inventories, or an in-game agent.</p>
       </section>
     </main>
 

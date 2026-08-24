@@ -6,6 +6,7 @@ The primary agent owns integration, resolves cross-cutting decisions, and keeps 
 
 - Prefer `gpt-5.6-luna` for this role when it is available.
 - Own beginner-facing work in `web/src/pages/` and `web/src/styles/`.
+- Follow the recorded design guidelines in `web/DESIGN.md` (type scale, contrast floor, voice rules) and update them when the design language changes.
 - Design for a Foxhole reader who may know nothing about probabilistic forecasting.
 - Lead with plain-language questions and conclusions, then progressively disclose technical definitions and equations.
 - Preserve auditability: exact predictions, cutoffs, evidence, settlement details, and technical scoring must remain reachable.

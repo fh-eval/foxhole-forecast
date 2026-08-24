@@ -27,12 +27,12 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       </div>
     </aside>
     <header class="masthead">
-      <div class="masthead__eyebrow">A SMALL, LIVE RESEARCH PROJECT · PROSPECTIVE MODEL EVALUATION</div>
+      <div class="masthead__eyebrow">A SMALL LIVE EXPERIMENT · RUN ENTIRELY ON PUBLIC GAME DATA</div>
       <div class="masthead__body page-width">
         <div>
           <h1>Foxhole <span>Forecast</span></h1>
-          <p class="lede">Are the models any good at this?</p>
-          <p class="sublede">If you wanted an AI as a strategic adviser in Foxhole, what evidence would help you choose? We give several models the same public data, record their calls before the front moves, and check those calls against what happened next.</p>
+          <p class="lede">Can an AI read a battlefield?</p>
+          <p class="sublede">We hand several AI models the same public war reports from the game Foxhole and ask them to call what happens next — which base falls, who takes it, and when. Every call is written down <em>before</em> the front moves. Then we check.</p>
         </div>
         <div class="war-stamp" aria-live="polite">
           <span class="pulse"></span>
@@ -43,15 +43,15 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 
     <nav class="section-nav" aria-label="Page sections">
       <div class="page-width">
-        <a href="#scoreboard">At a glance</a>
-        <a href="#war-data">Current war</a>
-        <a href="#rounds">Prediction rounds</a>
-        <a href="#briefings">Latest calls</a>
-        <a href="#probability">CRPS details</a>
+        <a href="#scoreboard">The scoreboard</a>
+        <a href="#war-data">War data</a>
+        <a href="#rounds">The calls</a>
+        <a href="#briefings">Briefings</a>
+        <a href="#probability">For nerds</a>
         <a href={`${basePath}predictions/`}>Round history</a>
-        <a href={`${basePath}history/`}>Summary archive</a>
+        <a href={`${basePath}history/`}>Archive</a>
         <a href={`${basePath}prompt-flow/`}>Prompt flow</a>
-        <a href="#limitations">Limits</a>
+        <a href="#limitations">Caveats</a>
         <a href="#method">Method</a>
       </div>
     </nav>
@@ -66,20 +66,20 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 
       <section class="investigation-intro" aria-labelledby="investigation-title">
         <div>
-          <p class="kicker">The question we are testing</p>
-          <h2 id="investigation-title">A useful adviser must be right, specific, and honest about uncertainty.</h2>
+          <p class="kicker">The bet</p>
+          <h2 id="investigation-title">Say which base falls, who takes it, when — and how sure you are.</h2>
         </div>
         <div class="investigation-intro__copy">
-          <p>We do not ask whether a model sounds clever. We ask whether it can name a strategic base, predict what will happen to it, say when, and give a probability that earns trust over many calls.</p>
-          <p class="plain-note"><strong>How to read the page:</strong> start with the compact comparison, then inspect the calls and evidence that produced it. The technical scoring details stay available for anyone who wants to audit the experiment.</p>
+          <p>Sounding clever is easy, so we don’t score cleverness. Each model must point at a real base on the map, name the exact outcome, give a time, and attach a probability. Over many rounds we learn who is right, who is lucky, and who is confidently wrong.</p>
+          <p class="plain-note"><strong>How to read this page</strong> Start with the scoreboard, then open the actual calls and the evidence behind them. Every technical detail stays on the page for anyone who wants to check our math.</p>
         </div>
       </section>
 
       <section id="scoreboard" class="section-block">
         <div class="section-heading">
-          <div><p class="kicker">First look</p><h2>Can the model pick where the map will move?</h2></div>
+          <div><p class="kicker">First look</p><h2>Did anyone call it?</h2></div>
           <div class="score-heading-controls">
-            <p>This is the strategic-adviser question: did the model spend its limited calls on bases where something happened, name the result, and get close enough in time to be useful?</p>
+            <p>The scoreboard in one sentence: did the model point at bases where something actually happened, name the right outcome, and land within three hours of its own ETA?</p>
             <div class="segmented" role="group" aria-label="Score history scope">
               <button class="active" data-score-scope="current">Current war</button>
               <button data-score-scope="all">All wars</button>
@@ -87,31 +87,31 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           </div>
         </div>
         <div class="adviser-guide">
-          <div><strong>Found action</strong><span>The selected base changed ownership or became neutral before the call closed.</span></div>
-          <div><strong>Useful timed call</strong><span>The exact named result happened within three hours either side of the model’s ETA.</span></div>
-          <div><strong>Named the result</strong><span>Among bases that moved, did the model correctly distinguish the faction capture from destruction?</span></div>
+          <div><strong>Found the action</strong><span>The base it picked changed hands or was destroyed before the call closed. Did it look at the right part of the map?</span></div>
+          <div><strong>Called the time</strong><span>The exact thing it predicted happened within three hours either side of its stated ETA.</span></div>
+          <div><strong>Named the winner</strong><span>When a picked base did fall, did it correctly say who would take it — capture, and by whom — rather than just “something happens”?</span></div>
         </div>
         <div class="compact-leaderboard">
-          <div class="subheading"><h3>Strategic-adviser evidence</h3><span>Descriptive profiles, not one overall rank</span></div>
+          <div class="subheading"><h3>The scoreboard</h3><span>Evidence profiles from a small sample — not a final ranking</span></div>
           <div class="table-caption table-caption--equation">
-            <p class="kicker">The main success test</p>
-            <p><strong>Useful timed-call rate = exact named outcomes within ±3 hours of ETA ÷ all scoreable calls</strong></p>
-            <span>False alarms, wrong outcomes, and otherwise-correct events more than three hours early or late remain misses. Calls we cannot fairly score are excluded and shown in the sample column.</span>
+            <p class="kicker">The headline number</p>
+            <p><strong>Bullseye rate = exact outcome within ±3 hours of the model’s own ETA, out of every call we could fairly score.</strong></p>
+            <span>False alarms, wrong outcomes, and correct-but-early-or-late calls all count as misses. Calls we can’t fairly judge are excluded — and you can see exactly how many in the evidence column. Small samples: read the counts, not just the percentages.</span>
           </div>
           <div class="table-shell">
             <table class="adviser-table" aria-label="Compact adviser comparison">
-              <thead><tr><th>Model</th><th>Useful timed calls<small>exact result within ±3h</small></th><th>Found action<small>any base movement</small></th><th>Named result<small>exact, given movement</small></th><th>Strongest picks<small>ranks #1 and #5 captured</small></th><th>Evidence<small>how much data</small></th></tr></thead>
+              <thead><tr><th>Model</th><th>Bullseyes<small>exact call, ±3h of ETA</small></th><th>Found the action<small>picked a base that moved</small></th><th>Named it right<small>exact, given movement</small></th><th>Best picks<small>ranks #1 and #5 captured</small></th><th>Evidence<small>how much data</small></th></tr></thead>
               <tbody id="adviser-rows" aria-live="polite"></tbody>
             </table>
           </div>
           <p id="adviser-empty" class="empty-state" hidden>No model has completed a full round under the current protocol yet.</p>
         </div>
         <details class="progressive-detail">
-          <summary>Show the full base-selection breakdown</summary>
+          <summary>Audit view: base-picking vs. the field</summary>
         <div class="table-caption table-caption--equation">
           <p class="kicker">The comparison with the field</p>
-          <p><strong>Finds captures vs. field = model capture rate ÷ eligible-field capture rate</strong></p>
-          <span>Technical name: capture lift. A value of 1.00× matches the field; 1.40× means the model found captures 40% more often in this comparison.</span>
+          <p><strong>Finds captures vs. field = the model’s capture rate ÷ the rate across all comparable bases it could have picked.</strong></p>
+          <span>Technical name: capture lift. A value of 1.00× means the model picked captures exactly as often as a random comparable base; 1.40× means 40% more often. This is the benchmark that separates “good eye” from “lucky guess”.</span>
         </div>
         <div class="table-shell">
           <table class="score-table selection-table" aria-describedby="selection-guide">
@@ -133,27 +133,27 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <div><dt>Captured selection</dt><dd>The selected base reached faction ownership by its deadline. This asks whether the model pointed toward a completed change of control.</dd></div>
           <div><dt>Any movement</dt><dd>The selected base changed ownership or became neutral. This broader measure asks whether the model at least looked in a live part of the map.</dd></div>
           <div><dt>Exact outcome</dt><dd>The selected base did exactly what the model named. This is stricter than finding a base where anything happened.</dd></div>
-          <div><dt>Finds action vs. field <span>(capture lift)</span></dt><dd>1.00× matches comparable strategic bases available at the cutoff; 1.40× finds captures 40% more often. Use this to judge where the model spends its attention.</dd></div>
+          <div><dt>Finds action vs. field <span>(capture lift)</span></dt><dd>1.00× means no better than picking a comparable base at random; 1.40× finds captures 40% more often. Use this to judge whether the model looks at the right places.</dd></div>
         </dl>
         </details>
       </section>
 
       <section class="section-block evidence-caution" aria-labelledby="evidence-caution-title">
         <div class="section-heading">
-          <div><p class="kicker">How much should we believe yet?</p><h2 id="evidence-caution-title">The evidence is still early.</h2></div>
-          <p>These numbers describe the calls observed so far. They do not prove that one model is generally the best Foxhole adviser.</p>
+          <div><p class="kicker">Read before believing</p><h2 id="evidence-caution-title">Don’t crown a winner yet.</h2></div>
+          <p>These numbers describe the calls we’ve seen so far. They are clues, not a verdict on which model is “the best”.</p>
         </div>
         <div class="limitations-grid">
-          <article><h3>Samples differ</h3><p>Models have different numbers of scored, open, unscored, dropped, and failed calls. Read every rate with its hit and sample counts.</p></article>
-          <article><h3>Rounds are related</h3><p>Several models may forecast the same front repeatedly. A collection of bets from one war is not the same as many independent experiments.</p></article>
-          <article><h3>Timing has a catch</h3><p>Simple ETA error exists only when an event was matched. The useful-call rate keeps false alarms in view, while CRPS later shows whether the model’s stated probabilities were appropriately cautious.</p></article>
+          <article><h3>It’s early</h3><p>Some models have made dozens of scored calls; others only a handful. A 60% rate on five calls is a very different claim from 60% on fifty — always read the counts next to the percentages.</p></article>
+          <article><h3>Same war, same rounds</h3><p>Models often bet on the same front in the same hours. Twenty calls from one war are not twenty independent experiments — one weird week can flatter or sink anyone.</p></article>
+          <article><h3>Timing has a catch</h3><p>Average timing error can only be computed when something actually happened, so it quietly ignores false alarms. The bullseye rate keeps those misses in view; the CRPS table below shows whether stated probabilities were honest.</p></article>
         </div>
       </section>
 
       <section id="war-data" class="section-block">
         <div class="section-heading">
-          <div><p class="kicker">What every model saw</p><h2>Current war data</h2></div>
-          <p>This is an observed snapshot, not a prediction. Every model receives the same all-region public packet: ownership, recent activity, casualty pace, and new-to-region enlistment activity. Forecast rounds retain their earlier cutoff.</p>
+          <div><p class="kicker">The raw material</p><h2>What the models were shown</h2></div>
+          <p>Every model gets exactly the same snapshot of the war: who owns what, where the fighting is, casualty pace, and fresh enlistment activity. Nothing secret, nothing after the cutoff. This is that snapshot, straight from the official game API.</p>
         </div>
         <div id="telemetry-summary" class="telemetry-grid"></div>
         <div class="telemetry-layout">
@@ -175,15 +175,15 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 
       <section id="rounds" class="section-block">
         <div class="section-heading">
-          <div><p class="kicker">Dated sets of bets</p><h2>Prediction rounds</h2></div>
-          <p>Each round is one shared three-hour UTC block. Open it to compare every participating model’s briefing and eight ranked predictions from the same cutoff.</p>
+          <div><p class="kicker">Receipts</p><h2>The calls, round by round</h2></div>
+          <p>Each round is one shared three-hour window. Open a round to compare what every model said from the exact same moment: its briefing, its eight ranked calls, and how each one settled.</p>
         </div>
         <div id="round-list" class="round-list"></div>
       </section>
 
       <section id="briefings" class="section-block">
         <div class="section-heading section-heading--controls">
-          <div><p class="kicker">The model’s story</p><h2>Latest calls and briefings</h2></div>
+          <div><p class="kicker">In their own words</p><h2>Latest briefings</h2></div>
           <label class="select-label">Model <select id="briefing-model"></select></label>
         </div>
         <div id="briefing-list" class="briefing-list"></div>
@@ -191,13 +191,13 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 
       <section id="probability" class="section-block">
         <div class="section-heading">
-          <div><p class="kicker">Probability and timing diagnostics</p><h2>Were its probabilities honest?</h2></div>
-          <p>This technical view comes after the adviser evidence because a cautious model can earn good probability scores without being especially good at choosing bases. CRPS remains useful; it simply answers a narrower question.</p>
+          <div><p class="kicker">For nerds</p><h2>How honest were the probabilities?</h2></div>
+          <p>A model can sound humble and still be useless, or nail every call while claiming it was never sure. This technical table checks whether the stated confidences and timing spreads matched reality. It answers a narrower question than the scoreboard, which is why it lives down here.</p>
         </div>
         <div class="table-caption table-caption--equation">
-          <p class="kicker">Whole forecast error</p>
+          <p class="kicker">Whole-forecast error</p>
           <p><strong>CRPS = ∫ [forecast probability by time t − observed result by time t]² dt</strong></p>
-          <span>This adds up disagreement between the model’s probability-and-time curve and what the API observed. Lower is better; zero is perfect. Near-term and next-day calls stay separate because their time windows differ.</span>
+          <span>In plain words: at every moment, how far apart were the model’s probability curve and what the game actually did? Add up that gap over time. Lower is better, zero is perfect. Near-term and next-day calls are scored separately because their windows differ.</span>
         </div>
         <div class="table-shell">
           <table class="score-table probability-table" aria-describedby="score-guide">
@@ -219,44 +219,44 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <p id="score-empty" class="empty-state" hidden>No model has scoreable probability forecasts under the current protocol yet.</p>
         </div>
         <dl id="score-guide" class="score-guide">
-          <div><dt>Near-term / next-day error <span>(CRPS)</span></dt><dd>The average whole-forecast error in minutes. Lower is better, but this does not by itself show whether the model selected strategically useful bases.</dd></div>
-          <div><dt>Stated chance <span>(confidence)</span></dt><dd>The model’s probability that its named outcome happens by the deadline. A low-confidence non-event can score well even though it was not useful advice.</dd></div>
-          <div><dt>Timing window <span>(sigma)</span></dt><dd>How spread out the model says the event time might be. A narrow window is a stronger and riskier timing claim.</dd></div>
-          <div><dt>Matched timing error <span>(ETA error)</span></dt><dd>Distance from ETA only when a relevant transition occurred. It excludes false alarms, so never read it alone.</dd></div>
-          <div><dt>Not scored <span>(censored)</span></dt><dd>Observation coverage was incomplete or the war ended before a fair result was possible.</dd></div>
+          <div><dt>Near-term / next-day error <span>(CRPS)</span></dt><dd>Average whole-forecast error in minutes. Lower is better — but a model can score well here with timid, unhelpful calls, which is why this table sits below the scoreboard.</dd></div>
+          <div><dt>Stated chance <span>(confidence)</span></dt><dd>How likely the model said its named outcome was. A low-confidence call about nothing happening can score fine while being useless advice — read this beside the bullseye rate.</dd></div>
+          <div><dt>Timing window <span>(sigma)</span></dt><dd>How spread out the model’s own timing estimate is. A narrow window is a bold, risky claim; a wide one hedges.</dd></div>
+          <div><dt>Matched timing error <span>(ETA error)</span></dt><dd>How far the event landed from the ETA — but only for calls where something actually happened. False alarms don’t appear here, so never read this number alone.</dd></div>
+          <div><dt>Not scored <span>(censored)</span></dt><dd>Our observation coverage had gaps or the war ended before a fair judgment was possible. Excluded, not counted as misses.</dd></div>
         </dl>
       </section>
 
       <section id="limitations" class="section-block limitations">
         <div class="section-heading">
-          <div><p class="kicker">What this experiment cannot know</p><h2>Useful evidence, limited view</h2></div>
-          <p>A good score does not mean an AI has a complete picture of the battlefield.</p>
+          <div><p class="kicker">Honest limits</p><h2>What this can’t tell you</h2></div>
+          <p>A good score means a model read public data well. It does not mean an AI understands the whole battlefield.</p>
         </div>
         <div class="limitations-grid">
-          <article><h3>Our data source</h3><p>We use the public Foxhole War API and poll it on a regular schedule. That keeps the comparison transparent and gives every model the same cutoff-time information.</p></article>
-          <article><h3>What may be missing</h3><p>Knowing a base's artillery-shell stockpile and how quickly shells are being used or resupplied could be more directly predictive than a region-wide casualty count. The public API does not expose that kind of logistics data, and we do not scrape game state or operate an in-game computer-use agent to obtain it.</p></article>
-          <article><h3>Why keep it small?</h3><p>We minimize out-of-pocket model costs while testing whether a simple, repeatable public-data setup produces useful evidence. Treat these results as an ongoing study, not a finished ranking.</p></article>
+          <article><h3>Public data only</h3><p>We poll the official Foxhole War API every fifteen minutes. That keeps the playing field level and the whole experiment auditable — anyone can pull the same numbers.</p></article>
+          <article><h3>No logistics intel</h3><p>Real Foxhole players would ask about shell stockpiles and supply lines. The public API doesn’t expose that, and we don’t scrape the game or run an in-game agent — so the models are forecasting with one hand tied behind their backs, on purpose.</p></article>
+          <article><h3>Small on purpose</h3><p>Model calls cost money, so the experiment stays compact: a handful of models, eight calls per round. Treat everything here as an ongoing study, not a finished leaderboard.</p></article>
         </div>
       </section>
 
       <section id="method" class="section-block methodology">
-        <div><p class="kicker">How this works</p><h2>A forecast, not a hindsight test</h2></div>
+        <div><p class="kicker">How it works</p><h2>No hindsight allowed</h2></div>
         <div class="method-grid">
-          <article><span>01</span><h3>Observe</h3><p>We collect the official public Foxhole War API every 15 minutes. Every model gets a frozen, cutoff-safe view of the same evidence.</p></article>
-          <article><span>02</span><h3>Forecast</h3><p>Each model scouts six regions, then makes eight ranked calls: four for the next six hours and four for the following 6–24 hours.</p></article>
-          <article><span>03</span><h3>Settle</h3><p>Later API observations tell us whether each call’s named outcome happened and how close its timing was. Near-term and next-day performance count equally.</p></article>
+          <article><span>01</span><h3>Snapshot</h3><p>Every fifteen minutes we save the official public war data. Before each round, every model gets the same frozen slice of it — identical evidence, identical cutoff.</p></article>
+          <article><span>02</span><h3>Predict</h3><p>Each model scouts six regions, then commits to eight ranked calls: four about the next six hours, four about the following day. Base, outcome, exact time, confidence.</p></article>
+          <article><span>03</span><h3>Check</h3><p>Later snapshots reveal what actually happened. Each call is scored against reality — outcome, timing, and honesty of its stated probability all count.</p></article>
         </div>
         <details class="progressive-detail method-detail">
-          <summary>Show settlement rules and edge cases</summary>
+          <summary>The fine print: settlement rules and edge cases</summary>
           <div class="rule-grid rule-grid--two">
-            <article class="rule-card"><h3>When a call closes</h3><p>Each prediction stays open until three hours after its ETA. No qualifying transition by then is a scored miss when observation coverage is adequate.</p></article>
-            <article class="rule-card"><h3>What counts as close</h3><p>The named faction capture or destruction receives full outcome credit. Confusing capture with destruction receives 0.75 because the model still anticipated loss of the current owner.</p></article>
-            <article class="rule-card"><h3>Why timing is an interval</h3><p>Fifteen-minute polling tells us that an event happened between two observations, not its exact second. Scoring averages over that observed interval.</p></article>
-            <article class="rule-card"><h3>When we do not score</h3><p>Missing coverage, an ambiguous transition interval, or a war ending before the scoring window closes can leave a prediction unscored rather than turning missing evidence into a miss.</p></article>
+            <article class="rule-card"><h3>When a call closes</h3><p>Each prediction stays open until three hours after its stated ETA. If nothing qualifying happened by then and our observation coverage was solid, it scores as a miss.</p></article>
+            <article class="rule-card"><h3>Partial credit exists</h3><p>Naming the exact outcome earns full credit. Confusing a capture with a destruction earns 0.75 — the model still saw the base falling, just misread who did it.</p></article>
+            <article class="rule-card"><h3>Why timing is fuzzy</h3><p>Fifteen-minute polling means we know an event happened <em>between</em> two observations, not the exact second. Scoring averages over that interval rather than pretending we have stopwatch precision.</p></article>
+            <article class="rule-card"><h3>When we refuse to score</h3><p>If our coverage had gaps, the transition window was ambiguous, or the war ended mid-round, a call is marked “not scored” instead of being turned into a fake miss. You can see those counts on the scoreboard.</p></article>
           </div>
         </details>
-        <a class="method-link" href={`${basePath}prompt-flow/`}>See the exact prompt and evidence flow →</a>
-        <p class="fine-print">Foxhole Forecast is an independent, non-commercial experiment. Foxhole is developed by Siege Camp. Model summaries are predictions, not gameplay advice.</p>
+        <a class="method-link" href={`${basePath}prompt-flow/`}>See the exact prompts and data flow →</a>
+        <p class="fine-print">Foxhole Forecast is an independent, non-commercial experiment. Foxhole is developed by Siege Camp. Model briefings are predictions, not gameplay advice.</p>
       </section>
     </main>
 
