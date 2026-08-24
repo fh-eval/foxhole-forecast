@@ -1,5 +1,6 @@
 ---
 import "../styles/global.css";
+import { Content as HumanNote } from "../content/human-note.md";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 ---
@@ -13,13 +14,25 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
     <title>Foxhole Forecast</title>
   </head>
   <body>
+    <aside class="human-note" aria-labelledby="human-note-title">
+      <div class="page-width human-note__inner">
+        <div class="human-note__label">
+          <p class="kicker">A word before the numbers</p>
+          <h2 id="human-note-title">Note from the human</h2>
+        </div>
+        <div class="human-note__copy">
+          <HumanNote />
+          <p class="human-note__credit">Project directed by its human researcher. Site built collaboratively with Codex and Luna.</p>
+        </div>
+      </div>
+    </aside>
     <header class="masthead">
-      <div class="masthead__eyebrow">LIVE-1 / ABLE · PROSPECTIVE MODEL EVAL</div>
+      <div class="masthead__eyebrow">A SMALL, LIVE RESEARCH PROJECT · PROSPECTIVE MODEL EVALUATION</div>
       <div class="masthead__body page-width">
         <div>
           <h1>Foxhole <span>Forecast</span></h1>
-          <p class="lede">Who is the smartest of them all?</p>
-          <p class="sublede">Models publish their calls before the front moves. The public War API settles every prediction.</p>
+          <p class="lede">Are the models any good at this?</p>
+          <p class="sublede">If you wanted an AI as a strategic adviser in Foxhole, what evidence would help you choose? We give several models the same public data, record their calls before the front moves, and check those calls against what happened next.</p>
         </div>
         <div class="war-stamp" aria-live="polite">
           <span class="pulse"></span>
@@ -30,12 +43,13 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 
     <nav class="section-nav" aria-label="Page sections">
       <div class="page-width">
-        <a href="#scoreboard">Scoreboard</a>
-        <a href="#war-data">War data</a>
-        <a href="#rounds">Rounds</a>
-        <a href="#briefings">Briefings</a>
+        <a href="#scoreboard">At a glance</a>
+        <a href="#war-data">Current war</a>
+        <a href="#rounds">Prediction rounds</a>
+        <a href="#briefings">Latest calls</a>
         <a href={`${basePath}predictions/`}>Prediction browser</a>
-        <a href="#history">History</a>
+        <a href="#history">Track record</a>
+        <a href="#limitations">Limits</a>
         <a href="#method">Method</a>
         <a href={`${basePath}scoring/`}>Scoring details</a>
       </div>
@@ -49,16 +63,56 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <div><small>TIMING RESOLUTION</small><strong>≤ 15 min</strong></div>
       </section>
 
+      <section class="investigation-intro" aria-labelledby="investigation-title">
+        <div>
+          <p class="kicker">The question we are testing</p>
+          <h2 id="investigation-title">A useful adviser must be right, specific, and honest about uncertainty.</h2>
+        </div>
+        <div class="investigation-intro__copy">
+          <p>We do not ask whether a model sounds clever. We ask whether it can name a strategic base, predict what will happen to it, say when, and give a probability that earns trust over many calls.</p>
+          <p class="plain-note"><strong>How to read the page:</strong> start with the compact comparison, then inspect the calls and evidence that produced it. The technical scoring details stay available for anyone who wants to audit the experiment.</p>
+        </div>
+      </section>
+
       <section id="scoreboard" class="section-block">
         <div class="section-heading">
-          <div><p class="kicker">Performance and behavior</p><h2>How the models think</h2></div>
+          <div><p class="kicker">First look</p><h2>What has each model shown so far?</h2></div>
           <div class="score-heading-controls">
-            <p>The forecast score balances short- and long-range CRPS on a 0–100 scale. Raw CRPS minutes, confidence, timing uncertainty, target horizon, and ETA error show how each model tends to make its calls.</p>
+            <p>Use this as a starting point, not a verdict. More settled calls make comparisons more useful; an early leader may simply have less evidence behind it.</p>
             <div class="segmented" role="group" aria-label="Score history scope">
               <button class="active" data-score-scope="current">Current war</button>
               <button data-score-scope="all">All wars</button>
             </div>
           </div>
+        </div>
+        <div class="adviser-guide">
+          <div><strong>Whole forecast</strong><span>Did the model assign probability to the right event at roughly the right time?</span></div>
+          <div><strong>Where it looks</strong><span>Did its chosen bases get captured more often than comparable bases in the field?</span></div>
+          <div><strong>How certain it sounds</strong><span>What chance and timing spread did it claim? Confidence describes the model; it is not proof that the model is calibrated.</span></div>
+        </div>
+        <div class="compact-leaderboard">
+          <div class="subheading"><h3>Compact adviser comparison</h3><span>Plain-language view</span></div>
+          <div class="table-caption table-caption--equation">
+            <p class="kicker">The two equations behind this table</p>
+            <p><strong>Whole forecast error (CRPS) = ∫ [forecast probability by time t − observed result by time t]² dt</strong></p>
+            <span>This adds up the disagreement between the model's probability-and-time curve and what the API observed. Lower is better; zero is perfect.</span>
+            <p><strong>Forecast quality = 100 × [1 − ½(near-term error ÷ 540) − ½(next-day error ÷ 1,620)]</strong></p>
+            <span>This turns the two errors into a readable index with equal weight for both horizons. Higher is better, but this number is not percent accuracy.</span>
+          </div>
+          <div class="table-shell">
+            <table class="adviser-table" aria-label="Compact adviser comparison">
+              <thead><tr><th>Model</th><th>Overall quality<small>0–100 · higher is better</small></th><th>Scored calls</th><th>Near term<small>0–6 hours</small></th><th>Next day<small>6–24 hours</small></th><th>Finds captures<small>vs. field</small></th></tr></thead>
+              <tbody id="adviser-rows" aria-live="polite"></tbody>
+            </table>
+          </div>
+          <p id="adviser-empty" class="empty-state" hidden>No model has completed a full round under the current protocol yet.</p>
+        </div>
+        <details class="progressive-detail">
+          <summary>Show the full scoring table and technical measures</summary>
+        <div class="table-caption table-caption--equation table-caption--detail">
+          <p class="kicker">Same score, more detail</p>
+          <p><strong>Overall forecast quality = 100 × [1 − ½(near-term error ÷ 540) − ½(next-day error ÷ 1,620)]</strong></p>
+          <span>The technical table below shows the ingredients behind the compact comparison.</span>
         </div>
         <div class="table-shell">
           <table class="score-table" aria-describedby="score-guide">
@@ -66,15 +120,15 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
               <tr>
                 <th>Rank</th>
                 <th>Model</th>
-                <th>Forecast score<small>Balanced 0–100 ↑</small></th>
-                <th>Short CRPS<small>0–6h bets · mean minutes ↓</small></th>
-                <th>Long CRPS<small>6–24h bets · mean minutes ↓</small></th>
-                <th>Confidence<small>Mean stated</small></th>
-                <th>Timing uncertainty<small>Mean sigma ↓</small></th>
-                <th>Typical 0–6h target<small>Median after cutoff</small></th>
-                <th>Typical 6–24h target<small>Median after cutoff</small></th>
-                <th>ETA error<small>Median matched event ↓</small></th>
-                <th>Settlement<small>Scored / censored / open</small></th>
+                <th>Overall quality<small>Balanced score · higher ↑</small></th>
+                <th>Near-term forecast error<small>CRPS · 0–6h calls · lower ↓</small></th>
+                <th>Next-day forecast error<small>CRPS · 6–24h calls · lower ↓</small></th>
+                <th>Claimed chance<small>Mean confidence</small></th>
+                <th>Claimed timing spread<small>Mean sigma</small></th>
+                <th>Typical near-term target<small>Median after cutoff</small></th>
+                <th>Typical next-day target<small>Median after cutoff</small></th>
+                <th>Timing error<small>Matched events · lower ↓</small></th>
+                <th>Call status<small>Scored / not scored / open</small></th>
               </tr>
             </thead>
             <tbody id="score-rows" aria-live="polite"></tbody>
@@ -82,50 +136,69 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <p id="score-empty" class="empty-state" hidden>No model has completed a full round under the current protocol yet.</p>
         </div>
         <dl id="score-guide" class="score-guide">
-          <div><dt>Forecast score</dt><dd>Short and long CRPS are normalized against fixed 540- and 1,620-minute protocol windows, weighted 50/50, and converted to 0–100. Higher is better; it is not percent accuracy.</dd></div>
-          <div><dt>Short / long CRPS</dt><dd>Mean CRPS is kept separate for ranks 1–4 and 5–8. Lower is better; 0 minutes is perfect.</dd></div>
-          <div><dt>Confidence</dt><dd>Probability that the named outcome occurs by ETA + 3 hours.</dd></div>
-          <div><dt>Timing uncertainty</dt><dd>Mean standard deviation around the ETA. Historical values are inferred from confidence; new values come from the model.</dd></div>
-          <div><dt>Typical targets</dt><dd>Median ETA lead is reported separately inside the required 0–6h and 6–24h tranches, so the imposed timeline does not blur model behavior.</dd></div>
-          <div><dt>ETA error</dt><dd>Median distance from the ETA to a matched transition interval; no-event misses are not measurable here.</dd></div>
-          <div><dt>Censored</dt><dd>Settled without a score because observation coverage could not support a fair result.</dd></div>
+          <div><dt>Overall forecast quality <span>(balanced CRPS)</span></dt><dd>A 0–100 summary of outcome and timing quality, giving both horizons equal weight. Higher is better; it is not percent accuracy.</dd></div>
+          <div><dt>Near-term / next-day error <span>(CRPS)</span></dt><dd>Average distance between a model’s probability curve and what the API observed. Lower is better; 0 minutes is perfect. Use these to see a model’s preferred horizon.</dd></div>
+          <div><dt>Stated chance <span>(confidence)</span></dt><dd>The model’s chance that its named outcome happens by the deadline. Compare it with outcomes over many calls; a high average alone is not proof of calibration.</dd></div>
+          <div><dt>Timing window <span>(sigma)</span></dt><dd>How spread out the model says its event time might be. A wider window admits uncertainty; a narrow one is a stronger, riskier claim.</dd></div>
+          <div><dt>Typical targets</dt><dd>The median time each model aims for in the two required horizons. This helps describe its style, not whether it was right.</dd></div>
+          <div><dt>Timing error <span>(ETA error)</span></dt><dd>How far a matched event landed from the model’s ETA. Use it to judge whether a model is useful for planning a response.</dd></div>
+          <div><dt>Not scored <span>(censored)</span></dt><dd>Observations were incomplete, so we do not turn missing data into either credit or a miss.</dd></div>
         </dl>
+        </details>
         <div class="selection-heading">
-          <div><p class="kicker">Base selection</p><h3>Can the model pick where the map will move?</h3></div>
-          <p>Capture rates judge the bases the model selected, independent of confidence. Lift compares those selections with every strategic base available at the same cutoff and observed through the same deadline.</p>
+          <div><p class="kicker">A second test</p><h3>Can the model pick where the map will move?</h3></div>
+          <p>This is the operational question: did a model spend one of its picks on a base where something happened? It is separate from confidence and from the exact timing score.</p>
+        </div>
+        <div class="table-caption table-caption--equation">
+          <p class="kicker">The comparison with the field</p>
+          <p><strong>Finds captures vs. field = model capture rate ÷ eligible-field capture rate</strong></p>
+          <span>Technical name: capture lift. A value of 1.00× matches the field; 1.40× means the model found captures 40% more often in this comparison.</span>
         </div>
         <div class="table-shell">
           <table class="score-table selection-table" aria-describedby="selection-guide">
             <thead>
               <tr>
                 <th>Model</th>
-                <th>Short captures<small>Selected 0–6h bases</small></th>
-                <th>Long captures<small>Selected 6–24h bases</small></th>
-                <th>Any transition<small>Captured or destroyed</small></th>
+                <th>Near-term captures<small>Selected 0–6h bases</small></th>
+                <th>Next-day captures<small>Selected 6–24h bases</small></th>
+                <th>Any movement<small>Captured or destroyed</small></th>
                 <th>Exact outcome<small>Named result matched</small></th>
-                <th>Capture lift<small>Model rate ÷ field rate</small></th>
-                <th>Top-ranked captures<small>Ranks #1 and #5</small></th>
+                <th>Finds action vs. field<small>Technical: capture lift</small></th>
+                <th>Strongest picks<small>Ranks #1 and #5</small></th>
               </tr>
             </thead>
             <tbody id="selection-rows" aria-live="polite"></tbody>
           </table>
         </div>
         <dl id="selection-guide" class="score-guide">
-          <div><dt>Capture</dt><dd>The selected base reached Warden or Colonial ownership by that bet’s deadline. A correct destruction call can still be a good exact outcome without counting as a capture.</dd></div>
-          <div><dt>Any transition</dt><dd>The selected base was captured or destroyed. This measures whether the model found an active base even if it named the wrong result.</dd></div>
-          <div><dt>Capture lift</dt><dd>1.00× matches the capture rate of all strategic bases available at those cutoffs and deadlines. Above 1.00× indicates useful selection; below 1.00× trails the field.</dd></div>
+          <div><dt>Captured selection</dt><dd>The selected base reached faction ownership by its deadline. This asks whether the model pointed toward a completed change of control.</dd></div>
+          <div><dt>Any movement</dt><dd>The selected base changed ownership or became neutral. This broader measure asks whether the model at least looked in a live part of the map.</dd></div>
+          <div><dt>Exact outcome</dt><dd>The selected base did exactly what the model named. This is stricter than finding a base where anything happened.</dd></div>
+          <div><dt>Finds action vs. field <span>(capture lift)</span></dt><dd>1.00× matches comparable strategic bases available at the cutoff; 1.40× finds captures 40% more often. Use this to judge where the model spends its attention.</dd></div>
         </dl>
+      </section>
+
+      <section class="section-block evidence-caution" aria-labelledby="evidence-caution-title">
+        <div class="section-heading">
+          <div><p class="kicker">How much should we believe yet?</p><h2 id="evidence-caution-title">The evidence is still early.</h2></div>
+          <p>These numbers describe the calls observed so far. They do not prove that one model is generally the best Foxhole adviser.</p>
+        </div>
+        <div class="limitations-grid">
+          <article><h3>Samples differ</h3><p>Models have different numbers of scored, open, unscored, dropped, and failed calls. Read every rate with its hit and sample counts.</p></article>
+          <article><h3>Rounds are related</h3><p>Several models may forecast the same front repeatedly. A collection of bets from one war is not the same as many independent experiments.</p></article>
+          <article><h3>Timing has a catch</h3><p>Simple ETA error exists only when an event was matched. Whole forecast error (CRPS) is the fairer overview because it also retains confident calls where nothing happened.</p></article>
+        </div>
       </section>
 
       <section id="war-data" class="section-block">
         <div class="section-heading">
-          <div><p class="kicker">The scout packet</p><h2>Current war telemetry</h2></div>
-          <p>This table is generated from the same all-region scout packet sent to every model: ownership, recent event activity, casualty pace, and new-to-region enlistment activity. Forecast rounds retain their earlier cutoff.</p>
+          <div><p class="kicker">What every model saw</p><h2>Current war data</h2></div>
+          <p>This is an observed snapshot, not a prediction. Every model receives the same all-region public packet: ownership, recent activity, casualty pace, and new-to-region enlistment activity. Forecast rounds retain their earlier cutoff.</p>
         </div>
         <div id="telemetry-summary" class="telemetry-grid"></div>
         <div class="telemetry-layout">
           <div>
-            <div class="subheading"><h3>All regions, ranked by recent activity</h3><span id="telemetry-cutoff">—</span></div>
+            <div class="subheading"><h3>Regions, ranked by recent activity</h3><span id="telemetry-cutoff">—</span></div>
             <div class="table-shell telemetry-scroll">
               <table class="telemetry-table">
                 <thead><tr><th>Region</th><th>Events<small>2h / 6h / 24h</small></th><th>Bases<small>W / C / neutral</small></th><th>Warden casualties<small>1h pace · total · 2h change</small></th><th>Colonial casualties<small>1h pace · total · 2h change</small></th><th>Enlistments<small>1h new-region pace · total · 2h change</small></th><th>Latest event</th></tr></thead>
@@ -143,14 +216,14 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       <section id="rounds" class="section-block">
         <div class="section-heading">
           <div><p class="kicker">Dated sets of bets</p><h2>Prediction rounds</h2></div>
-          <p>Each round is one shared three-hour UTC block. Open it to compare every participating model’s cutoff-time briefing and eight ranked predictions.</p>
+          <p>Each round is one shared three-hour UTC block. Open it to compare every participating model’s briefing and eight ranked predictions from the same cutoff.</p>
         </div>
         <div id="round-list" class="round-list"></div>
       </section>
 
       <section id="briefings" class="section-block">
         <div class="section-heading section-heading--controls">
-          <div><p class="kicker">What they think now</p><h2>Latest war briefings</h2></div>
+          <div><p class="kicker">The model’s story</p><h2>Latest calls and briefings</h2></div>
           <label class="select-label">Model <select id="briefing-model"></select></label>
         </div>
         <div id="briefing-list" class="briefing-list"></div>
@@ -158,18 +231,30 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 
       <section id="history" class="section-block">
         <div class="section-heading section-heading--controls">
-          <div><p class="kicker">Track the narrative</p><h2>Model history</h2></div>
+          <div><p class="kicker">Look for consistency</p><h2>Model track record</h2></div>
           <label class="select-label">Model <select id="history-model"></select></label>
         </div>
         <ol id="history-list" class="history-list"></ol>
       </section>
 
+      <section id="limitations" class="section-block limitations">
+        <div class="section-heading">
+          <div><p class="kicker">What this experiment cannot know</p><h2>Useful evidence, limited view</h2></div>
+          <p>A good score does not mean an AI has a complete picture of the battlefield.</p>
+        </div>
+        <div class="limitations-grid">
+          <article><h3>Our data source</h3><p>We use the public Foxhole War API and poll it on a regular schedule. That keeps the comparison transparent and gives every model the same cutoff-time information.</p></article>
+          <article><h3>What may be missing</h3><p>Knowing a base's artillery-shell stockpile and how quickly shells are being used or resupplied could be more directly predictive than a region-wide casualty count. The public API does not expose that kind of logistics data, and we do not scrape game state or operate an in-game computer-use agent to obtain it.</p></article>
+          <article><h3>Why keep it small?</h3><p>We minimize out-of-pocket model costs while testing whether a simple, repeatable public-data setup produces useful evidence. Treat these results as an ongoing study, not a finished ranking.</p></article>
+        </div>
+      </section>
+
       <section id="method" class="section-block methodology">
         <div><p class="kicker">How this works</p><h2>A forecast, not a hindsight test</h2></div>
         <div class="method-grid">
-          <article><span>01</span><h3>Observe</h3><p>The official Foxhole War API is polled every 15 minutes. A tagged FoxholeStats snapshot backfills pre-launch history only; every prompt remains cutoff-safe.</p></article>
-          <article><span>02</span><h3>Forecast</h3><p>Each model scouts six regions, then publishes eight ranked state-transition bets: four with ETAs within six hours and four with ETAs from six to 24 hours.</p></article>
-          <article><span>03</span><h3>Settle</h3><p>Interval-aware CRPS evaluates each probability distribution through ETA + 3 hours. Short and long CRPS stay separate, then receive equal weight in the 0–100 forecast score.</p></article>
+          <article><span>01</span><h3>Observe</h3><p>We collect the official public Foxhole War API every 15 minutes. Every model gets a frozen, cutoff-safe view of the same evidence.</p></article>
+          <article><span>02</span><h3>Forecast</h3><p>Each model scouts six regions, then makes eight ranked calls: four for the next six hours and four for the following 6–24 hours.</p></article>
+          <article><span>03</span><h3>Settle</h3><p>Later API observations tell us whether each call’s named outcome happened and how close its timing was. Near-term and next-day performance count equally.</p></article>
         </div>
         <a class="method-link" href={`${basePath}scoring/`}>Read the complete scoring method and rationale →</a>
         <p class="fine-print">Foxhole Forecast is an independent, non-commercial experiment. Foxhole is developed by Siege Camp. Model summaries are predictions, not gameplay advice.</p>
@@ -339,12 +424,22 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         return cell;
       }
 
+      function adviserCell(value, note, className = "") {
+        const cell = element("td", `adviser-table__metric ${className}`.trim());
+        cell.append(element("strong", "", value), element("small", "", note));
+        return cell;
+      }
+
       function renderScores(models, rounds, summaries = []) {
         const rows = document.querySelector("#score-rows");
         const selectionRows = document.querySelector("#selection-rows");
+        const adviserRows = document.querySelector("#adviser-rows");
+        const adviserEmpty = document.querySelector("#adviser-empty");
         const empty = document.querySelector("#score-empty");
         rows.replaceChildren();
         selectionRows.replaceChildren();
+        adviserRows.replaceChildren();
+        adviserEmpty.hidden = models.length > 0;
         empty.hidden = models.length > 0;
         if (!models.length) {
           return;
@@ -398,6 +493,19 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           || String(a.model.label).localeCompare(String(b.model.label))
         );
         behaviors.forEach((behavior, index) => {
+          const adviserRow = document.createElement("tr");
+          const adviserModel = element("td", "adviser-table__model");
+          adviserModel.append(element("strong", "", behavior.model.label || behavior.model.series_id));
+          adviserRow.append(
+            adviserModel,
+            adviserCell(decimal(behavior.forecastScore), behavior.forecastScore == null ? "waiting for both horizons" : "higher is better · not % accuracy", "adviser-table__primary"),
+            adviserCell(`${behavior.scoreableCount} scored`, `${behavior.open} open · ${behavior.censored} not scored`),
+            adviserCell(crps(behavior.shortCrpsMinutes), `${behavior.shortScoreableCount} calls · lower is better`),
+            adviserCell(crps(behavior.longCrpsMinutes), `${behavior.longScoreableCount} calls · lower is better`),
+            adviserCell(ratio(behavior.captureLift), behavior.captureLift == null ? "field comparison unavailable" : `${percentage(behavior.captureRate)} model · ${percentage(behavior.captureBaselineRate)} field`),
+          );
+          adviserRows.append(adviserRow);
+
           const row = document.createElement("tr");
           const modelCell = element("td", "score-table__model");
           modelCell.append(
@@ -415,8 +523,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             metricCell(decimal(behavior.forecastScore), behavior.forecastScore == null ? "waiting for both timelines" : "equal short / long weight", "score-table__primary"),
             metricCell(crps(behavior.shortCrpsMinutes), `${behavior.shortScoreableCount} scored short bets`),
             metricCell(crps(behavior.longCrpsMinutes), `${behavior.longScoreableCount} scored long bets`),
-            metricCell(decimal(behavior.confidence), `${behavior.publishedCount} published bets`),
-            metricCell(duration(behavior.sigmaMinutes), "conditional standard deviation"),
+            metricCell(percentage(behavior.confidence), `${behavior.publishedCount} published calls`),
+            metricCell(duration(behavior.sigmaMinutes), "average timing spread (sigma)"),
             metricCell(duration(behavior.immediateLeadMinutes), "within required tranche"),
             metricCell(duration(behavior.extendedLeadMinutes), "within required tranche"),
             metricCell(duration(behavior.etaErrorMinutes), `${behavior.matched} matched transitions`),
@@ -600,8 +708,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const line = element("p", "prediction-headline");
         const predictedOutcome = bet.predicted_outcome || (typeof bet.outcome === "string" ? bet.outcome : null);
         const sigmaSource = bet.sigma_source === "inferred_from_confidence" ? " (inferred)" : "";
-        const sigma = bet.sigma_minutes == null ? "" : ` · σ ${duration(Number(bet.sigma_minutes))}${sigmaSource}`;
-        const confidence = element("strong", "prediction-headline__confidence", `${decimal(bet.confidence)} confidence${sigma}`);
+        const sigma = bet.sigma_minutes == null ? "" : ` · timing spread ${duration(Number(bet.sigma_minutes))}${sigmaSource}`;
+        const confidence = element("strong", "prediction-headline__confidence", `${percentage(bet.confidence)} chance${sigma}`);
         line.append(confidence, document.createTextNode(": "));
         if (predictedOutcome) {
           line.append(baseIdentity(bet));
@@ -651,7 +759,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 
       function supportingEvidence(items) {
         const wrapper = element("div", "supporting-evidence");
-        wrapper.append(element("small", "supporting-evidence__label", "Supporting evidence"));
+        wrapper.append(element("small", "supporting-evidence__label", "Model-cited evidence · relevance is the model's own 1–10 rating"));
         const evidence = element("div", "evidence-list");
         (items || []).forEach((item) => evidence.append(evidenceChip(item)));
         if (!items?.length) evidence.append(element("span", "evidence-empty", "No supporting evidence retained."));
@@ -694,7 +802,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         if (score != null) {
           const badge = element("span", "prediction-score prediction-score--scored");
           badge.append(
-            element("span", "prediction-score__label", "CRPS"),
+            element("span", "prediction-score__label", "Forecast error · CRPS"),
             element("strong", "", crps(score)),
           );
           result.append(badge);

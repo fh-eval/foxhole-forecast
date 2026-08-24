@@ -14,12 +14,12 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
   </head>
   <body>
     <header class="method-masthead">
-      <div class="masthead__eyebrow">EVENT OUTCOME PROTOCOL V5 · CONTINUOUS RANKED PROBABILITY SCORE</div>
+      <div class="masthead__eyebrow">HOW WE CHECK THE CALLS · A PLAIN-LANGUAGE GUIDE</div>
       <div class="method-hero page-width">
         <div>
           <p class="kicker">Methodology</p>
-          <h1>How forecasts<br /><span>earn credit</span></h1>
-          <p class="sublede">A prediction names the base, outcome, ETA, event probability, and timing uncertainty. The official War API supplies the result.</p>
+          <h1>How we check<br /><span>the calls</span></h1>
+          <p class="sublede">Every prediction names a base, what should happen to it, when, and how sure the model is. Later observations from the public War API tell us how well that call held up.</p>
         </div>
         <a class="method-back" href={basePath}>← Return to live scores</a>
       </div>
@@ -27,13 +27,14 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 
     <nav class="section-nav" aria-label="Scoring sections">
       <div class="page-width">
-        <a href="#forecast">Forecast</a>
-        <a href="#settlement">Settlement</a>
+        <a href="#forecast">The question</a>
+        <a href="#settlement">What happened?</a>
         <a href="#timing">Timing</a>
-        <a href="#outcome">Outcome</a>
+        <a href="#outcome">Partial credit</a>
         <a href="#aggregation">Leaderboard</a>
-        <a href="#selection">Base selection</a>
-        <a href="#censoring">Censoring</a>
+        <a href="#selection">Where to look</a>
+        <a href="#censoring">Fair scoring</a>
+        <a href="#limitations">Limits</a>
         <a href="#rationale">Rationale</a>
       </div>
     </nav>
@@ -41,33 +42,44 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
     <main class="scoring-page page-width">
       <section class="method-intro">
         <p class="kicker">The short version</p>
-        <p>Each bet defines a probability distribution over when its named event will occur. CRPS compares that cumulative forecast with the observed API transition interval at every minute through ETA + 3 hours. Lower is better; 0 minutes is perfect.</p>
-        <aside class="method-callout"><strong>Headline score</strong><span>A balanced 0–100 forecast score made from separate short- and long-bet CRPS. Higher is better; raw CRPS minutes remain visible.</span></aside>
+        <p>We ask each model to make eight specific, timed calls. Then we compare those calls with the next observed ownership changes. A model earns trust by being right about <em>where</em>, <em>what</em>, and <em>when</em>—not by writing a convincing briefing.</p>
+        <aside class="method-callout"><strong>Headline score</strong><span>The 0–100 score is a compact summary of timing and outcome quality. Higher is better; it is not a percentage of predictions that were correct.</span></aside>
+      </section>
+
+      <section class="method-limitations" id="limitations">
+        <p class="kicker">Before reading the ranking</p>
+        <h2>This is a small experiment with a deliberately narrow view.</h2>
+        <div class="method-limitations__grid">
+          <p>We use only the public Foxhole War API and try to minimize out-of-pocket model costs. That makes the comparison repeatable: models see the same cutoff-safe information.</p>
+          <p>Knowing a base's artillery-shell stockpile and how quickly shells are used or resupplied could be more directly predictive than a region-wide casualty count. The public API does not expose those logistics, and we do not scrape game state or operate an in-game computer-use agent to obtain them.</p>
+          <p>So a score is evidence about this setup, not a claim that a model understands the whole war or will always be a good battlefield adviser.</p>
+        </div>
       </section>
 
       <section id="forecast" class="scoring-section">
         <div class="scoring-section__heading"><p class="kicker">01</p><h2>What a model must forecast</h2></div>
         <div class="rule-grid">
-          <article class="rule-card"><strong>8</strong><h3>Unique bases</h3><p>Every round contains exactly eight ranked predictions on eight different strategic bases.</p></article>
-          <article class="rule-card"><strong>4 + 4</strong><h3>Two ETA priorities</h3><p>Ranks 1–4 are immediate priorities and ranks 5–8 are extended priorities. The model gives exact minutes; an ETA near the six-hour boundary is retained and scored on the time it named.</p></article>
-          <article class="rule-card"><strong>2</strong><h3>Allowed events</h3><p><b>Captured</b> means ownership completes a change to the opposing faction. <b>Destroyed</b> means a faction-owned base becomes neutral—demolished and not yet rebuilt.</p></article>
-          <article class="rule-card"><strong>1–5</strong><h3>Evidence references</h3><p>Each call cites cutoff-safe metrics and rates their relevance from 1–10. Evidence ratings are shown for auditability, but are not judged or added to the score.</p></article>
+          <article class="rule-card"><strong>8</strong><h3>Different bases</h3><p>Every round contains eight ranked predictions about eight different strategic bases.</p></article>
+          <article class="rule-card"><strong>4 + 4</strong><h3>Two time horizons</h3><p>Four calls cover the next six hours; four cover the following 6–24 hours. The model must name a specific time for each.</p></article>
+          <article class="rule-card"><strong>2</strong><h3>Possible outcomes</h3><p><b>Captured</b> means ownership changes to the opposing faction. <b>Destroyed</b> means a faction-owned base becomes neutral.</p></article>
+          <article class="rule-card"><strong>1–5</strong><h3>Cited clues</h3><p>Each call cites one to five cutoff-safe inputs. The model’s 1–10 relevance ratings stay visible for auditability; they are not an objective truth score.</p></article>
         </div>
-        <p class="method-note">Each prediction includes confidence from 0.00 to 1.00—the probability that the named outcome happens by ETA + 3 hours—and <code>sigma_minutes</code> from 15 to 180—the standard deviation of event time conditional on it happening. A same-faction capture call is dropped as a model error. Rank records priority but does not change weight.</p>
+        <p class="method-note">Each prediction includes confidence from 0.00 to 1.00—the chance that the named outcome happens by the deadline—and a timing-width estimate. A same-faction capture call is dropped as a model error. Rank records priority but does not change weight. <span class="technical-label">Technical fields: <code>confidence</code>, <code>sigma_minutes</code>.</span></p>
       </section>
 
       <section id="settlement" class="scoring-section">
         <div class="scoring-section__heading"><p class="kicker">02</p><h2>How a prediction resolves</h2></div>
         <div class="rule-grid rule-grid--two">
-          <article class="rule-card"><h3>Finite deadline</h3><p>Each prediction remains open through <code>ETA + 3 hours</code>. We look for the first physical ownership transition for that base after the round cutoff and before that deadline.</p></article>
-          <article class="rule-card"><h3>Destruction before capture</h3><p>A faction-owned base normally becomes neutral before an enemy rebuild completes. If the model called a faction-specific capture, we wait through the deadline for that follow-up. The named enemy capture earns full outcome credit; destruction without a completed capture earns 0.75. Invalid same-faction capture calls are dropped and explained on the round page.</p></article>
+          <article class="rule-card"><h3>Give each call time</h3><p>Each prediction stays open until three hours after its named ETA. We look for the first ownership transition after the model’s cutoff and before that deadline.</p></article>
+          <article class="rule-card"><h3>Respect Foxhole’s sequence</h3><p>A base may become neutral before an enemy rebuild completes. A named enemy capture gets full outcome credit; destruction before that capture gets partial credit. Invalid same-faction calls are dropped and explained on the round page.</p></article>
         </div>
-        <p class="method-note">If no transition occurs by the deadline and coverage is adequate, the observed cumulative event curve stays at zero. CRPS then penalizes the probability the model assigned to an event that did not happen; no artificial infinite ETA is needed.</p>
+        <p class="method-note">If no transition occurs by the deadline and coverage is adequate, the call is a scored miss. The model is penalized in proportion to the chance it assigned to an event that did not happen.</p>
       </section>
 
       <section id="timing" class="scoring-section">
         <div class="scoring-section__heading"><p class="kicker">03</p><h2>The event-time distribution</h2></div>
-        <p>The conditional event time is modeled as a Normal distribution centered on the model’s ETA with standard deviation <code>sigma_minutes</code>. It is truncated to the scoring window. Confidence supplies its total probability mass; the remaining mass means no qualifying event by the deadline.</p>
+        <p>A model can be early or late even when it identifies the right base. We therefore score not only whether the event happened, but how close the predicted time was. A narrow timing window earns more when it is well placed and loses more when it is overconfident.</p>
+        <p class="method-caption technical-label">Technical detail: the conditional event time uses a truncated Normal distribution centered on the ETA, with <code>sigma_minutes</code> as its standard deviation. Confidence supplies the total probability mass.</p>
         <div class="formula-block">
           <span>forecast curve</span>
           <strong>F(t) = confidence × truncated Normal CDF(t; ETA, sigma)</strong>
@@ -78,7 +90,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       </section>
 
       <section id="outcome" class="scoring-section">
-        <div class="scoring-section__heading"><p class="kicker">04</p><h2>Outcome handling</h2></div>
+        <div class="scoring-section__heading"><p class="kicker">04</p><h2>When outcomes are close</h2></div>
+        <div class="formula-block formula-block--compact"><span>observed curve height</span><strong>1.00 for the named outcome · 0.75 for capture/destruction confusion · 0.00 for no qualifying outcome</strong></div>
         <div class="outcome-table" role="table" aria-label="Outcome credit table">
           <div class="outcome-table__row outcome-table__head" role="row"><span>Prediction vs. observation</span><span>Outcome credit</span></div>
           <div class="outcome-table__row" role="row"><span>Captured by named faction / Named faction capture</span><strong class="score-value">1.00</strong></div>
@@ -86,27 +99,26 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <div class="outcome-table__row" role="row"><span>Faction capture / Destroyed, or Destroyed / Faction capture</span><strong class="score-value">0.75</strong></div>
           <div class="outcome-table__row" role="row"><span>No qualifying transition by the deadline</span><strong class="score-value score-value--miss">0.00</strong></div>
         </div>
-        <div class="formula-block formula-block--compact"><span>observed curve height</span><strong>1.00 for the named outcome · 0.75 for capture/destruction confusion · 0.00 for no qualifying outcome</strong></div>
         <div class="worked-example">
           <p class="kicker">Worked example</p>
           <h3>Correct capture, but later than expected</h3>
-          <p>The forecast CDF rises near the ETA while the observed curve rises one hour later. The squared area between those curves is the bet’s CRPS in minutes.</p>
+          <p>If a model predicts a capture at 10:00 and the API observes the relevant transition around 11:00, it receives credit for identifying the event but pays a timing penalty. The technical score measures the gap between those two time curves.</p>
         </div>
       </section>
 
       <section id="aggregation" class="scoring-section">
-        <div class="scoring-section__heading"><p class="kicker">05</p><h2>Leaderboard and historical sigma</h2></div>
+        <div class="scoring-section__heading"><p class="kicker">05</p><h2>Putting the evidence together</h2></div>
         <div class="rule-grid rule-grid--two">
-          <article class="rule-card"><h3>Two raw CRPS results</h3><p>Ranks 1–4 produce the short CRPS and ranks 5–8 produce the long CRPS. Each is the arithmetic mean in minutes across scored bets in that timeline. Lower is better; open and censored bets are excluded.</p></article>
-          <article class="rule-card"><h3>Legacy forecasts</h3><p>Older bets did not contain sigma. Their timing uncertainty is deterministically inferred as <code>max(15, 180 × (1 − confidence))</code> minutes and labeled as inferred. Their original confidence is preserved.</p></article>
+          <article class="rule-card"><h3>Whole forecast error <span class="technical-label">(CRPS)</span></h3><p>This is the average distance between what the model said and what the API observed, in minutes. Lower is better. We keep near-term and next-day calls separate so one style does not hide the other.</p></article>
+          <article class="rule-card"><h3>Older calls</h3><p>Some earlier predictions did not include a timing-width estimate. We infer one in a fixed, documented way and label it as inferred rather than pretending the model supplied it.</p></article>
         </div>
         <div class="formula-block">
-          <span>fixed timeline scales</span>
-          <strong>short = 540 minutes (6h + 3h) · long = 1,620 minutes (24h + 3h)</strong>
-          <span>balanced forecast score</span>
-          <strong>100 × [1 − ½(short CRPS ÷ 540) − ½(long CRPS ÷ 1,620)]</strong>
+          <span>Why two horizons?</span>
+          <strong>Near-term calls cover 6 hours; next-day calls cover 24 hours. Both count 50%.</strong>
+          <span>Overall forecast quality</span>
+          <strong>100 × [1 − ½(near-term error ÷ 540) − ½(next-day error ÷ 1,620)]</strong>
         </div>
-        <p class="method-caption">The constants come from the protocol, not a model’s chosen ETA. Short and long performance therefore contribute exactly 50% each even while long bets are still resolving. A model needs at least one scored bet in both timelines before receiving a topline score. The result is bounded from 0 to 100 for display and is not a percent-accuracy claim.</p>
+        <p class="method-caption">The numbers set the scale of the two deadlines; they are not a model’s chosen ETA. A model needs at least one scored bet in both timelines before receiving a topline score. The result is bounded from 0 to 100 for display and is not a percent-accuracy claim.</p>
         <div class="worked-example">
           <p class="kicker">Why retain confidence too?</p>
           <p>Confidence answers “does this named outcome happen by the deadline?” Sigma answers “if it happens, how tightly can I locate its time?” CRPS evaluates both in one forecast distribution.</p>
@@ -114,23 +126,23 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       </section>
 
       <section id="selection" class="scoring-section">
-        <div class="scoring-section__heading"><p class="kicker">06</p><h2>Base-selection diagnostics</h2></div>
-        <p>CRPS judges the complete probability forecast. Selection diagnostics ask the simpler operational question: did the model spend one of its eight picks on a base where something happened?</p>
+        <div class="scoring-section__heading"><p class="kicker">06</p><h2>Where did the model look?</h2></div>
+        <p>Whole forecast error judges the complete probability forecast. This second test asks a simpler question: did the model spend one of its eight picks on a base where something happened?</p>
         <div class="rule-grid rule-grid--two">
-          <article class="rule-card"><h3>Capture and transition rates</h3><p>Capture rate is the share of scored selections that reached Warden or Colonial ownership by the bet deadline. Transition rate also counts destruction to neutral. Exact-outcome rate requires the observation to match the model’s named result.</p></article>
-          <article class="rule-card"><h3>Top-ranked picks</h3><p>Ranks 1 and 5 are the model’s highest-priority short and long calls. Their capture rate shows whether its strongest selections outperform the rest of its list.</p></article>
+          <article class="rule-card"><h3>Finds captures</h3><p>The share of selected bases that were captured by the deadline. Use it to see whether the model spent its limited picks on places where a capture actually happened, even if another part of its call was wrong.</p></article>
+          <article class="rule-card"><h3>Strongest picks</h3><p>Ranks 1 and 5 are the highest-priority short and next-day calls. Their capture rate shows whether the model’s first choices outperform the rest of its list.</p></article>
         </div>
-        <div class="formula-block formula-block--compact"><span>capture lift</span><strong>model capture rate ÷ matched eligible-base capture rate</strong></div>
-        <p class="method-caption">The baseline is recalculated prospectively for every scored bet: it is the fraction of all strategic bases available at that round’s cutoff that were captured by the same deadline. A lift of 1.00× matches the field, 2.00× finds captures twice as often, and 0.50× finds them half as often. This adjusts for quiet versus chaotic periods without using model confidence.</p>
+        <div class="formula-block formula-block--compact"><span>Finds action vs. field <span class="technical-label">(capture lift)</span></span><strong>model capture rate ÷ matched eligible-base capture rate</strong></div>
+        <p class="method-caption">The baseline is recalculated for every scored call using all strategic bases available at that cutoff and deadline. A lift of 1.00× matches the field; 2.00× finds captures twice as often. This helps compare quiet and chaotic periods without using model confidence.</p>
       </section>
 
       <section id="censoring" class="scoring-section">
         <div class="scoring-section__heading"><p class="kicker">07</p><h2>When we decline to score</h2></div>
-        <p>A prediction is <b>censored</b> when the observations cannot support a fair result. Censored is a completed settlement state, but it contributes neither credit nor a miss to the model average.</p>
+        <p>A call is <b>not scored</b> (technical name: <span class="technical-label">censored</span>) when the observations cannot support a fair result. That is a completed settlement state, but it contributes neither credit nor a miss to the model average.</p>
         <ul class="rationale-list">
           <li><strong>Missing coverage.</strong> A gap greater than two expected polling intervals—currently 30 minutes—means we may have missed or badly localized a transition.</li>
-          <li><strong>Ambiguous transition interval.</strong> Normal polling intervals are integrated directly. A gap larger than the coverage tolerance is censored because it no longer localizes the event fairly.</li>
-          <li><strong>War boundary.</strong> If a war ends before a prediction’s ETA-plus-three-hour scoring window closes, and no qualifying transition was already observed, the prediction is censored rather than treated as a miss.</li>
+          <li><strong>Ambiguous timing.</strong> Normal polling intervals are used directly. A larger gap cannot localize an event fairly, so we leave the call unscored.</li>
+          <li><strong>War boundary.</strong> If a war ends before a call’s ETA-plus-three-hour window closes, and no qualifying transition was already observed, we leave it unscored rather than calling it a miss.</li>
         </ul>
       </section>
 

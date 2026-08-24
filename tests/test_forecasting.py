@@ -88,6 +88,9 @@ class ForecastBudgetTests(unittest.TestCase):
         self.assertTrue(SCOUT_SYSTEM)
         self.assertTrue(FORECAST_SYSTEM)
         self.assertIn("select the most active regions", SCOUT_SYSTEM)
+        self.assertIn("1920s–1940s newspaper dispatch", SCOUT_SYSTEM)
+        self.assertIn("dispatch from an earlier war is never provided", SCOUT_SYSTEM)
+        self.assertIn("opening edition", SCOUT_SYSTEM)
         self.assertIn("exactly eight ranked bets", FORECAST_SYSTEM)
         self.assertIn("{error}", CORRECTION_USER)
 

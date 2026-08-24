@@ -36,7 +36,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
     <main class="prediction-page page-width">
       <section class="section-block prediction-browser-section">
         <div class="section-heading section-heading--controls">
-          <div><p class="kicker">Current event-outcome protocol</p><h2>Discrete predictions</h2></div>
+          <div><p class="kicker">Current event-outcome protocol</p><h2>Model calls</h2></div>
           <div class="prediction-controls">
             <div class="segmented" role="group" aria-label="Prediction status">
               <button class="active" data-bet-view="open">Open</button>
@@ -45,6 +45,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             <label class="select-label">Model <select id="prediction-model"><option value="all">All models</option></select></label>
           </div>
         </div>
+        <p class="plain-note"><strong>Reading a call:</strong> the percentage is the model's claimed chance that its named outcome happens by the deadline. The timing spread shows how tightly it placed the event. Resolved calls show whole forecast error (CRPS), where lower is better and zero is perfect.</p>
         <p class="prediction-browser__summary" id="prediction-summary">Loading predictions…</p>
         <div class="table-shell prediction-browser">
           <table>
@@ -67,7 +68,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         if (text !== undefined) value.textContent = String(text);
         return value;
       };
-      const decimal = (value) => value == null || !Number.isFinite(Number(value)) ? "—" : Number(value).toFixed(2);
+      const percentage = (value) => value == null || !Number.isFinite(Number(value)) ? "—" : `${(100 * Number(value)).toFixed(1)}%`;
       const number = (value) => new Intl.NumberFormat().format(Number(value) || 0);
       const eventLabel = (value) => String(value || "").replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
       const teamLabel = (value) => value === "NONE" ? "Neutral / destroyed" : eventLabel(value);
@@ -99,8 +100,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       function predictionHeadline(bet) {
         const line = element("p", "prediction-headline");
         const sigmaSource = bet.sigma_source === "inferred_from_confidence" ? " (inferred)" : "";
-        const sigma = bet.sigma_minutes == null ? "" : ` · σ ${duration(Number(bet.sigma_minutes))}${sigmaSource}`;
-        const confidence = element("strong", "prediction-headline__confidence", `${decimal(bet.confidence)} confidence${sigma}`);
+        const sigma = bet.sigma_minutes == null ? "" : ` · timing spread ${duration(Number(bet.sigma_minutes))}${sigmaSource}`;
+        const confidence = element("strong", "prediction-headline__confidence", `${percentage(bet.confidence)} chance${sigma}`);
         line.append(confidence, document.createTextNode(": "), baseIdentity(bet));
         if (bet.predicted_outcome === "DESTROYED") {
           line.append(document.createTextNode(" will be destroyed at "));
@@ -125,7 +126,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 
       function supportingEvidence(items) {
         const wrapper = element("div", "supporting-evidence");
-        wrapper.append(element("small", "supporting-evidence__label", "Supporting evidence"));
+        wrapper.append(element("small", "supporting-evidence__label", "Model-cited evidence · relevance is the model's own 1–10 rating"));
         const evidence = element("div", "evidence-list");
         (items || []).forEach((item) => evidence.append(evidenceChip(item)));
         if (!items?.length) evidence.append(element("span", "evidence-empty", "No supporting evidence retained."));
@@ -156,7 +157,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         result.append(element("small", `status status--${scored ? "scored" : bet.status}`, predictionStatus(bet)));
         if (scored) {
           const badge = element("span", "prediction-score prediction-score--scored");
-          badge.append(element("span", "prediction-score__label", "CRPS"), element("strong", "", crps(bet.crps_minutes)));
+          badge.append(element("span", "prediction-score__label", "Forecast error · CRPS"), element("strong", "", crps(bet.crps_minutes)));
           result.append(badge);
         }
         return result;
