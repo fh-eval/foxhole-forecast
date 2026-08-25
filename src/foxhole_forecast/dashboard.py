@@ -32,6 +32,25 @@ def _forecast_status(
     return "ready"
 
 
+def _legacy_summary_headline(summary: Any, war_number: Any = None) -> str:
+    """Give pre-headline summaries a stable newspaper-style display title."""
+    text = str(summary or "")
+    match = re.search(r"\bday\s+(\d+)\b|\b(\d+)(?:st|nd|rd|th)\s+day\b", text, re.IGNORECASE)
+    if match:
+        return f"Day {next(group for group in match.groups() if group)}"
+    return f"War {war_number or '—'} dispatch"
+
+
+def _summary_headline(run: dict[str, Any], war_number: Any = None) -> str:
+    headline = run.get("headline")
+    if isinstance(headline, str) and headline.strip():
+        return headline.strip()
+    return _legacy_summary_headline(
+        run.get("war_summary", run.get("forecast", {}).get("war_summary")),
+        war_number or run.get("war_number"),
+    )
+
+
 def _behavior_summary(
     rounds: list[dict[str, Any]],
     war_id: str | None,
@@ -172,6 +191,9 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
             "war_number": cohorts.get(run.get("cohort_id"), {}).get("war_number"),
             "cutoff": run["cutoff"],
             "status": run["status"],
+            "headline": _summary_headline(
+                run, cohorts.get(run.get("cohort_id"), {}).get("war_number")
+            ),
             "war_summary": run.get("war_summary", run.get("forecast", {}).get("war_summary")),
             "selected_regions": run.get("selected_regions", []),
             "brier_skill_score": settlement.get("brier_skill_score"),
@@ -280,6 +302,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                 "series_id": series,
                 "model_label": run.get("label", series),
                 "cutoff": run["cutoff"],
+                "headline": _summary_headline(run, cohort.get("war_number") or run.get("war_number")),
                 "war_summary": run.get("war_summary"),
                 "selected_regions": run.get("selected_regions", []),
                 "dropped_predictions": presented_drops,

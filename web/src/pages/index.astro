@@ -331,6 +331,15 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         wrapper.append(toggle);
         return wrapper;
       }
+      function summaryHeadline(entry) {
+        if (entry?.headline) return String(entry.headline);
+        const text = String(entry?.war_summary || "");
+        const match = text.match(/\bday\s+(\d+)\b|\b(\d+)(?:st|nd|rd|th)\s+day\b/i);
+        return match ? `Day ${match[1] || match[2]}` : `War ${entry?.war_number || "—"} dispatch`;
+      }
+      function briefingHeadline(entry) {
+        return element("h3", "briefing__headline", summaryHeadline(entry));
+      }
       let dashboard = null;
       let briefingFilter = "all";
       let scoreScope = "current";
@@ -732,7 +741,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           const header = element("div", "briefing__header");
           header.append(element("h3", "", modelLabel(model)), element("time", "", formatDate(model.latest.cutoff)));
           const regions = element("p", "region-list", model.latest.selected_regions?.map(regionLabel).join(" · ") || "No selected regions");
-          article.append(header, briefingSummary(model.latest.war_summary), regions);
+          article.append(header, briefingHeadline(model.latest), briefingSummary(model.latest.war_summary), regions);
           list.append(article);
         });
       }
@@ -997,6 +1006,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             );
             const participantBody = element("div", "round-model__body");
             participantBody.append(
+              briefingHeadline(round),
               briefingSummary(round.war_summary),
               element("p", "region-list", (round.selected_regions || []).map(regionLabel).join(" · ")),
             );

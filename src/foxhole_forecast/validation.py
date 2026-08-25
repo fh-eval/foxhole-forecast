@@ -17,6 +17,9 @@ def validate_scout(
     summary = value.get("war_summary")
     if not isinstance(summary, str) or not summary.strip() or len(summary.split()) > 350:
         raise ValidationError("war_summary must contain 1-350 words")
+    headline = value.get("headline")
+    if not isinstance(headline, str) or not headline.strip() or len(headline.split()) > 20:
+        raise ValidationError("headline must contain 1-20 words")
     selected = value.get("selected_regions")
     if not isinstance(selected, list) or not selected:
         raise ValidationError("selected_regions must be a non-empty array")
@@ -25,7 +28,11 @@ def validate_scout(
     allowed = {region["map_name"] for region in packet["regions"]}
     if any(not isinstance(name, str) or name not in allowed for name in selected):
         raise ValidationError("selected_regions contains an unknown region")
-    return {"war_summary": summary.strip(), "selected_regions": selected}
+    return {
+        "headline": headline.strip(),
+        "war_summary": summary.strip(),
+        "selected_regions": selected,
+    }
 
 
 def validate_forecast(value: dict[str, Any], packet: dict[str, Any], settings: Settings) -> None:

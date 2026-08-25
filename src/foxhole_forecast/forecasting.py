@@ -171,6 +171,7 @@ def _run_model(
                 "cohort_id": cohort_id,
                 "series_id": config["series_id"],
                 "cutoff": scout_packet["cutoff"],
+                "headline": overview["headline"],
                 "war_summary": overview["war_summary"],
                 "selected_regions": selected,
             },
@@ -210,6 +211,7 @@ def _run_model(
             "status": "valid",
             "returned_model": forecast_response.returned_model,
             "upstream_provider": forecast_response.upstream_provider,
+            "headline": overview["headline"],
             "war_summary": overview["war_summary"],
             "selected_regions": selected,
             "forecast": frozen_forecast,
@@ -226,6 +228,7 @@ def _run_model(
             **base,
             "status": "invalid",
             "error": f"{type(error).__name__}: {error}",
+            "headline": overview.get("headline"),
             "war_summary": overview.get("war_summary"),
             "selected_regions": selected,
             "dropped_predictions": dropped_predictions,
@@ -265,10 +268,13 @@ def _previous_model_summary(
     if not candidates:
         return None
     _, previous = max(candidates, key=lambda item: item[0])
-    return {
+    result = {
         "cutoff": previous["cutoff"],
         "war_summary": previous["war_summary"].strip(),
     }
+    if isinstance(previous.get("headline"), str) and previous["headline"].strip():
+        result["headline"] = previous["headline"].strip()
+    return result
 
 
 def _drop_invalid_predictions(

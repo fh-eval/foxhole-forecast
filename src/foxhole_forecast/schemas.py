@@ -9,8 +9,9 @@ def scout_schema(settings: Settings) -> dict[str, Any]:
     return {
         "type": "object",
         "additionalProperties": False,
-        "required": ["war_summary", "selected_regions"],
+        "required": ["headline", "war_summary", "selected_regions"],
         "properties": {
+            "headline": {"type": "string", "minLength": 1, "maxLength": 120},
             "war_summary": {"type": "string"},
             "selected_regions": {
                 "type": "array",

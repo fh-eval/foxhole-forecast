@@ -47,6 +47,7 @@ class ValidationTests(unittest.TestCase):
 
     def test_valid_contract(self) -> None:
         overview = {
+            "headline": "The Central Front Stirs",
             "war_summary": "The central front is active, but the situation remains uncertain.",
             "selected_regions": ["DeadLandsHex"],
         }
