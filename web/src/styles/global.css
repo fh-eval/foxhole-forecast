@@ -248,6 +248,10 @@ h1 span { color: var(--accent); }
 .telemetry-table { width: 100%; table-layout: fixed; }
 .telemetry-table thead { position: sticky; top: 0; z-index: 2; background: var(--wash); }
 .telemetry-table th small { margin-top: 3px; display: block; color: var(--faint); font-size: 11px; font-weight: 400; letter-spacing: .02em; text-transform: none; }
+.telemetry-region-name { position: relative; z-index: 0; isolation: isolate; display: inline-block; padding-inline: .16em; color: var(--ink); font-weight: 650; }
+.telemetry-region-name--wardens { --marker-color: var(--marker-wardens); }
+.telemetry-region-name--colonials { --marker-color: var(--marker-colonials); }
+.telemetry-region-name--none { --marker-color: var(--tag); }
 .telemetry-pair { min-width: 128px; }
 .telemetry-pair strong, .telemetry-pair small { display: block; }
 .telemetry-pair strong { font-size: 13px; font-weight: 600; }
@@ -258,6 +262,8 @@ h1 span { color: var(--accent); }
 .trend--steady strong { color: var(--faint); }
 
 .event-feed { min-width: 0; }
+.event-feed__direction { color: var(--accent-ink) !important; font-size: 11px !important; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.event-feed__direction b { display: inline-block; padding-inline: 4px; color: var(--accent); font-size: 15px; line-height: .7; }
 .event-feed ol { min-height: 142px; margin: 0; padding: 0; display: flex; overflow-x: auto; overflow-y: hidden; border: 2px solid var(--inkline); box-shadow: var(--hard-sm); list-style: none; background: var(--card); }
 .event-feed__item { min-width: 265px; max-width: 320px; padding: 14px 16px; flex: 1 0 265px; display: grid; align-content: start; gap: 4px; border-right: 1px dashed var(--faint); }
 .event-feed__item:last-child { border-right: 0; }
@@ -367,6 +373,31 @@ h1 span { color: var(--accent); }
 }
 .prediction-score__label { font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; opacity: .8; }
 .prediction-score strong { font-size: 14px; font-weight: 600; letter-spacing: 0; }
+.prediction-score__value { position: relative; z-index: 0; isolation: isolate; display: inline-block; padding-inline: .18em; color: var(--ink); }
+
+/* A card's status explains the result; the weathered marker belongs only on the number. */
+.prediction-result .status--hit,
+.prediction-result .status--partial,
+.prediction-result .status--miss,
+.prediction-result .status--scored,
+.prediction-result .status--complete {
+  position: static;
+  z-index: auto;
+  isolation: auto;
+  border-color: currentColor;
+  border-radius: 999px;
+  background: var(--card);
+}
+.prediction-result .status--hit { color: var(--olive) !important; }
+.prediction-result .status--partial { color: var(--signal) !important; }
+.prediction-result .status--miss { color: var(--danger) !important; }
+.prediction-result .status--scored,
+.prediction-result .status--complete { color: var(--olive) !important; }
+.prediction-result .status--hit::before,
+.prediction-result .status--partial::before,
+.prediction-result .status--miss::before,
+.prediction-result .status--scored::before,
+.prediction-result .status--complete::before { display: none; }
 
 .prediction-page { padding-bottom: 70px; }
 .prediction-hero { min-height: 330px; }
@@ -387,6 +418,7 @@ h1 span { color: var(--accent); }
 .faction-name { position: relative; z-index: 0; isolation: isolate; display: inline-block; padding-inline: .15em; color: var(--ink) !important; font: inherit; font-weight: 650; }
 .faction-name::before,
 .base-identity::before,
+.telemetry-region-name::before,
 .prediction-score--hit::before,
 .prediction-score--partial::before,
 .prediction-score--miss::before,

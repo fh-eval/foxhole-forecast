@@ -191,9 +191,12 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             : "Bad call: the named outcome or timing received no credit.";
         result.append(status);
         if (bet.crps_minutes != null) {
-          const badge = element("span", `prediction-score prediction-score--scored prediction-score--${quality || "partial"}`);
+          const badge = element("span", "prediction-score prediction-score--scored");
           badge.title = status.title || "Forecast error measured by CRPS.";
-          badge.append(element("span", "prediction-score__label", "Whole forecast error · CRPS"), element("strong", "", crps(bet.crps_minutes)));
+          badge.append(
+            element("span", "prediction-score__label", "Whole forecast error · CRPS"),
+            element("strong", `prediction-score__value prediction-score--${quality || "partial"}`, crps(bet.crps_minutes)),
+          );
           result.append(badge);
         }
         return result;

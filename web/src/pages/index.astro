@@ -157,6 +157,10 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         </div>
         <div id="telemetry-summary" class="telemetry-grid"></div>
         <div class="telemetry-layout">
+          <div class="event-feed">
+            <div class="subheading"><h3>Latest observed changes</h3><span class="event-feed__direction">newest <b aria-hidden="true">→</b> earlier</span></div>
+            <ol id="telemetry-events" aria-label="Recent ownership changes, newest first"></ol>
+          </div>
           <div>
             <div class="subheading"><h3>Regions, ranked by recent activity</h3><span id="telemetry-cutoff">—</span></div>
             <div class="table-shell telemetry-scroll">
@@ -165,10 +169,6 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
                 <tbody id="telemetry-regions"></tbody>
               </table>
             </div>
-          </div>
-          <div class="event-feed">
-            <div class="subheading"><h3>Latest observed changes</h3><span>Official API only</span></div>
-            <ol id="telemetry-events"></ol>
           </div>
         </div>
       </section>
@@ -649,9 +649,14 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         (snapshot.active_regions || []).forEach((region) => {
           const activity = region.activity || {};
           const ownership = region.ownership || {};
+          const wardenBases = Number(ownership.WARDENS) || 0;
+          const colonialBases = Number(ownership.COLONIALS) || 0;
+          const majority = wardenBases > colonialBases ? "wardens" : colonialBases > wardenBases ? "colonials" : "none";
           const row = document.createElement("tr");
+          const regionCell = element("td", "");
+          regionCell.append(element("strong", `telemetry-region-name telemetry-region-name--${majority}`, regionLabel(region.map_name)));
           row.append(
-            element("td", "", regionLabel(region.map_name)),
+            regionCell,
             telemetryPair(
               `${number(activity.events_2h)} / ${number(activity.events_6h)} / ${number(activity.events_24h)}`,
               "ownership transitions",
@@ -919,11 +924,11 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             : "Bad call: the named outcome or timing received no credit.";
         result.append(status);
         if (score != null) {
-          const badge = element("span", `prediction-score prediction-score--scored prediction-score--${quality || "partial"}`);
+          const badge = element("span", "prediction-score prediction-score--scored");
           badge.title = status.title || "Forecast error measured by CRPS.";
           badge.append(
             element("span", "prediction-score__label", "Forecast error · CRPS"),
-            element("strong", "", crps(score)),
+            element("strong", `prediction-score__value prediction-score--${quality || "partial"}`, crps(score)),
           );
           result.append(badge);
         }
