@@ -1135,6 +1135,46 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         return `${day} · ${time(start)}–${time(end)} UTC`;
       }
 
+      function compactOutcome(bet) {
+        const outcome = bet.predicted_outcome || bet.outcome || bet.event_type;
+        if (outcome === "DESTROYED" || outcome === "SELF_CAPTURE") return "destroyed";
+        if (outcome === "CAPTURED_BY_WARDENS") return "captured by Wardens";
+        if (outcome === "CAPTURED_BY_COLONIALS") return "captured by Colonials";
+        if (outcome === "CAPTURED") return "captured";
+        return eventLabel(outcome || "control change").toLowerCase();
+      }
+
+      function roundModelPreview(round) {
+        const bets = round.predictions || [];
+        const shortCount = bets.filter((bet) => bet.tranche === "IMMEDIATE").length;
+        const longCount = bets.filter((bet) => bet.tranche === "EXTENDED").length;
+        const confidences = bets.map((bet) => Number(bet.confidence)).filter(Number.isFinite);
+        const averageConfidence = confidences.length
+          ? confidences.reduce((total, value) => total + value, 0) / confidences.length
+          : null;
+        const lead = [...bets].sort((a, b) => (Number(a.rank) || 999) - (Number(b.rank) || 999))[0];
+        const dropped = (round.dropped_predictions || []).length;
+        const preview = element("span", "round-preview__model");
+        preview.append(
+          element("strong", "", modelLabel(round)),
+          element(
+            "small",
+            "",
+            `${bets.length} valid call${bets.length === 1 ? "" : "s"} · ${averageConfidence == null ? "confidence unavailable" : `${percentage(averageConfidence)} avg confidence`} · ${shortCount} within 6h / ${longCount} at 6–24h${dropped ? ` · ${dropped} dropped` : ""}`,
+          ),
+        );
+        if (lead) {
+          preview.append(element(
+            "span",
+            "round-preview__call",
+            `Lead call: ${percentage(lead.confidence)} · ${lead.base_type || "Base"} ${lead.base_name || "Unknown base"} ${compactOutcome(lead)} · ${predictionTime(lead.eta_utc)}`,
+          ));
+        } else {
+          preview.append(element("span", "round-preview__call round-preview__call--empty", "No valid calls were retained for this model."));
+        }
+        return preview;
+      }
+
       function renderRounds(rounds, latestOnly = false) {
         const list = document.querySelector("#round-list");
         list.replaceChildren();
@@ -1151,11 +1191,15 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           const groupPredictions = group.participants.flatMap((round) => round.predictions || []);
           const dropped = group.participants.reduce((count, round) => count + (round.dropped_predictions || []).length, 0);
           const roundStatuses = roundStatusBadges(groupPredictions, dropped);
-          summary.append(
+          const summaryTop = element("span", "round__summary-top");
+          summaryTop.append(
             element("strong", "", `${group.warNumber ? `War ${group.warNumber} · ` : ""}${roundWindow(group)}`),
             element("time", "", `${group.participants.length} participating model${group.participants.length === 1 ? "" : "s"}`),
             roundStatuses,
           );
+          const preview = element("span", "round__preview");
+          group.participants.forEach((round) => preview.append(roundModelPreview(round)));
+          summary.append(summaryTop, preview, element("span", "round__summary-toggle", ""));
           const body = element("div", "round__body");
           group.participants.forEach((round) => {
             const participant = element("details", "round-model");

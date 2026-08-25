@@ -578,6 +578,22 @@ def _build_war_api_snapshot(
         )
     )
     recent_events.sort(key=lambda event: event["observed_to"], reverse=True)
+    # Keep complete state transitions together. A single change can be represented by
+    # both an OWNER_LOSES row and a CAPTURED/BECOMES_NEUTRAL row; slicing raw rows
+    # produces a variable number of cards and can cut the oldest transition in half.
+    recent_transition_keys: set[tuple[str | None, str | None, str | None]] = set()
+    displayed_events: list[dict[str, Any]] = []
+    for event in recent_events:
+        transition_key = (
+            event.get("observed_to"),
+            event.get("map_name"),
+            event.get("base_name"),
+        )
+        if transition_key not in recent_transition_keys:
+            if len(recent_transition_keys) >= 24:
+                break
+            recent_transition_keys.add(transition_key)
+        displayed_events.append(event)
     return {
         "source": "Official Foxhole War API",
         "observed_at": observed_at,
@@ -600,7 +616,7 @@ def _build_war_api_snapshot(
                 "event_type": event.get("event_type"),
                 "actor": event.get("actor"),
             }
-            for event in recent_events[:12]
+            for event in displayed_events
         ],
     }
 

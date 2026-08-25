@@ -255,6 +255,40 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(snapshot["active_regions"][0]["activity"]["events_24h"], 1)
         self.assertEqual(len(snapshot["recent_ownership_events"]), 1)
 
+    def test_war_api_snapshot_keeps_twenty_four_complete_transitions(self) -> None:
+        latest = {"observed_at": "2026-08-22T23:59:00Z", "maps": {}}
+        events = []
+        for minute in range(30):
+            observed_to = f"2026-08-22T23:{59 - minute:02d}:00Z"
+            events.extend(
+                [
+                    {
+                        "observed_to": observed_to,
+                        "map_name": "TestHex",
+                        "base_name": f"Base {minute}",
+                        "event_type": "OWNER_LOSES",
+                        "actor": "WARDENS",
+                    },
+                    {
+                        "observed_to": observed_to,
+                        "map_name": "TestHex",
+                        "base_name": f"Base {minute}",
+                        "event_type": "CAPTURED_BY_COLONIALS",
+                        "actor": "COLONIALS",
+                    },
+                ]
+            )
+
+        displayed = _build_war_api_snapshot(latest, events)["recent_ownership_events"]
+
+        grouped = {
+            (event["observed_at"], event["map_name"], event["base_name"])
+            for event in displayed
+        }
+        self.assertEqual(len(grouped), 24)
+        self.assertEqual(len(displayed), 48)
+        self.assertEqual({event["base_name"] for event in displayed[-2:]}, {"Base 23"})
+
     def test_evidence_value_is_frozen_and_presented_readably(self) -> None:
         metric_id = "region.OarbreakerHex.casualties.ratio_colonial_to_warden"
         forecast = {
