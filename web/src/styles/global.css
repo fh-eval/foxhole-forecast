@@ -266,11 +266,24 @@ h1 span { color: var(--accent); }
 .event-feed { min-width: 0; }
 .event-feed__direction { color: var(--accent-ink) !important; font-size: 11px !important; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
 .event-feed__direction b { display: inline-block; padding-inline: 4px; color: var(--accent); font-size: 15px; line-height: .7; }
-.event-feed ol { min-height: 142px; margin: 0; padding: 0; display: flex; overflow-x: auto; overflow-y: hidden; border: 2px solid var(--inkline); box-shadow: var(--hard-sm); list-style: none; background: var(--card); }
-.event-feed__item { min-width: 265px; max-width: 320px; padding: 14px 16px; flex: 1 0 265px; display: grid; align-content: start; gap: 4px; border-right: 1px dashed var(--faint); }
-.event-feed__item:last-child { border-right: 0; }
-.event-feed__item time, .event-feed__item span { color: var(--faint); font-size: 12px; }
-.event-feed__item strong { overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.event-feed__controls { display: inline-flex; align-items: center; gap: 6px; }
+.event-feed__button { width: 27px; height: 27px; padding: 0; color: var(--ink); border: 1px solid var(--inkline); background: var(--card); font: 600 16px/1 var(--mono); cursor: pointer; }
+.event-feed__button--latest { width: auto; padding-inline: 7px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; }
+.event-feed__button:hover:not(:disabled) { color: var(--paper); background: var(--ink); }
+.event-feed__button:disabled { opacity: .3; cursor: default; }
+.event-feed__page { min-width: 38px; color: var(--faint); font-size: 11px; text-align: center; }
+.event-feed__viewport { padding: 4px 3px 7px; overflow: hidden; border: 2px solid var(--inkline); box-shadow: var(--hard-sm); background: var(--wash); }
+.event-feed ol { min-height: 166px; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; list-style: none; }
+.event-feed__item { min-width: 0; min-height: 158px; padding: 14px 15px; position: relative; display: grid; align-content: start; gap: 4px; border: 1px solid var(--inkline); box-shadow: 2px 2px 0 rgba(44,50,38,.28); background: linear-gradient(rgba(243,238,221,.2), rgba(255,255,255,0)), var(--card); }
+.event-feed__item:nth-child(3n+1) { transform: rotate(-.45deg); }
+.event-feed__item:nth-child(3n+2) { transform: rotate(.3deg); }
+.event-feed__item:nth-child(3n) { transform: rotate(-.15deg); }
+.event-feed__item[hidden] { display: none; }
+.event-feed__item time { color: var(--faint); font-size: 11px; }
+.event-feed__item strong { overflow: hidden; color: var(--ink); font: 650 20px/1.05 var(--serif); text-overflow: ellipsis; white-space: nowrap; }
+.event-feed__region { color: var(--accent-ink) !important; font-size: 12px !important; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.event-feed__morse { overflow: hidden; color: var(--faint); font: 500 10px/1.2 var(--mono); letter-spacing: .08em; text-overflow: ellipsis; white-space: nowrap; }
+.event-feed__item > span:last-child { margin-top: 7px; padding-top: 8px; color: var(--soft); border-top: 1px dashed var(--line); font-size: 12px; line-height: 1.45; }
 
 /* ---------- Section scaffolding ---------- */
 
@@ -707,6 +720,7 @@ footer strong { color: var(--accent-ink); letter-spacing: .12em; }
   .status-strip > div:nth-child(odd) { border-right: 1px solid var(--line); }
   .status-strip > div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
   .telemetry-layout > * { min-width: 0; }
+  .event-feed ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .telemetry-table { width: 980px; table-layout: auto; }
   .round__bets { grid-template-columns: 1fr; }
   .section-heading { grid-template-columns: 1fr; align-items: start; }
@@ -737,6 +751,9 @@ footer strong { color: var(--accent-ink); letter-spacing: .12em; }
   .prediction-controls { width: 100%; justify-content: flex-start; }
   .briefing { padding: 22px 18px; }
   .briefing__header, footer div { flex-direction: column; }
+  .event-feed ol { grid-template-columns: 1fr; }
+  .event-feed__controls { gap: 4px; }
+  .event-feed__direction { margin-right: 3px; }
   .round__summary { grid-template-columns: 1fr; gap: 6px; }
   .round-model__summary { grid-template-columns: 1fr; gap: 6px; }
   .round-bet__meta > *, .prediction-result { min-width: 0; max-width: 100%; }

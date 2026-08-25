@@ -158,8 +158,17 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <div id="telemetry-summary" class="telemetry-grid"></div>
         <div class="telemetry-layout">
           <div class="event-feed">
-            <div class="subheading"><h3>Latest observed changes</h3><span class="event-feed__direction">newest <b aria-hidden="true">→</b> earlier</span></div>
-            <ol id="telemetry-events" aria-label="Recent ownership changes, newest first"></ol>
+            <div class="subheading">
+              <h3>Base Control Wire</h3>
+              <div class="event-feed__controls">
+                <span class="event-feed__direction">newest <b aria-hidden="true">→</b> earlier</span>
+                <button id="telemetry-events-prev" class="event-feed__button" type="button" aria-label="Show newer bulletins">←</button>
+                <span id="telemetry-events-page" class="event-feed__page" aria-live="polite">1 / 1</span>
+                <button id="telemetry-events-next" class="event-feed__button" type="button" aria-label="Show older bulletins">→</button>
+                <button id="telemetry-events-latest" class="event-feed__button event-feed__button--latest" type="button">Latest</button>
+              </div>
+            </div>
+            <div class="event-feed__viewport"><ol id="telemetry-events" aria-label="Recent base-control bulletins, newest first"></ol></div>
           </div>
           <div>
             <div class="subheading"><h3>Regions, ranked by recent activity</h3><span id="telemetry-cutoff">—</span></div>
@@ -297,6 +306,13 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         ReaversPassHex: "Reaver's Pass",
       };
       const regionLabel = (value) => regionNames[value] || String(value || "Unknown region").replace(/Hex$/, "").replace(/([a-z])([A-Z])/g, "$1 $2");
+      const morseAlphabet = {
+        A: ".-", B: "-...", C: "-.-.", D: "-..", E: ".", F: "..-.", G: "--.", H: "....", I: "..", J: ".---", K: "-.-", L: ".-..", M: "--", N: "-.", O: "---", P: ".--.", Q: "--.-", R: ".-.", S: "...", T: "-", U: "..-", V: "...-", W: ".--", X: "-..-", Y: "-.--", Z: "--..",
+        0: "-----", 1: ".----", 2: "..---", 3: "...--", 4: "....-", 5: ".....", 6: "-....", 7: "--...", 8: "---..", 9: "----.",
+      };
+      const morseCode = (value) => String(value || "Unknown region")
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase()
+        .split(/\s+/).map((word) => [...word].map((letter) => morseAlphabet[letter]).filter(Boolean).join(" ")).filter(Boolean).join(" / ");
       const predictionTime = (value) => value ? new Intl.DateTimeFormat(undefined, {
         month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC",
       }).format(new Date(value)) + " UTC" : "an unknown time";
@@ -349,6 +365,30 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       let scoreScope = "current";
       let protocolRounds = [];
       let visibleSeries = new Set();
+      let eventPage = 0;
+
+      function updateEventPager() {
+        const events = document.querySelector("#telemetry-events");
+        const items = [...(events?.children || [])];
+        const perPage = window.matchMedia("(max-width: 580px)").matches ? 1 : window.matchMedia("(max-width: 900px)").matches ? 2 : 3;
+        const pageCount = Math.max(1, Math.ceil(items.length / perPage));
+        eventPage = Math.max(0, Math.min(eventPage, pageCount - 1));
+        items.forEach((item, index) => { item.hidden = Math.floor(index / perPage) !== eventPage; });
+        const pageLabel = document.querySelector("#telemetry-events-page");
+        const previous = document.querySelector("#telemetry-events-prev");
+        const next = document.querySelector("#telemetry-events-next");
+        const latest = document.querySelector("#telemetry-events-latest");
+        if (pageLabel) pageLabel.textContent = `${items.length ? eventPage + 1 : 1} / ${pageCount}`;
+        if (previous) previous.disabled = eventPage === 0;
+        if (next) next.disabled = eventPage >= pageCount - 1;
+        if (latest) latest.disabled = eventPage === 0;
+      }
+      function setupEventPager() {
+        document.querySelector("#telemetry-events-prev")?.addEventListener("click", () => { eventPage -= 1; updateEventPager(); });
+        document.querySelector("#telemetry-events-next")?.addEventListener("click", () => { eventPage += 1; updateEventPager(); });
+        document.querySelector("#telemetry-events-latest")?.addEventListener("click", () => { eventPage = 0; updateEventPager(); });
+        window.addEventListener("resize", updateEventPager);
+      }
 
       function isCompleteCurrentRound(round) {
         const expected = dashboard?.methodology?.predictions_per_round ?? 8;
@@ -690,16 +730,33 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         if (!recent.length) {
           events.append(element("li", "empty-state", "No official ownership changes have been observed in the last 24 hours."));
         } else {
+          const grouped = [];
+          const groupedLookup = new Map();
           recent.forEach((event) => {
+            const key = `${event.observed_at}|${event.base_name || "Unknown base"}|${event.map_name || ""}`;
+            let group = groupedLookup.get(key);
+            if (!group) {
+              group = { ...event, events: [] };
+              groupedLookup.set(key, group);
+              grouped.push(group);
+            }
+            group.events.push(event);
+          });
+          grouped.forEach((group) => {
+            const region = group.map_display_name || regionLabel(group.map_name);
             const item = element("li", "event-feed__item");
             item.append(
-              element("time", "", formatDate(event.observed_at)),
-              element("strong", "", `${event.base_name || "Unknown base"} · ${event.map_display_name || regionLabel(event.map_name)}`),
-              element("span", "", `${eventLabel(event.event_type)} · ${eventLabel(event.actor)}`),
+              element("time", "", formatDate(group.observed_at)),
+              element("strong", "", group.base_name || "Unknown base"),
+              element("span", "event-feed__region", region),
+              element("small", "event-feed__morse", morseCode(region)),
+              element("span", "", `${group.events.map((event) => eventLabel(event.event_type)).filter((value, index, values) => values.indexOf(value) === index).join(" → ")} · ${group.events.map((event) => eventLabel(event.actor)).filter((value, index, values) => values.indexOf(value) === index).join(" / ")}`),
             );
             events.append(item);
           });
         }
+        eventPage = 0;
+        updateEventPager();
       }
 
       function signed(value) {
@@ -1078,6 +1135,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           document.querySelector("#base-count").textContent = dashboard.strategic_base_count ?? 0;
           document.querySelector("#poll-count").textContent = dashboard.collector_runs ?? 0;
           document.querySelector("#generated-at").textContent = dashboard.generated_at ? `Generated ${formatDate(dashboard.generated_at)}` : "No dataset generated yet";
+          setupEventPager();
           renderWarData(dashboard.war_api_snapshot);
           renderScoreboard();
           renderRounds(currentRounds, true);
