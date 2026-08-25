@@ -833,7 +833,6 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             const item = element("li", `event-feed__item event-feed__item--outcome-${report.tone}`);
             const meta = element("div", "event-feed__meta");
             meta.append(element("span", "event-feed__wire-label", report.wireLabel));
-            if (groupIndex === 0) meta.append(element("span", "event-feed__urgent", "Urgent"));
             meta.append(element("time", "", formatDate(group.observed_at)));
             const state = element("div", "event-feed__state-flow");
             state.append(
@@ -841,6 +840,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
               element("b", "", "→"),
               element("span", `event-feed__state event-feed__state--${report.after.tone}`, report.after.label),
             );
+            if (groupIndex === 0) item.append(element("span", "event-feed__urgent", "Urgent"));
             item.append(
               meta,
               element("strong", "", group.base_name || "Unknown base"),
