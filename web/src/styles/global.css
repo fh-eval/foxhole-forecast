@@ -240,12 +240,12 @@ h1 span { color: var(--accent); }
 .telemetry-card { min-height: 112px; padding: 18px; background: var(--card); }
 .telemetry-card small { display: block; min-height: 34px; color: var(--faint); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
 .telemetry-card strong { display: block; color: var(--accent-ink); font: 650 32px/1 var(--serif); }
-.telemetry-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 24px; align-items: start; }
+.telemetry-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; align-items: start; }
 .subheading { min-height: 42px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 20px; align-items: baseline; }
 .subheading h3 { margin: 0; font: 650 22px var(--serif); }
 .subheading span { color: var(--faint); font-size: 12px; }
 .telemetry-scroll { max-height: 470px; overflow: auto; }
-.telemetry-table { min-width: 1240px; }
+.telemetry-table { width: 100%; table-layout: fixed; }
 .telemetry-table thead { position: sticky; top: 0; z-index: 2; background: var(--wash); }
 .telemetry-table th small { margin-top: 3px; display: block; color: var(--faint); font-size: 11px; font-weight: 400; letter-spacing: .02em; text-transform: none; }
 .telemetry-pair { min-width: 128px; }
@@ -258,9 +258,9 @@ h1 span { color: var(--accent); }
 .trend--steady strong { color: var(--faint); }
 
 .event-feed { min-width: 0; }
-.event-feed ol { max-height: 470px; margin: 0; padding: 0; overflow-y: auto; border: 2px solid var(--inkline); box-shadow: var(--hard-sm); list-style: none; background: var(--card); }
-.event-feed__item { padding: 14px 16px; display: grid; gap: 4px; border-bottom: 1px dashed var(--faint); }
-.event-feed__item:last-child { border-bottom: 0; }
+.event-feed ol { min-height: 142px; margin: 0; padding: 0; display: flex; overflow-x: auto; overflow-y: hidden; border: 2px solid var(--inkline); box-shadow: var(--hard-sm); list-style: none; background: var(--card); }
+.event-feed__item { min-width: 265px; max-width: 320px; padding: 14px 16px; flex: 1 0 265px; display: grid; align-content: start; gap: 4px; border-right: 1px dashed var(--faint); }
+.event-feed__item:last-child { border-right: 0; }
 .event-feed__item time, .event-feed__item span { color: var(--faint); font-size: 12px; }
 .event-feed__item strong { overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -664,8 +664,8 @@ footer strong { color: var(--accent-ink); letter-spacing: .12em; }
   .status-strip, .telemetry-grid { grid-template-columns: repeat(2, 1fr); }
   .status-strip > div:nth-child(odd) { border-right: 1px solid var(--line); }
   .status-strip > div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
-  .telemetry-layout { grid-template-columns: minmax(0, 1fr); }
   .telemetry-layout > * { min-width: 0; }
+  .telemetry-table { width: 980px; table-layout: auto; }
   .round__bets { grid-template-columns: 1fr; }
   .section-heading { grid-template-columns: 1fr; align-items: start; }
   .selection-heading { align-items: flex-start; flex-direction: column; }
