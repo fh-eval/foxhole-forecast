@@ -24,11 +24,11 @@
   --steel: #3f5a78;
   --signal: #8a5c06;
   --danger: #a63d2a;
-  --marker-wardens: #a9c0dc;
-  --marker-colonials: #b9cc93;
-  --marker-hit: #b8d596;
-  --marker-partial: #f0c878;
-  --marker-miss: #efaa9b;
+  --marker-wardens: #a5b4bb;
+  --marker-colonials: #afb789;
+  --marker-hit: #aebc8e;
+  --marker-partial: #c8ad70;
+  --marker-miss: #bd877b;
   --wash: #efe8d1;
   --hl: #f2dc9b;
   --tag: #efe7cd;
@@ -357,8 +357,12 @@ h1 span { color: var(--accent); }
   position: absolute;
   z-index: -1;
   inset: .08em -.16em .04em;
-  background: var(--marker-color);
-  clip-path: polygon(2% 14%, 96% 3%, 100% 82%, 7% 100%, 0 56%);
+  background:
+    repeating-linear-gradient(168deg, transparent 0 4px, rgba(38,43,33,.10) 4px 5px, transparent 5px 9px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.14) 0 1px, transparent 1px 13px),
+    var(--marker-color);
+  clip-path: polygon(2% 14%, 14% 5%, 31% 9%, 49% 2%, 68% 8%, 96% 3%, 100% 28%, 97% 52%, 100% 82%, 82% 94%, 61% 90%, 43% 98%, 24% 92%, 7% 100%, 0 76%, 3% 56%);
+  opacity: .94;
   transform: rotate(-.7deg);
 }
 .prediction-score__label { font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; opacity: .8; }
@@ -375,13 +379,14 @@ h1 span { color: var(--accent); }
 
 .prediction-headline { margin: 0; color: var(--ink); font: 500 19px/1.45 var(--serif); }
 .prediction-headline__confidence { color: var(--accent-ink); font: inherit; font-weight: 650; }
-.base-identity { font-weight: 650; }
-.base-identity--wardens { color: var(--steel); }
-.base-identity--colonials { color: var(--olive); }
-.base-identity--none { color: var(--soft); }
+.base-identity { position: relative; z-index: 0; isolation: isolate; display: inline-block; padding-inline: .16em; color: var(--ink) !important; font-weight: 650; }
+.base-identity--wardens { --marker-color: var(--marker-wardens); }
+.base-identity--colonials { --marker-color: var(--marker-colonials); }
+.base-identity--none { --marker-color: var(--tag); }
 .prediction-headline__time { color: var(--accent-ink); font-weight: 650; white-space: nowrap; }
 .faction-name { position: relative; z-index: 0; isolation: isolate; display: inline-block; padding-inline: .15em; color: var(--ink) !important; font: inherit; font-weight: 650; }
 .faction-name::before,
+.base-identity::before,
 .prediction-score--hit::before,
 .prediction-score--partial::before,
 .prediction-score--miss::before,
@@ -390,8 +395,12 @@ h1 span { color: var(--accent); }
   position: absolute;
   z-index: -1;
   inset: .08em -.16em .04em;
-  background: var(--marker-color);
-  clip-path: polygon(2% 14%, 96% 3%, 100% 82%, 7% 100%, 0 56%);
+  background:
+    repeating-linear-gradient(168deg, transparent 0 4px, rgba(38,43,33,.10) 4px 5px, transparent 5px 9px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.14) 0 1px, transparent 1px 13px),
+    var(--marker-color);
+  clip-path: polygon(2% 14%, 14% 5%, 31% 9%, 49% 2%, 68% 8%, 96% 3%, 100% 28%, 97% 52%, 100% 82%, 82% 94%, 61% 90%, 43% 98%, 24% 92%, 7% 100%, 0 76%, 3% 56%);
+  opacity: .94;
   transform: rotate(-.7deg);
 }
 .faction-name--wardens { --marker-color: var(--marker-wardens); }
