@@ -78,7 +78,12 @@ class ModelProvider:
             if self.config.get("provider_only"):
                 provider["only"] = self.config["provider_only"]
             body["provider"] = provider
-            body["reasoning"] = {"effort": self.settings.reasoning_effort}
+            reasoning = self.config.get(
+                "reasoning", {"effort": self.settings.reasoning_effort}
+            )
+            if not isinstance(reasoning, dict):
+                raise ValueError("reasoning must be an object")
+            body["reasoning"] = reasoning
         request_extra = self.config.get("request_extra", {})
         if not isinstance(request_extra, dict):
             raise ValueError("request_extra must be an object")
@@ -100,6 +105,12 @@ class ModelProvider:
         cost = _cost(self.config["model"], usage)
         self.accumulated_cost += cost
         prompt = json.dumps(messages, separators=(",", ":"), ensure_ascii=False)
+        response_message = (raw.get("choices") or [{}])[0].get("message", {})
+        reasoning_trace_returned = any(
+            response_message.get(key) not in (None, "", [])
+            for key in ("reasoning", "reasoning_content", "reasoning_details")
+        )
+        reasoning_tokens = _reasoning_tokens(usage)
         attempt = {
             "stage": schema_name.removeprefix("foxhole_"),
             "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
@@ -108,6 +119,15 @@ class ModelProvider:
             "upstream_provider": raw.get("provider"),
             "usage": usage,
             "cost_usd": cost,
+            "request_max_tokens": body["max_tokens"],
+            "request_reasoning": body.get("reasoning")
+            or {
+                key: body[key]
+                for key in ("reasoning_effort", "reasoning_budget", "thinking")
+                if key in body
+            },
+            "reasoning_trace_returned": reasoning_trace_returned,
+            "reasoning_tokens": reasoning_tokens,
             "raw_response": raw,
         }
         self.attempts.append(attempt)
@@ -131,14 +151,14 @@ class ModelProvider:
             cost_usd=cost,
         )
 
-    @staticmethod
-    def _request_with_retry(request: urllib.request.Request) -> dict[str, Any]:
+    def _request_with_retry(self, request: urllib.request.Request) -> dict[str, Any]:
         last_error: Exception | None = None
+        timeout = int(self.config.get("request_timeout_seconds", 180))
         for delay in (0, 2, 8):
             if delay:
                 time.sleep(delay)
             try:
-                with urllib.request.urlopen(request, timeout=180) as response:
+                with urllib.request.urlopen(request, timeout=timeout) as response:
                     return json.loads(response.read().decode("utf-8"))
             except urllib.error.HTTPError as error:
                 detail = error.read().decode("utf-8", errors="replace")
@@ -223,3 +243,16 @@ def _cost(model: str, usage: dict[str, Any]) -> float:
         input_price, output_price = prices[model]
         return round(prompt * input_price / 1_000_000 + completion * output_price / 1_000_000, 8)
     return 0.0
+
+
+def _reasoning_tokens(usage: dict[str, Any]) -> int | None:
+    direct = usage.get("reasoning_tokens")
+    if isinstance(direct, (int, float)):
+        return int(direct)
+    for details_key in ("completion_tokens_details", "output_tokens_details"):
+        details = usage.get(details_key)
+        if isinstance(details, dict) and isinstance(
+            details.get("reasoning_tokens"), (int, float)
+        ):
+            return int(details["reasoning_tokens"])
+    return None

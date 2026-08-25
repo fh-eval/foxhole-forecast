@@ -1162,6 +1162,25 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         return eventLabel(outcome || "control change").toLowerCase();
       }
 
+      function reasoningLabel(round) {
+        const reasoning = round?.reasoning;
+        if (!reasoning) return "Thinking setting not recorded";
+        if (!reasoning.enabled) return "Thinking disabled";
+        const effort = reasoning.effort ? `${reasoning.effort} reasoning` : "Thinking enabled";
+        const budget = reasoning.reasoning_budget_tokens
+          ? ` · ${number(reasoning.reasoning_budget_tokens)}-token thought budget`
+          : "";
+        const ceiling = reasoning.completion_ceiling_tokens
+          ? ` · ${number(reasoning.completion_ceiling_tokens)} total output ceiling`
+          : "";
+        const trace = reasoning.trace_returned
+          ? ` · trace saved${reasoning.reasoning_tokens > 0 ? ` (${number(reasoning.reasoning_tokens)} reasoning tokens)` : ""}`
+          : reasoning.trace_requested
+            ? " · trace not returned"
+            : "";
+        return `${effort}${budget}${ceiling}${trace}`;
+      }
+
       function roundModelPreview(round) {
         const bets = round.predictions || [];
         const shortCount = bets.filter((bet) => bet.tranche === "IMMEDIATE").length;
@@ -1179,7 +1198,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           element(
             "small",
             "",
-            `${bets.length} valid call${bets.length === 1 ? "" : "s"} · ${averageConfidence == null ? "confidence unavailable" : `${percentage(averageConfidence)} avg confidence`} · ${shortCount} within 6h / ${longCount} at 6–24h${dropped ? ` · ${dropped} dropped` : ""}${droppedAdvice ? ` · ${droppedAdvice} adviser note excluded` : ""}`,
+            `${bets.length} valid call${bets.length === 1 ? "" : "s"} · ${averageConfidence == null ? "confidence unavailable" : `${percentage(averageConfidence)} avg confidence`} · ${shortCount} within 6h / ${longCount} at 6–24h${dropped ? ` · ${dropped} dropped` : ""}${droppedAdvice ? ` · ${droppedAdvice} adviser note excluded` : ""} · ${reasoningLabel(round)}`,
           ),
         );
         if (lead) {
@@ -1226,6 +1245,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             participantSummary.append(
               element("strong", "", modelLabel(round)),
               element("time", "", `Data cutoff ${formatDate(round.cutoff)}`),
+              element("span", `reasoning-note${round?.reasoning?.enabled === false ? " reasoning-note--disabled" : ""}`, reasoningLabel(round)),
               roundStatusBadges(round.predictions, (round.dropped_predictions || []).length),
             );
             const participantBody = element("div", "round-model__body");

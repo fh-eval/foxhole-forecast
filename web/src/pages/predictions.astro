@@ -76,6 +76,16 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         return " · Legacy format";
       };
       const modelLabel = (record) => `${record?.model_label || record?.label || record?.series_id || "Unknown model"}${modelFormat(record)}`;
+      const reasoningLabel = (round) => {
+        const reasoning = round?.reasoning;
+        if (!reasoning) return "Thinking setting not recorded";
+        if (!reasoning.enabled) return "Thinking disabled";
+        const effort = reasoning.effort ? `${reasoning.effort} reasoning` : "Thinking enabled";
+        const budget = reasoning.reasoning_budget_tokens ? ` · ${number(reasoning.reasoning_budget_tokens)}-token thought budget` : "";
+        const ceiling = reasoning.completion_ceiling_tokens ? ` · ${number(reasoning.completion_ceiling_tokens)} total output ceiling` : "";
+        const trace = reasoning.trace_returned ? ` · trace saved${reasoning.reasoning_tokens > 0 ? ` (${number(reasoning.reasoning_tokens)} reasoning tokens)` : ""}` : reasoning.trace_requested ? " · trace not returned" : "";
+        return `${effort}${budget}${ceiling}${trace}`;
+      };
       const predictionTime = (value) => value ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC" }).format(new Date(value)) + " UTC" : "an unknown time";
       const duration = (minutes) => minutes == null ? "—" : Number(minutes) < 60 ? `${Math.round(Number(minutes))}m` : `${(Number(minutes) / 60).toFixed(1)}h`;
       const crps = (minutes) => minutes == null || !Number.isFinite(Number(minutes)) ? "—" : `${Number(minutes).toFixed(2)}m`;
@@ -270,7 +280,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           const body = element("div", "archive-round__body");
           group.participants.forEach((round) => {
             const participant = element("details", "round-model"); const participantSummary = element("summary", "round-model__summary");
-            participantSummary.append(element("strong", "", modelLabel(round)), element("time", "", `Cutoff ${formatDate(round.cutoff)}`), roundStatusBadges(round.predictions, (round.dropped_predictions || []).length));
+            participantSummary.append(element("strong", "", modelLabel(round)), element("time", "", `Cutoff ${formatDate(round.cutoff)}`), element("span", `reasoning-note${round?.reasoning?.enabled === false ? " reasoning-note--disabled" : ""}`, reasoningLabel(round)), roundStatusBadges(round.predictions, (round.dropped_predictions || []).length));
             const participantBody = element("div", "round-model__body"); participantBody.append(briefingSummary(round.war_summary), element("p", "region-list", (round.selected_regions || []).map(regionLabel).join(" · ") || "No selected regions"));
             const advice = renderStrategicAdvice(round.strategic_advice); if (advice) participantBody.append(advice);
             const adviceWarning = droppedAdviceWarning(round.dropped_strategic_advice); if (adviceWarning) participantBody.append(adviceWarning);

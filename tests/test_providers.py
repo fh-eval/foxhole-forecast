@@ -117,7 +117,67 @@ class ProviderTests(unittest.TestCase):
             captured["chat_template_kwargs"], {"enable_thinking": False}
         )
 
-    def test_deepseek_uses_direct_endpoint_and_disables_thinking(self) -> None:
+    def test_openrouter_uses_per_model_reasoning_and_token_budget(self) -> None:
+        captured = {}
+
+        def urlopen(request, timeout):
+            self.assertEqual(timeout, 180)
+            captured.update(json.loads(request.data))
+            return _Response()
+
+        config = {
+            "gateway": "openrouter",
+            "model": "z-ai/glm-5.2:free",
+            "api_key_env": "TEST_OPENROUTER_KEY",
+            "max_tokens": 32768,
+            "reasoning": {"effort": "high", "exclude": False},
+            "allow_fallbacks": False,
+        }
+        with patch.dict("os.environ", {"TEST_OPENROUTER_KEY": "secret"}), patch(
+            "urllib.request.urlopen", side_effect=urlopen
+        ):
+            provider = ModelProvider(config, Settings.load())
+            provider.complete_json(
+                [{"role": "user", "content": "Return JSON"}],
+                "test",
+                {"type": "object"},
+            )
+
+        self.assertEqual(captured["max_tokens"], 32768)
+        self.assertEqual(
+            captured["reasoning"], {"effort": "high", "exclude": False}
+        )
+        self.assertEqual(
+            provider.attempts[0]["request_reasoning"],
+            {"effort": "high", "exclude": False},
+        )
+        self.assertEqual(provider.attempts[0]["request_max_tokens"], 32768)
+
+    def test_model_can_extend_request_timeout_for_reasoning(self) -> None:
+        observed = {}
+
+        def urlopen(_request, timeout):
+            observed["timeout"] = timeout
+            return _Response()
+
+        config = {
+            "gateway": "openrouter",
+            "model": "z-ai/glm-5.2:free",
+            "api_key_env": "TEST_OPENROUTER_KEY",
+            "request_timeout_seconds": 300,
+        }
+        with patch.dict("os.environ", {"TEST_OPENROUTER_KEY": "secret"}), patch(
+            "urllib.request.urlopen", side_effect=urlopen
+        ):
+            ModelProvider(config, Settings.load()).complete_json(
+                [{"role": "user", "content": "Return JSON"}],
+                "test",
+                {"type": "object"},
+            )
+
+        self.assertEqual(observed["timeout"], 300)
+
+    def test_deepseek_uses_direct_endpoint_and_enables_thinking(self) -> None:
         captured = {}
 
         def urlopen(request, timeout):
@@ -130,7 +190,10 @@ class ProviderTests(unittest.TestCase):
             "gateway": "deepseek",
             "model": "deepseek-v4-flash",
             "api_key_env": "TEST_DEEPSEEK_KEY",
-            "request_extra": {"thinking": {"type": "disabled"}},
+            "request_extra": {
+                "thinking": {"type": "enabled"},
+                "reasoning_effort": "high",
+            },
         }
         with patch.dict("os.environ", {"TEST_DEEPSEEK_KEY": "secret"}), patch(
             "urllib.request.urlopen", side_effect=urlopen
@@ -144,7 +207,8 @@ class ProviderTests(unittest.TestCase):
 
         self.assertEqual(captured["url"], "https://api.deepseek.com/chat/completions")
         self.assertEqual(captured["body"]["response_format"], {"type": "json_object"})
-        self.assertEqual(captured["body"]["thinking"], {"type": "disabled"})
+        self.assertEqual(captured["body"]["thinking"], {"type": "enabled"})
+        self.assertEqual(captured["body"]["reasoning_effort"], "high")
 
     def test_malformed_paid_response_still_counts_toward_budget(self) -> None:
         config = {

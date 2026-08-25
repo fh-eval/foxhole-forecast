@@ -124,6 +124,64 @@ def _median(values: list[float]) -> float | None:
     return round(statistics.median(values), 2) if values else None
 
 
+def _run_reasoning(run: dict[str, Any]) -> dict[str, Any] | None:
+    metadata = dict(run["reasoning"]) if isinstance(run.get("reasoning"), dict) else None
+    trace_returned = False
+    reasoning_tokens = 0
+    token_count_reported = False
+    calls = run.get("calls", [])
+    for call in calls:
+        message = (
+            (call.get("raw_response", {}).get("choices") or [{}])[0]
+            .get("message", {})
+        )
+        if any(
+            message.get(key) not in (None, "", [])
+            for key in ("reasoning", "reasoning_content", "reasoning_details")
+        ):
+            trace_returned = True
+        tokens = call.get("reasoning_tokens")
+        if tokens is None:
+            usage = call.get("usage", {})
+            tokens = usage.get("reasoning_tokens")
+            if tokens is None:
+                tokens = usage.get("completion_tokens_details", {}).get(
+                    "reasoning_tokens"
+                )
+        if isinstance(tokens, (int, float)):
+            reasoning_tokens += int(tokens)
+            token_count_reported = True
+    if metadata is not None:
+        if calls:
+            metadata["trace_returned"] = trace_returned
+        if token_count_reported:
+            metadata["reasoning_tokens"] = reasoning_tokens
+        return metadata
+    if trace_returned:
+        observed = {
+            "enabled": True,
+            "trace_returned": True,
+            "source": "observed_trace",
+        }
+        if token_count_reported:
+            observed["reasoning_tokens"] = reasoning_tokens
+        return observed
+    # These legacy series explicitly disabled thinking before reasoning metadata
+    # became part of each run record. New runs in the same series carry their
+    # actual setting above, so this fallback applies only to archived runs.
+    if run.get("series_id") in {
+        "nvidia-thinkingmachines-inkling-event-v4",
+        "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
+        "deepseek-v4-flash-direct-json-event-v4",
+    }:
+        return {
+            "enabled": False,
+            "trace_returned": False,
+            "source": "legacy_config",
+        }
+    return None
+
+
 def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
     current_settings = settings or Settings.load()
     latest = read_json(DATA_DIR / "raw" / "latest.json", default={})
@@ -216,6 +274,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
             "forecast_count": len(forecast_rows),
             "dropped_predictions": presented_drops,
             "dropped_strategic_advice": presented_advice_drops,
+            "reasoning": _run_reasoning(run),
             "cost_usd": run.get("cost_usd", 0),
         }
         by_series[series].append(history)
@@ -320,6 +379,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                 "headline": _summary_headline(run, cohort.get("war_number") or run.get("war_number")),
                 "war_summary": run.get("war_summary"),
                 "selected_regions": run.get("selected_regions", []),
+                "reasoning": _run_reasoning(run),
                 "dropped_predictions": presented_drops,
                 "dropped_strategic_advice": presented_advice_drops,
                 "protocol": settlement.get("protocol"),

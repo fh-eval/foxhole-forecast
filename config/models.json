@@ -9,6 +9,12 @@
       "api_key_env": "OPENROUTER_API_KEY",
       "paid": true,
       "provider_only": ["openai"],
+      "max_tokens": 16384,
+      "request_timeout_seconds": 240,
+      "reasoning": {
+        "effort": "medium",
+        "exclude": false
+      },
       "omit_temperature": true,
       "allow_fallbacks": false,
       "enabled": true
@@ -21,26 +27,33 @@
       "api_key_env": "OPENROUTER_API_KEY",
       "paid": true,
       "provider_only": ["google-vertex"],
+      "max_tokens": 16384,
+      "request_timeout_seconds": 240,
+      "reasoning": {
+        "effort": "medium",
+        "exclude": false
+      },
       "structured_outputs": false,
       "omit_temperature": true,
       "allow_fallbacks": false,
       "enabled": true
     },
     {
-      "series_id": "nvidia-thinkingmachines-inkling-event-v4",
-      "label": "Inkling",
-      "gateway": "nvidia_nim",
-      "model": "thinkingmachines/inkling",
-      "api_key_env": "NVIDIA_API_KEY",
-      "max_tokens": 8192,
+      "series_id": "openrouter-z-ai-glm-5.2-free-event-v4",
+      "label": "GLM 5.2 Free",
+      "gateway": "openrouter",
+      "model": "z-ai/glm-5.2:free",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "max_tokens": 32768,
+      "request_timeout_seconds": 300,
       "validation_attempts": 3,
-      "request_extra": {
-        "chat_template_kwargs": {
-          "reasoning_effort": "none"
-        }
+      "reasoning": {
+        "effort": "high",
+        "exclude": false
       },
+      "allow_fallbacks": false,
       "paid": false,
-      "enabled": false
+      "enabled": true
     },
     {
       "series_id": "nvidia-nemotron-3-ultra-550b-a55b-event-v4",
@@ -48,10 +61,12 @@
       "gateway": "nvidia_nim",
       "model": "nvidia/nemotron-3-ultra-550b-a55b",
       "api_key_env": "NVIDIA_API_KEY",
+      "max_tokens": 32768,
+      "request_timeout_seconds": 300,
+      "omit_temperature": true,
       "request_extra": {
-        "chat_template_kwargs": {
-          "enable_thinking": false
-        }
+        "reasoning_effort": "medium",
+        "reasoning_budget": 12288
       },
       "paid": false,
       "enabled": true
@@ -62,11 +77,14 @@
       "gateway": "deepseek",
       "model": "deepseek-v4-flash",
       "api_key_env": "DEEPSEEK_KEY",
-      "max_tokens": 8192,
+      "max_tokens": 24576,
+      "request_timeout_seconds": 240,
+      "omit_temperature": true,
       "request_extra": {
         "thinking": {
-          "type": "disabled"
-        }
+          "type": "enabled"
+        },
+        "reasoning_effort": "high"
       },
       "paid": true,
       "budget_group": "deepseek-direct",
@@ -80,6 +98,12 @@
       "gateway": "openrouter",
       "model": "stealth/ox-alpha",
       "api_key_env": "OPENROUTER_API_KEY",
+      "max_tokens": 32768,
+      "request_timeout_seconds": 300,
+      "reasoning": {
+        "effort": "high",
+        "exclude": false
+      },
       "paid": false,
       "structured_outputs": false,
       "allow_fallbacks": false,

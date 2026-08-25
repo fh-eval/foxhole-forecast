@@ -210,6 +210,7 @@ def _run_model(
         "label": config["label"],
         "gateway": config["gateway"],
         "requested_model": config["model"],
+        "reasoning": _reasoning_metadata(config, settings),
         "cutoff": scout_packet["cutoff"],
         "war_id": scout_packet["war"]["warId"],
         "created_at": isoformat(),
@@ -328,6 +329,42 @@ def _run_model(
             "calls": calls,
             "cost_usd": round(total_cost, 8),
         }
+
+
+def _reasoning_metadata(
+    config: dict[str, Any], settings: Settings
+) -> dict[str, Any]:
+    """Describe the reasoning settings requested for a model run."""
+    gateway = config["gateway"]
+    max_tokens = int(config.get("max_tokens", settings.output_token_limit))
+    if gateway == "openrouter":
+        reasoning = config.get("reasoning", {"effort": settings.reasoning_effort})
+        effort = reasoning.get("effort") if isinstance(reasoning, dict) else None
+        return {
+            "enabled": effort != "none" and reasoning.get("enabled", True),
+            "effort": effort,
+            "trace_requested": not reasoning.get("exclude", False),
+            "completion_ceiling_tokens": max_tokens,
+        }
+
+    extra = config.get("request_extra", {})
+    thinking = extra.get("thinking", {}) if isinstance(extra, dict) else {}
+    if thinking.get("type") == "disabled":
+        enabled = False
+    elif thinking.get("type") == "enabled":
+        enabled = True
+    elif gateway == "nvidia_nim":
+        template = extra.get("chat_template_kwargs", {})
+        enabled = template.get("enable_thinking", extra.get("reasoning_effort") != "none")
+    else:
+        enabled = extra.get("reasoning_effort") != "none"
+    return {
+        "enabled": bool(enabled),
+        "effort": extra.get("reasoning_effort"),
+        "trace_requested": bool(enabled),
+        "reasoning_budget_tokens": extra.get("reasoning_budget"),
+        "completion_ceiling_tokens": max_tokens,
+    }
 
 
 def _previous_model_summary(
