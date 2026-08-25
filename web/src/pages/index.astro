@@ -370,23 +370,55 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       function updateEventPager() {
         const events = document.querySelector("#telemetry-events");
         const items = [...(events?.children || [])];
-        const perPage = window.matchMedia("(max-width: 580px)").matches ? 1 : window.matchMedia("(max-width: 900px)").matches ? 2 : 3;
-        const pageCount = Math.max(1, Math.ceil(items.length / perPage));
-        eventPage = Math.max(0, Math.min(eventPage, pageCount - 1));
-        items.forEach((item, index) => { item.hidden = Math.floor(index / perPage) !== eventPage; });
+        const visibleDistance = window.matchMedia("(max-width: 580px)").matches ? 0 : window.matchMedia("(max-width: 900px)").matches ? 1 : 2;
+        const itemCount = items.length;
+        eventPage = Math.max(0, Math.min(eventPage, Math.max(0, itemCount - 1)));
+        const states = new Map([[-2, "far-prev"], [-1, "prev"], [0, "active"], [1, "next"], [2, "far-next"]]);
+        items.forEach((item, index) => {
+          const distance = index - eventPage;
+          const visible = Math.abs(distance) <= visibleDistance;
+          item.hidden = !visible;
+          item.classList.remove("event-feed__item--far-prev", "event-feed__item--prev", "event-feed__item--active", "event-feed__item--next", "event-feed__item--far-next");
+          if (!visible) return;
+          item.classList.add(`event-feed__item--${states.get(distance)}`);
+          if (distance === 0) {
+            item.setAttribute("aria-current", "true");
+            item.removeAttribute("role");
+            item.removeAttribute("tabindex");
+            item.removeAttribute("title");
+          } else {
+            item.removeAttribute("aria-current");
+            item.setAttribute("role", "button");
+            item.tabIndex = 0;
+            item.title = "Bring this bulletin to the front";
+          }
+        });
         const pageLabel = document.querySelector("#telemetry-events-page");
         const previous = document.querySelector("#telemetry-events-prev");
         const next = document.querySelector("#telemetry-events-next");
         const latest = document.querySelector("#telemetry-events-latest");
-        if (pageLabel) pageLabel.textContent = `${items.length ? eventPage + 1 : 1} / ${pageCount}`;
+        if (pageLabel) pageLabel.textContent = `${itemCount ? eventPage + 1 : 1} / ${Math.max(1, itemCount)}`;
         if (previous) previous.disabled = eventPage === 0;
-        if (next) next.disabled = eventPage >= pageCount - 1;
+        if (next) next.disabled = eventPage >= itemCount - 1;
         if (latest) latest.disabled = eventPage === 0;
       }
       function setupEventPager() {
         document.querySelector("#telemetry-events-prev")?.addEventListener("click", () => { eventPage -= 1; updateEventPager(); });
         document.querySelector("#telemetry-events-next")?.addEventListener("click", () => { eventPage += 1; updateEventPager(); });
         document.querySelector("#telemetry-events-latest")?.addEventListener("click", () => { eventPage = 0; updateEventPager(); });
+        const events = document.querySelector("#telemetry-events");
+        const bringForward = (target) => {
+          const item = target?.closest?.(".event-feed__item");
+          if (!item || item.classList.contains("event-feed__item--active")) return;
+          const index = [...events.children].indexOf(item);
+          if (index >= 0) { eventPage = index; updateEventPager(); }
+        };
+        events?.addEventListener("click", (event) => bringForward(event.target));
+        events?.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          bringForward(event.target);
+        });
         window.addEventListener("resize", updateEventPager);
       }
 
