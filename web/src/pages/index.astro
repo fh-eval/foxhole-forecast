@@ -175,8 +175,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 
       <section id="rounds" class="section-block">
         <div class="section-heading">
-          <div><p class="kicker">Receipts</p><h2>The calls, round by round</h2></div>
-          <p>Each round is one shared three-hour window. Open a round to compare what every model said from the exact same moment: its briefing, its eight ranked calls, and how each one settled.</p>
+          <div><p class="kicker">Receipts</p><h2>Latest calls</h2></div>
+          <p>Here is the newest shared three-hour window: every model’s briefing, ranked calls, and settlement status. <a class="section-heading__link" href={`${basePath}predictions/`}>Browse the full round history →</a></p>
         </div>
         <div id="round-list" class="round-list"></div>
       </section>
@@ -339,6 +339,10 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       }
       function briefingHeadline(entry) {
         return element("h3", "briefing__headline", summaryHeadline(entry));
+      }
+      function briefingByline(entry, fallbackLabel = "Foxhole Forecast desk") {
+        const author = entry?.model_label || fallbackLabel;
+        return element("p", "briefing__byline", `By ${author} · Filed ${formatDate(entry?.cutoff)}`);
       }
       let dashboard = null;
       let briefingFilter = "all";
@@ -739,9 +743,9 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         available.forEach((model) => {
           const article = element("article", "briefing");
           const header = element("div", "briefing__header");
-          header.append(element("h3", "", modelLabel(model)), element("time", "", formatDate(model.latest.cutoff)));
+          header.append(element("span", "briefing__paper", "The War Desk"), element("time", "", formatDate(model.latest.cutoff)));
           const regions = element("p", "region-list", model.latest.selected_regions?.map(regionLabel).join(" · ") || "No selected regions");
-          article.append(header, briefingHeadline(model.latest), briefingSummary(model.latest.war_summary), regions);
+          article.append(header, briefingHeadline(model.latest), briefingByline(model.latest, modelLabel(model)), briefingSummary(model.latest.war_summary), regions);
           list.append(article);
         });
       }
@@ -976,14 +980,16 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         return `${day} · ${time(start)}–${time(end)} UTC`;
       }
 
-      function renderRounds(rounds) {
+      function renderRounds(rounds, latestOnly = false) {
         const list = document.querySelector("#round-list");
         list.replaceChildren();
-        if (!rounds.length) {
+        const groups = groupedRounds(rounds);
+        const visibleGroups = latestOnly ? groups.slice(0, 1) : groups;
+        if (!visibleGroups.length) {
           list.append(element("p", "empty-state", "The first valid timed prediction round has not landed yet."));
           return;
         }
-        groupedRounds(rounds).forEach((group, index) => {
+        visibleGroups.forEach((group, index) => {
           const details = element("details", "round");
           if (index === 0) details.open = true;
           const summary = element("summary", "round__summary");
@@ -1007,6 +1013,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             const participantBody = element("div", "round-model__body");
             participantBody.append(
               briefingHeadline(round),
+              briefingByline(round),
               briefingSummary(round.war_summary),
               element("p", "region-list", (round.selected_regions || []).map(regionLabel).join(" · ")),
             );
@@ -1073,7 +1080,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           document.querySelector("#generated-at").textContent = dashboard.generated_at ? `Generated ${formatDate(dashboard.generated_at)}` : "No dataset generated yet";
           renderWarData(dashboard.war_api_snapshot);
           renderScoreboard();
-          renderRounds(currentRounds);
+          renderRounds(currentRounds, true);
           setupBriefingFilter(currentModels);
           renderBriefings(currentModels);
         } catch (error) {
