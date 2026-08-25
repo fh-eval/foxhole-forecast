@@ -177,6 +177,35 @@ class ProviderTests(unittest.TestCase):
 
         self.assertEqual(observed["timeout"], 300)
 
+    def test_model_can_extend_retry_schedule_for_shared_free_capacity(self) -> None:
+        attempts = 0
+
+        def urlopen(_request, timeout):
+            nonlocal attempts
+            self.assertEqual(timeout, 180)
+            attempts += 1
+            if attempts < 4:
+                raise TimeoutError("shared provider still busy")
+            return _Response()
+
+        config = {
+            "gateway": "openrouter",
+            "model": "z-ai/glm-5.2:free",
+            "api_key_env": "TEST_OPENROUTER_KEY",
+            "retry_delays_seconds": [0, 5, 20, 60],
+        }
+        with patch.dict("os.environ", {"TEST_OPENROUTER_KEY": "secret"}), patch(
+            "urllib.request.urlopen", side_effect=urlopen
+        ), patch("time.sleep") as sleep:
+            ModelProvider(config, Settings.load()).complete_json(
+                [{"role": "user", "content": "Return JSON"}],
+                "test",
+                {"type": "object"},
+            )
+
+        self.assertEqual(attempts, 4)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [5, 20, 60])
+
     def test_deepseek_uses_direct_endpoint_and_enables_thinking(self) -> None:
         captured = {}
 

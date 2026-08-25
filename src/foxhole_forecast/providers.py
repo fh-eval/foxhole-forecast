@@ -154,7 +154,15 @@ class ModelProvider:
     def _request_with_retry(self, request: urllib.request.Request) -> dict[str, Any]:
         last_error: Exception | None = None
         timeout = int(self.config.get("request_timeout_seconds", 180))
-        for delay in (0, 2, 8):
+        delays = self.config.get("retry_delays_seconds", [0, 2, 8])
+        if (
+            not isinstance(delays, list)
+            or not delays
+            or len(delays) > 6
+            or any(not isinstance(delay, (int, float)) or delay < 0 for delay in delays)
+        ):
+            raise ValueError("retry_delays_seconds must contain 1-6 nonnegative numbers")
+        for delay in delays:
             if delay:
                 time.sleep(delay)
             try:
