@@ -160,15 +160,17 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <div class="event-feed">
             <div class="subheading">
               <h3>Base Control Wire</h3>
-              <div class="event-feed__controls">
-                <span class="event-feed__direction">newest <b aria-hidden="true">→</b> earlier</span>
-                <button id="telemetry-events-prev" class="event-feed__button" type="button" aria-label="Show newer bulletins">←</button>
+              <span>Official control reports · newest first</span>
+            </div>
+            <div class="event-feed__viewport">
+              <button id="telemetry-events-prev" class="event-feed__nav event-feed__nav--newer" type="button" aria-label="Show the next newer bulletin"><b aria-hidden="true">←</b><small>Newer</small></button>
+              <ol id="telemetry-events" aria-label="Recent base-control bulletins, newest first"></ol>
+              <button id="telemetry-events-next" class="event-feed__nav event-feed__nav--older" type="button" aria-label="Show the next older bulletin"><b aria-hidden="true">→</b><small>Older</small></button>
+              <div class="event-feed__docket">
                 <span id="telemetry-events-page" class="event-feed__page" aria-live="polite">1 / 1</span>
-                <button id="telemetry-events-next" class="event-feed__button" type="button" aria-label="Show older bulletins">→</button>
-                <button id="telemetry-events-latest" class="event-feed__button event-feed__button--latest" type="button">Latest</button>
+                <button id="telemetry-events-latest" class="event-feed__latest" type="button">Return to latest</button>
               </div>
             </div>
-            <div class="event-feed__viewport"><ol id="telemetry-events" aria-label="Recent base-control bulletins, newest first"></ol></div>
           </div>
           <div>
             <div class="subheading"><h3>Regions, ranked by recent activity</h3><span id="telemetry-cutoff">—</span></div>
@@ -706,6 +708,57 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         renderScores(scopedModels, scopedRounds, summaries);
       }
 
+      function wireTeam(value) {
+        if (value === "WARDENS") return { label: "Warden control", short: "Wardens", tone: "wardens" };
+        if (value === "COLONIALS") return { label: "Colonial control", short: "Colonials", tone: "colonials" };
+        if (value === "NONE") return { label: "Neutral / no-man's-land", short: "Neutral", tone: "neutral" };
+        return { label: "Control unconfirmed", short: "Unconfirmed", tone: "unconfirmed" };
+      }
+
+      function wireReport(group) {
+        const ownerLoss = group.events.find((event) => event.event_type === "OWNER_LOSES");
+        const capture = group.events.find((event) => String(event.event_type || "").startsWith("CAPTURED"));
+        const neutral = group.events.find((event) => event.event_type === "BECOMES_NEUTRAL");
+        const before = wireTeam(ownerLoss?.actor);
+        const after = wireTeam(capture?.actor || (neutral ? "NONE" : null));
+        const base = group.base_name || "This base";
+        if (capture) {
+          const changedHands = ownerLoss?.actor && ownerLoss.actor !== capture.actor;
+          return {
+            tone: after.tone,
+            wireLabel: "Control flash · base captured",
+            headline: `Captured by the ${after.short}`,
+            detail: changedHands
+              ? `${after.short} took ${base} from the ${before.short}.`
+              : `${after.short} established control of ${base}; its prior owner was not confirmed in this report.`,
+            before: ownerLoss ? before : wireTeam(null),
+            after,
+          };
+        }
+        if (neutral) {
+          return {
+            tone: "neutral",
+            wireLabel: "Demolition report · control ended",
+            headline: "Base destroyed — now neutral",
+            detail: ownerLoss
+              ? `${before.short} control ended. No faction had rebuilt ${base} when this report was filed.`
+              : `${base} was observed neutral and had not been rebuilt by either faction.`,
+            before: ownerLoss ? before : wireTeam(null),
+            after,
+          };
+        }
+        return {
+          tone: "unconfirmed",
+          wireLabel: "Incomplete wire · check pending",
+          headline: "Control lost — next state unconfirmed",
+          detail: ownerLoss
+            ? `The API recorded the end of ${before.short} control at ${base}, but no replacement state appeared in the same poll.`
+            : `The API reported a control change at ${base}, but the available record is incomplete.`,
+          before: ownerLoss ? before : wireTeam(null),
+          after: wireTeam(null),
+        };
+      }
+
       function renderWarData(snapshot) {
         const summary = document.querySelector("#telemetry-summary");
         const regions = document.querySelector("#telemetry-regions");
@@ -776,13 +829,24 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           });
           grouped.forEach((group) => {
             const region = group.map_display_name || regionLabel(group.map_name);
-            const item = element("li", "event-feed__item");
+            const report = wireReport(group);
+            const item = element("li", `event-feed__item event-feed__item--outcome-${report.tone}`);
+            const meta = element("div", "event-feed__meta");
+            meta.append(element("span", "event-feed__wire-label", report.wireLabel), element("time", "", formatDate(group.observed_at)));
+            const state = element("div", "event-feed__state-flow");
+            state.append(
+              element("span", `event-feed__state event-feed__state--${report.before.tone}`, report.before.label),
+              element("b", "", "→"),
+              element("span", `event-feed__state event-feed__state--${report.after.tone}`, report.after.label),
+            );
             item.append(
-              element("time", "", formatDate(group.observed_at)),
+              meta,
               element("strong", "", group.base_name || "Unknown base"),
               element("span", "event-feed__region", region),
               element("small", "event-feed__morse", morseCode(region)),
-              element("span", "", `${group.events.map((event) => eventLabel(event.event_type)).filter((value, index, values) => values.indexOf(value) === index).join(" → ")} · ${group.events.map((event) => eventLabel(event.actor)).filter((value, index, values) => values.indexOf(value) === index).join(" / ")}`),
+              element("span", "event-feed__headline", report.headline),
+              element("p", "event-feed__copy", report.detail),
+              state,
             );
             events.append(item);
           });
