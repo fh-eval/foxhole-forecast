@@ -162,6 +162,23 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         return "partial";
       }
 
+      function roundStatusBadges(predictions, droppedCount = 0) {
+        const bets = predictions || [];
+        const total = bets.length;
+        const scored = bets.filter((bet) => bet.crps_minutes != null).length;
+        const resolved = bets.filter((bet) => bet.status && bet.status !== "open").length;
+        const hasCensored = bets.some((bet) => bet.status === "censored");
+        const scoredClass = scored === total ? "complete" : scored ? "partial" : "censored";
+        const resolvedClass = resolved < total ? "open" : hasCensored ? "censored" : "complete";
+        const badges = element("span", "round-statuses");
+        badges.append(
+          element("span", `status status--${scoredClass}`, `${scored}/${total} scored`),
+          element("span", `status status--${resolvedClass}`, `${resolved}/${total} resolved`),
+        );
+        if (droppedCount) badges.append(element("span", "status status--partial", `${droppedCount} dropped`));
+        return badges;
+      }
+
       function predictionResult(bet) {
         const result = element("div", "prediction-result");
         const quality = predictionQuality(bet);
@@ -236,12 +253,13 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           const warList = element("div", "round-history-list");
           war.rounds.forEach((group, index) => {
           const details = element("details", "archive-round"); if (warIndex === 0 && index === 0 && warFilter === "all" && modelFilter === "all") details.open = true;
-          const summaryRow = element("summary", "archive-round__summary"); const resolved = group.participants.flatMap((round) => round.predictions || []).filter((bet) => bet.status && bet.status !== "open").length; const total = group.participants.reduce((count, round) => count + (round.predictions || []).length, 0); const end = group.end ? new Date(group.end) : new Date(new Date(group.slot).getTime() + 3 * 60 * 60 * 1000);
-          summaryRow.append(element("strong", "", `War ${group.warNumber || "—"} · Round ${String(group.roundNumber).padStart(2, "0")}`), element("time", "", `${formatDate(group.slot)}–${formatDate(end)}`), element("span", "status status--open", `${group.participants.length} models · ${resolved}/${total} calls resolved`));
+          const summaryRow = element("summary", "archive-round__summary"); const groupPredictions = group.participants.flatMap((round) => round.predictions || []); const dropped = group.participants.reduce((count, round) => count + (round.dropped_predictions || []).length, 0); const end = group.end ? new Date(group.end) : new Date(new Date(group.slot).getTime() + 3 * 60 * 60 * 1000);
+          const roundStatuses = roundStatusBadges(groupPredictions, dropped); roundStatuses.prepend(element("span", "round-statuses__models", `${group.participants.length} models`));
+          summaryRow.append(element("strong", "", `War ${group.warNumber || "—"} · Round ${String(group.roundNumber).padStart(2, "0")}`), element("time", "", `${formatDate(group.slot)}–${formatDate(end)}`), roundStatuses);
           const body = element("div", "archive-round__body");
           group.participants.forEach((round) => {
-            const participant = element("details", "round-model"); const participantSummary = element("summary", "round-model__summary"); const resolvedCount = (round.predictions || []).filter((bet) => bet.status && bet.status !== "open").length;
-            participantSummary.append(element("strong", "", modelLabel(round)), element("time", "", `Cutoff ${formatDate(round.cutoff)}`), element("span", `status status--${round.settlement_status || "open"}`, `${resolvedCount}/${round.predictions?.length || 0} resolved`));
+            const participant = element("details", "round-model"); const participantSummary = element("summary", "round-model__summary");
+            participantSummary.append(element("strong", "", modelLabel(round)), element("time", "", `Cutoff ${formatDate(round.cutoff)}`), roundStatusBadges(round.predictions, (round.dropped_predictions || []).length));
             const participantBody = element("div", "round-model__body"); participantBody.append(briefingSummary(round.war_summary), element("p", "region-list", (round.selected_regions || []).map(regionLabel).join(" · ") || "No selected regions"));
             const advice = renderStrategicAdvice(round.strategic_advice); if (advice) participantBody.append(advice);
             if (round.dropped_predictions?.length) {
