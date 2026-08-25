@@ -159,7 +159,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <div class="telemetry-layout">
           <div class="event-feed">
             <div class="subheading">
-              <h3>Base Control Wire</h3>
+              <div class="event-feed__title"><h3>Base Control Wire</h3><small>Recent events on the front</small></div>
               <span>Official control reports · newest first</span>
             </div>
             <div class="event-feed__viewport">
@@ -827,12 +827,14 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             }
             group.events.push(event);
           });
-          grouped.forEach((group) => {
+          grouped.forEach((group, groupIndex) => {
             const region = group.map_display_name || regionLabel(group.map_name);
             const report = wireReport(group);
             const item = element("li", `event-feed__item event-feed__item--outcome-${report.tone}`);
             const meta = element("div", "event-feed__meta");
-            meta.append(element("span", "event-feed__wire-label", report.wireLabel), element("time", "", formatDate(group.observed_at)));
+            meta.append(element("span", "event-feed__wire-label", report.wireLabel));
+            if (groupIndex === 0) meta.append(element("span", "event-feed__urgent", "Urgent"));
+            meta.append(element("time", "", formatDate(group.observed_at)));
             const state = element("div", "event-feed__state-flow");
             state.append(
               element("span", `event-feed__state event-feed__state--${report.before.tone}`, report.before.label),
