@@ -635,13 +635,13 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const ownership = snapshot.strategic_base_ownership || {};
         const casualties = snapshot.casualties || {};
         [
-          ["Day of war", snapshot.day_of_war ?? "—"],
-          ["Warden strategic bases", number(ownership.WARDENS)],
-          ["Colonial strategic bases", number(ownership.COLONIALS)],
-          ["Warden casualties", number(casualties.WARDENS)],
-          ["Colonial casualties", number(casualties.COLONIALS)],
-        ].forEach(([label, value]) => {
-          const card = element("article", "telemetry-card");
+          ["Day of war", snapshot.day_of_war ?? "—", ""],
+          ["Warden strategic bases", number(ownership.WARDENS), "wardens"],
+          ["Colonial strategic bases", number(ownership.COLONIALS), "colonials"],
+          ["Warden casualties", number(casualties.WARDENS), "wardens"],
+          ["Colonial casualties", number(casualties.COLONIALS), "colonials"],
+        ].forEach(([label, value, faction]) => {
+          const card = element("article", `telemetry-card ${faction ? `telemetry-card--${faction}` : ""}`.trim());
           card.append(element("small", "", label), element("strong", "", value));
           summary.append(card);
         });
