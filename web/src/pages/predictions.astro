@@ -78,13 +78,10 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       const modelLabel = (record) => `${record?.model_label || record?.label || record?.series_id || "Unknown model"}${modelFormat(record)}`;
       const reasoningLabel = (round) => {
         const reasoning = round?.reasoning;
-        if (!reasoning) return "Thinking setting not recorded";
-        if (!reasoning.enabled) return "Thinking disabled";
-        const effort = reasoning.effort ? `${reasoning.effort} reasoning` : "Thinking enabled";
-        const budget = reasoning.reasoning_budget_tokens ? ` · ${number(reasoning.reasoning_budget_tokens)}-token thought budget` : "";
-        const ceiling = reasoning.completion_ceiling_tokens ? ` · ${number(reasoning.completion_ceiling_tokens)} total output ceiling` : "";
-        const trace = reasoning.trace_returned ? ` · trace saved${reasoning.reasoning_tokens > 0 ? ` (${number(reasoning.reasoning_tokens)} reasoning tokens)` : ""}` : reasoning.trace_requested ? " · trace not returned" : "";
-        return `${effort}${budget}${ceiling}${trace}`;
+        const provider = round?.provider_label || "Provider unrecorded";
+        if (!reasoning) return `${provider} · reasoning setting not recorded`;
+        if (!reasoning.enabled) return `${provider} · thinking disabled — historical limitation`;
+        return `${provider} · ${reasoning.effort ? `${reasoning.effort} reasoning` : "reasoning used"}`;
       };
       const predictionTime = (value) => value ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC" }).format(new Date(value)) + " UTC" : "an unknown time";
       const duration = (minutes) => minutes == null ? "—" : Number(minutes) < 60 ? `${Math.round(Number(minutes))}m` : `${(Number(minutes) / 60).toFixed(1)}h`;

@@ -182,6 +182,16 @@ def _run_reasoning(run: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
+def _provider_label(run: dict[str, Any]) -> str:
+    if run.get("upstream_provider"):
+        return str(run["upstream_provider"])
+    return {
+        "deepseek": "DeepSeek",
+        "nvidia_nim": "NVIDIA",
+        "openrouter": "OpenRouter",
+    }.get(run.get("gateway"), str(run.get("gateway") or "Provider unrecorded"))
+
+
 def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
     current_settings = settings or Settings.load()
     latest = read_json(DATA_DIR / "raw" / "latest.json", default={})
@@ -275,6 +285,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
             "dropped_predictions": presented_drops,
             "dropped_strategic_advice": presented_advice_drops,
             "reasoning": _run_reasoning(run),
+            "provider_label": _provider_label(run),
             "cost_usd": run.get("cost_usd", 0),
         }
         by_series[series].append(history)
@@ -380,6 +391,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                 "war_summary": run.get("war_summary"),
                 "selected_regions": run.get("selected_regions", []),
                 "reasoning": _run_reasoning(run),
+                "provider_label": _provider_label(run),
                 "dropped_predictions": presented_drops,
                 "dropped_strategic_advice": presented_advice_drops,
                 "protocol": settlement.get("protocol"),

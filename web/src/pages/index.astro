@@ -1164,21 +1164,10 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 
       function reasoningLabel(round) {
         const reasoning = round?.reasoning;
-        if (!reasoning) return "Thinking setting not recorded";
-        if (!reasoning.enabled) return "Thinking disabled";
-        const effort = reasoning.effort ? `${reasoning.effort} reasoning` : "Thinking enabled";
-        const budget = reasoning.reasoning_budget_tokens
-          ? ` · ${number(reasoning.reasoning_budget_tokens)}-token thought budget`
-          : "";
-        const ceiling = reasoning.completion_ceiling_tokens
-          ? ` · ${number(reasoning.completion_ceiling_tokens)} total output ceiling`
-          : "";
-        const trace = reasoning.trace_returned
-          ? ` · trace saved${reasoning.reasoning_tokens > 0 ? ` (${number(reasoning.reasoning_tokens)} reasoning tokens)` : ""}`
-          : reasoning.trace_requested
-            ? " · trace not returned"
-            : "";
-        return `${effort}${budget}${ceiling}${trace}`;
+        const provider = round?.provider_label || "Provider unrecorded";
+        if (!reasoning) return `${provider} · reasoning setting not recorded`;
+        if (!reasoning.enabled) return `${provider} · thinking disabled — historical limitation`;
+        return `${provider} · ${reasoning.effort ? `${reasoning.effort} reasoning` : "reasoning used"}`;
       }
 
       function roundModelPreview(round) {
