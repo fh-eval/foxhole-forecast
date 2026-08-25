@@ -873,13 +873,37 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         return Number.isFinite(value) ? value : null;
       }
 
+      function predictionQuality(bet) {
+        if (bet.crps_minutes == null) return null;
+        const state = Number(bet.state_credit);
+        const timing = Number(bet.timing_credit);
+        const error = bet.eta_error_minutes != null
+          ? Number(bet.eta_error_minutes)
+          : bet.eta_error_max_minutes != null
+            ? Number(bet.eta_error_max_minutes)
+            : null;
+        const sigma = Number(bet.sigma_minutes);
+        const insideSpread = Number.isFinite(error) && Number.isFinite(sigma) && error <= sigma;
+        if (state === 0 || state === 1 && timing === 0 || bet.status === "miss" && state <= 0) return "miss";
+        if (state === 1 && insideSpread) return "hit";
+        return "partial";
+      }
+
       function predictionResult(bet) {
         const result = element("div", "prediction-result");
         const score = predictionScoreValue(bet);
-        const displayStatus = score == null ? bet.status : "scored";
-        result.append(element("small", `status status--${displayStatus}`, predictionStatus(bet)));
+        const quality = predictionQuality(bet);
+        const displayStatus = quality || bet.status || "open";
+        const status = element("small", `status status--${displayStatus}`, predictionStatus(bet));
+        if (quality) status.title = quality === "hit"
+          ? "Correct: the named outcome was observed inside the model's timing spread."
+          : quality === "partial"
+            ? "Error: the call received partial credit or landed outside the model's timing spread."
+            : "Bad call: the named outcome or timing received no credit.";
+        result.append(status);
         if (score != null) {
-          const badge = element("span", "prediction-score prediction-score--scored");
+          const badge = element("span", `prediction-score prediction-score--scored prediction-score--${quality || "partial"}`);
+          badge.title = status.title || "Forecast error measured by CRPS.";
           badge.append(
             element("span", "prediction-score__label", "Forecast error · CRPS"),
             element("strong", "", crps(score)),
