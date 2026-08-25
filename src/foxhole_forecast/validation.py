@@ -35,7 +35,21 @@ def validate_scout(
     }
 
 
-def validate_forecast(value: dict[str, Any], packet: dict[str, Any], settings: Settings) -> None:
+STRATEGIC_ADVICE_OWNERS = {
+    "colonial_reinforce": "COLONIALS",
+    "colonial_attack": "WARDENS",
+    "warden_reinforce": "WARDENS",
+    "warden_attack": "COLONIALS",
+}
+
+
+def validate_forecast(
+    value: dict[str, Any],
+    packet: dict[str, Any],
+    settings: Settings,
+    *,
+    allow_partial_strategic_advice: bool = False,
+) -> None:
     rows = value.get("predictions")
     if not isinstance(rows, list):
         raise ValidationError("predictions must be an array")
@@ -134,51 +148,68 @@ def validate_forecast(value: dict[str, Any], packet: dict[str, Any], settings: S
         return
     if not isinstance(advice, dict):
         raise ValidationError("strategic_advice must be an object")
-    advice_owners = {
-        "colonial_reinforce": "COLONIALS",
-        "colonial_attack": "WARDENS",
-        "warden_reinforce": "WARDENS",
-        "warden_attack": "COLONIALS",
-    }
-    for key, expected_owner in advice_owners.items():
-        recommendation = advice.get(key)
-        if not isinstance(recommendation, dict):
-            raise ValidationError(f"strategic_advice.{key} must be an object")
-        identifier = recommendation.get("base_id")
-        if identifier not in bases:
-            raise ValidationError(f"strategic_advice.{key} contains an unknown base_id")
-        owner = bases[identifier].get(
-            "current_owner", bases[identifier].get("team")
+    unknown_keys = set(advice) - set(STRATEGIC_ADVICE_OWNERS)
+    if unknown_keys:
+        raise ValidationError(
+            f"strategic_advice contains unknown keys: {sorted(unknown_keys)}"
         )
-        if owner != expected_owner:
+    if not allow_partial_strategic_advice:
+        missing_keys = set(STRATEGIC_ADVICE_OWNERS) - set(advice)
+        if missing_keys:
             raise ValidationError(
-                f"strategic_advice.{key} must select a {expected_owner}-owned base"
+                f"strategic_advice is missing required keys: {sorted(missing_keys)}"
             )
-        reason = recommendation.get("reason")
+    for key, recommendation in advice.items():
+        expected_owner = STRATEGIC_ADVICE_OWNERS[key]
+        validate_strategic_recommendation(
+            key, recommendation, expected_owner, bases, metrics
+        )
+
+
+def validate_strategic_recommendation(
+    key: str,
+    recommendation: Any,
+    expected_owner: str,
+    bases: dict[str, dict[str, Any]],
+    metrics: set[str],
+) -> None:
+    if not isinstance(recommendation, dict):
+        raise ValidationError(f"strategic_advice.{key} must be an object")
+    identifier = recommendation.get("base_id")
+    if identifier not in bases:
+        raise ValidationError(f"strategic_advice.{key} contains an unknown base_id")
+    owner = bases[identifier].get(
+        "current_owner", bases[identifier].get("team")
+    )
+    if owner != expected_owner:
+        raise ValidationError(
+            f"strategic_advice.{key} must select a {expected_owner}-owned base"
+        )
+    reason = recommendation.get("reason")
+    if (
+        not isinstance(reason, str)
+        or not reason.strip()
+        or not 10 <= len(reason.split()) <= 120
+    ):
+        raise ValidationError(
+            f"strategic_advice.{key}.reason must contain 10-120 words"
+        )
+    cited = recommendation.get("evidence")
+    if not isinstance(cited, list) or not 1 <= len(cited) <= 3:
+        raise ValidationError(
+            f"strategic_advice.{key} requires 1-3 evidence references"
+        )
+    for item in cited:
+        if item.get("metric_id") not in metrics:
+            raise ValidationError(
+                f"Unknown strategic advice evidence metric: {item.get('metric_id')}"
+            )
+        relevance = item.get("relevance")
         if (
-            not isinstance(reason, str)
-            or not reason.strip()
-            or not 10 <= len(reason.split()) <= 120
+            not isinstance(relevance, int)
+            or isinstance(relevance, bool)
+            or not 1 <= relevance <= 10
         ):
             raise ValidationError(
-                f"strategic_advice.{key}.reason must contain 10-120 words"
+                "Strategic advice evidence relevance must be an integer from 1 to 10"
             )
-        cited = recommendation.get("evidence")
-        if not isinstance(cited, list) or not 1 <= len(cited) <= 3:
-            raise ValidationError(
-                f"strategic_advice.{key} requires 1-3 evidence references"
-            )
-        for item in cited:
-            if item.get("metric_id") not in metrics:
-                raise ValidationError(
-                    f"Unknown strategic advice evidence metric: {item.get('metric_id')}"
-                )
-            relevance = item.get("relevance")
-            if (
-                not isinstance(relevance, int)
-                or isinstance(relevance, bool)
-                or not 1 <= relevance <= 10
-            ):
-                raise ValidationError(
-                    "Strategic advice evidence relevance must be an integer from 1 to 10"
-                )

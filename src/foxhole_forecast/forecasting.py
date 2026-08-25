@@ -9,10 +9,24 @@ from typing import Any, Callable
 
 from .config import DATA_DIR, ROOT, Settings, load_models
 from .packets import build_detail_packet, build_scout_packet, current_strategic_base_ids
-from .providers import MissingApiKey, ModelProvider, ProviderResponse
+from .providers import MissingApiKey, ModelProvider, ProviderResponse, _parse_json_content
 from .schemas import forecast_schema, scout_schema
-from .storage import append_jsonl, isoformat, parse_time, read_json, read_jsonl, write_json
-from .validation import ValidationError, validate_forecast, validate_scout
+from .storage import (
+    append_jsonl,
+    isoformat,
+    parse_time,
+    read_json,
+    read_jsonl,
+    write_json,
+    write_jsonl,
+)
+from .validation import (
+    STRATEGIC_ADVICE_OWNERS,
+    ValidationError,
+    validate_forecast,
+    validate_scout,
+    validate_strategic_recommendation,
+)
 from .war_lifecycle import war_ended_at, war_is_active
 
 
@@ -106,6 +120,79 @@ def run_forecast_cohort(
     return cohort
 
 
+def salvage_invalid_run(settings: Settings, run_id: str) -> dict[str, Any]:
+    """Revalidate a stored provider response without making another model call."""
+    runs_path = DATA_DIR / "model_runs.jsonl"
+    runs = read_jsonl(runs_path)
+    matching = [index for index, run in enumerate(runs) if run.get("run_id") == run_id]
+    if len(matching) != 1:
+        raise ValueError(f"Expected exactly one stored run for {run_id}; found {len(matching)}")
+    index = matching[0]
+    run = runs[index]
+    if run.get("status") != "invalid":
+        raise ValueError(f"Run {run_id} is not invalid")
+    detail_packet = read_json(
+        DATA_DIR
+        / "raw"
+        / "cohorts"
+        / run["cohort_id"]
+        / f"{run['series_id']}-detail-packet.json",
+        default=None,
+    )
+    if not isinstance(detail_packet, dict):
+        raise ValueError(f"Detail packet is missing for {run_id}")
+    forecast_attempts = [
+        attempt
+        for attempt in run.get("calls", [])
+        if attempt.get("stage") == "forecast" and attempt.get("raw_response")
+    ]
+    if not forecast_attempts:
+        raise ValueError(f"No stored forecast response is available for {run_id}")
+    raw = forecast_attempts[-1]["raw_response"]
+    content = raw["choices"][0]["message"]["content"]
+    if isinstance(content, list):
+        content = "".join(
+            str(part.get("text", "")) for part in content if isinstance(part, dict)
+        )
+    parsed = _parse_json_content(str(content))
+    filtered, dropped_predictions, dropped_advice = _filter_forecast_output(
+        parsed, detail_packet, settings
+    )
+    original_error = run.get("error")
+    repaired = {
+        **run,
+        "status": "valid",
+        "returned_model": raw.get("model"),
+        "upstream_provider": raw.get("provider"),
+        "forecast": _freeze_evidence(filtered, detail_packet),
+        "dropped_predictions": dropped_predictions,
+        "dropped_strategic_advice": dropped_advice,
+        "salvaged_at": isoformat(),
+        "salvaged_from_error": original_error,
+        "settlement": {"status": "open", "horizons": {}},
+    }
+    repaired.pop("error", None)
+    runs[index] = repaired
+    write_jsonl(runs_path, runs)
+
+    cohorts_path = DATA_DIR / "cohorts.jsonl"
+    cohorts = read_jsonl(cohorts_path)
+    for cohort in cohorts:
+        if cohort.get("cohort_id") != run.get("cohort_id"):
+            continue
+        for model in cohort.get("models", []):
+            if model.get("run_id") == run_id:
+                model["status"] = "valid"
+    write_jsonl(cohorts_path, cohorts)
+    return {
+        "run_id": run_id,
+        "status": "valid",
+        "predictions": len(repaired["forecast"].get("predictions", [])),
+        "dropped_predictions": len(dropped_predictions),
+        "dropped_strategic_advice": len(dropped_advice),
+    }
+
+
 def _run_model(
     settings: Settings,
     config: dict[str, Any],
@@ -143,6 +230,7 @@ def _run_model(
     overview: dict[str, Any] = {}
     selected: list[str] = []
     dropped_predictions: list[dict[str, Any]] = []
+    dropped_strategic_advice: list[dict[str, Any]] = []
     try:
         scout_contract = scout_schema(settings)
         model_scout_packet = copy.deepcopy(scout_packet)
@@ -186,12 +274,15 @@ def _run_model(
                 raise ValidationError(_dropped_prediction_error(dropped))
             validate_forecast(filtered, detail_packet, settings)
             dropped_predictions.clear()
+            dropped_strategic_advice.clear()
             return filtered
 
         def validate_with_individual_drops(value: dict[str, Any]) -> dict[str, Any]:
-            filtered, dropped = _drop_invalid_predictions(value, detail_packet)
-            validate_forecast(filtered, detail_packet, settings)
+            filtered, dropped, dropped_advice = _filter_forecast_output(
+                value, detail_packet, settings
+            )
             dropped_predictions[:] = dropped
+            dropped_strategic_advice[:] = dropped_advice
             return filtered
 
         forecast_response, filtered_forecast = _call_validated(
@@ -216,6 +307,7 @@ def _run_model(
             "selected_regions": selected,
             "forecast": frozen_forecast,
             "dropped_predictions": dropped_predictions,
+            "dropped_strategic_advice": dropped_strategic_advice,
             "calls": calls,
             "cost_usd": round(total_cost, 8),
             "settlement": {"status": "open", "horizons": {}},
@@ -232,6 +324,7 @@ def _run_model(
             "war_summary": overview.get("war_summary"),
             "selected_regions": selected,
             "dropped_predictions": dropped_predictions,
+            "dropped_strategic_advice": dropped_strategic_advice,
             "calls": calls,
             "cost_usd": round(total_cost, 8),
         }
@@ -308,6 +401,72 @@ def _drop_invalid_predictions(
         kept.append(prediction)
     filtered["predictions"] = kept
     return filtered, dropped
+
+
+def _drop_invalid_strategic_advice(
+    value: dict[str, Any], detail_packet: dict[str, Any]
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Retain valid adviser recommendations without sacrificing forecast bets."""
+    filtered = copy.deepcopy(value)
+    advice = filtered.get("strategic_advice")
+    if advice is None:
+        return filtered, []
+    bases = {
+        base["base_id"]: base for base in detail_packet.get("strategic_bases", [])
+    }
+    metrics = {
+        metric["metric_id"] for metric in detail_packet.get("selected_metrics", [])
+    }
+    kept: dict[str, dict[str, Any]] = {}
+    dropped: list[dict[str, Any]] = []
+    source = advice if isinstance(advice, dict) else {}
+    for key, expected_owner in STRATEGIC_ADVICE_OWNERS.items():
+        recommendation = source.get(key)
+        try:
+            validate_strategic_recommendation(
+                key, recommendation, expected_owner, bases, metrics
+            )
+        except ValidationError as error:
+            base = bases.get(
+                recommendation.get("base_id") if isinstance(recommendation, dict) else None,
+                {},
+            )
+            dropped.append(
+                {
+                    "advice_key": key,
+                    "base_id": (
+                        recommendation.get("base_id")
+                        if isinstance(recommendation, dict)
+                        else None
+                    ),
+                    "base_name": base.get("name"),
+                    "current_owner": base.get("current_owner", base.get("team")),
+                    "reason": str(error),
+                }
+            )
+            continue
+        kept[key] = recommendation
+    filtered["strategic_advice"] = kept
+    return filtered, dropped
+
+
+def _filter_forecast_output(
+    value: dict[str, Any], detail_packet: dict[str, Any], settings: Settings
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
+    filtered, dropped_predictions = _drop_invalid_predictions(value, detail_packet)
+    predictions_only = copy.deepcopy(filtered)
+    predictions_only.pop("strategic_advice", None)
+    validate_forecast(predictions_only, detail_packet, settings)
+    filtered, dropped_advice = _drop_invalid_strategic_advice(
+        filtered, detail_packet
+    )
+    validate_forecast(
+        filtered,
+        detail_packet,
+        settings,
+        allow_partial_strategic_advice=True,
+    )
+    return filtered, dropped_predictions, dropped_advice
 
 
 def _dropped_prediction_error(dropped: list[dict[str, Any]]) -> str:

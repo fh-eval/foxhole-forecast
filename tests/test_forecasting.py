@@ -12,6 +12,7 @@ from foxhole_forecast.forecasting import (
     _budget,
     _call_validated,
     _dropped_prediction_error,
+    _drop_invalid_strategic_advice,
     _messages,
     _drop_invalid_predictions,
     _previous_model_summary,
@@ -151,6 +152,41 @@ class ForecastBudgetTests(unittest.TestCase):
         self.assertIn("rank 2 Test Base", message)
         self.assertIn("current_owner=WARDENS", message)
         self.assertIn("CAPTURED_BY_COLONIALS", message)
+
+    def test_invalid_strategic_advice_is_dropped_individually(self) -> None:
+        metric_id = "region.TestHex.activity.events_2h"
+        packet = {
+            "strategic_bases": [
+                {"base_id": "warden-base", "name": "Warden Base", "current_owner": "WARDENS"},
+                {"base_id": "colonial-base", "name": "Colonial Base", "current_owner": "COLONIALS"},
+            ],
+            "selected_metrics": [{"metric_id": metric_id}],
+        }
+
+        def recommendation(base_id: str) -> dict:
+            return {
+                "base_id": base_id,
+                "reason": "Recent activity makes this position strategically important, although the available public evidence remains incomplete and uncertain.",
+                "evidence": [{"metric_id": metric_id, "relevance": 7}],
+            }
+
+        value = {
+            "strategic_advice": {
+                "colonial_reinforce": recommendation("colonial-base"),
+                "colonial_attack": recommendation("warden-base"),
+                "warden_reinforce": recommendation("warden-base"),
+                "warden_attack": recommendation("warden-base"),
+            }
+        }
+
+        filtered, dropped = _drop_invalid_strategic_advice(value, packet)
+
+        self.assertEqual(set(filtered["strategic_advice"]), {
+            "colonial_reinforce", "colonial_attack", "warden_reinforce"
+        })
+        self.assertEqual(dropped[0]["advice_key"], "warden_attack")
+        self.assertEqual(dropped[0]["base_name"], "Warden Base")
+        self.assertIn("COLONIALS-owned", dropped[0]["reason"])
 
     def test_validation_retries_before_falling_back_to_individual_drops(self) -> None:
         class FakeProvider:

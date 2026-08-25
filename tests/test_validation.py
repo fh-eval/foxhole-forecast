@@ -122,6 +122,16 @@ class ValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, "WARDENS-owned"):
             validate_forecast(value, self.packet, self.settings)
 
+        value["strategic_advice"].pop("colonial_attack")
+        with self.assertRaisesRegex(ValidationError, "missing required keys"):
+            validate_forecast(value, self.packet, self.settings)
+        validate_forecast(
+            value,
+            self.packet,
+            self.settings,
+            allow_partial_strategic_advice=True,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

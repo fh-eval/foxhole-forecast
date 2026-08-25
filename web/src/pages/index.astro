@@ -1019,6 +1019,24 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         return section;
       }
 
+      function droppedAdviceWarning(items) {
+        if (!items?.length) return null;
+        const warning = element("div", "method-note");
+        warning.append(element(
+          "strong",
+          "",
+          `Model output note: ${items.length} invalid strategic recommendation${items.length === 1 ? " was" : "s were"} excluded; the model’s forecast bets remain valid.`,
+        ));
+        const list = element("ul", "rationale-list");
+        items.forEach((item) => list.append(element(
+          "li",
+          "",
+          `${eventLabel(item.advice_key)}${item.base_name ? ` — ${item.base_name}` : ""}: ${item.reason || "invalid recommendation"}.`,
+        )));
+        warning.append(list);
+        return warning;
+      }
+
       function predictionStatus(bet) {
         if (bet.status === "censored" && bet.settlement_reason === "ambiguous_transition_interval") {
           return "Not scored · transition time ambiguous";
@@ -1154,13 +1172,14 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           : null;
         const lead = [...bets].sort((a, b) => (Number(a.rank) || 999) - (Number(b.rank) || 999))[0];
         const dropped = (round.dropped_predictions || []).length;
+        const droppedAdvice = (round.dropped_strategic_advice || []).length;
         const preview = element("span", "round-preview__model");
         preview.append(
           element("strong", "", modelLabel(round)),
           element(
             "small",
             "",
-            `${bets.length} valid call${bets.length === 1 ? "" : "s"} · ${averageConfidence == null ? "confidence unavailable" : `${percentage(averageConfidence)} avg confidence`} · ${shortCount} within 6h / ${longCount} at 6–24h${dropped ? ` · ${dropped} dropped` : ""}`,
+            `${bets.length} valid call${bets.length === 1 ? "" : "s"} · ${averageConfidence == null ? "confidence unavailable" : `${percentage(averageConfidence)} avg confidence`} · ${shortCount} within 6h / ${longCount} at 6–24h${dropped ? ` · ${dropped} dropped` : ""}${droppedAdvice ? ` · ${droppedAdvice} adviser note excluded` : ""}`,
           ),
         );
         if (lead) {
@@ -1218,6 +1237,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             );
             const advice = renderStrategicAdvice(round.strategic_advice);
             if (advice) participantBody.append(advice);
+            const adviceWarning = droppedAdviceWarning(round.dropped_strategic_advice);
+            if (adviceWarning) participantBody.append(adviceWarning);
             if (round.dropped_predictions?.length) {
               const warning = element("div", "method-note");
               warning.append(element(

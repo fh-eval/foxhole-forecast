@@ -225,6 +225,15 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         section.append(list); return section;
       }
 
+      function droppedAdviceWarning(items) {
+        if (!items?.length) return null;
+        const warning = element("div", "method-note");
+        warning.append(element("strong", "", `${items.length} invalid strategic recommendation${items.length === 1 ? " was" : "s were"} excluded; forecast bets remain valid.`));
+        const list = element("ul", "rationale-list");
+        items.forEach((item) => list.append(element("li", "", `${eventLabel(item.advice_key)}${item.base_name ? ` — ${item.base_name}` : ""}: ${item.reason || "invalid recommendation"}.`)));
+        warning.append(list); return warning;
+      }
+
       let dashboard = null; let warFilter = "all"; let modelFilter = "all";
       const usableRound = (round) => Array.isArray(round.predictions) && round.predictions.length > 0 && round.predictions.some((bet) => bet.base_name && bet.eta_utc);
 
@@ -264,6 +273,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             participantSummary.append(element("strong", "", modelLabel(round)), element("time", "", `Cutoff ${formatDate(round.cutoff)}`), roundStatusBadges(round.predictions, (round.dropped_predictions || []).length));
             const participantBody = element("div", "round-model__body"); participantBody.append(briefingSummary(round.war_summary), element("p", "region-list", (round.selected_regions || []).map(regionLabel).join(" · ") || "No selected regions"));
             const advice = renderStrategicAdvice(round.strategic_advice); if (advice) participantBody.append(advice);
+            const adviceWarning = droppedAdviceWarning(round.dropped_strategic_advice); if (adviceWarning) participantBody.append(adviceWarning);
             if (round.dropped_predictions?.length) {
               const warning = element("div", "method-note");
               warning.append(element("strong", "", `${round.dropped_predictions.length} model output error${round.dropped_predictions.length === 1 ? "" : "s"} excluded from this round’s prediction count.`));

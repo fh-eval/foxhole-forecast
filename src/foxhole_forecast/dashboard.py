@@ -185,6 +185,20 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                     or dropped_base.get("valid_outcomes", []),
                 }
             )
+        presented_advice_drops = []
+        for dropped in run.get("dropped_strategic_advice", []):
+            dropped_base = cutoff_bases.get(dropped.get("base_id"), {})
+            presented_advice_drops.append(
+                {
+                    **dropped,
+                    "base_name": dropped.get("base_name")
+                    or dropped_base.get("name")
+                    or dropped.get("base_id"),
+                    "current_owner": dropped.get("current_owner")
+                    or dropped_base.get("current_owner")
+                    or dropped_base.get("team"),
+                }
+            )
         history = {
             "run_id": run["run_id"],
             "war_id": run.get("war_id"),
@@ -201,6 +215,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
             "settlement_status": settlement.get("status", "not_available"),
             "forecast_count": len(forecast_rows),
             "dropped_predictions": presented_drops,
+            "dropped_strategic_advice": presented_advice_drops,
             "cost_usd": run.get("cost_usd", 0),
         }
         by_series[series].append(history)
@@ -306,6 +321,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                 "war_summary": run.get("war_summary"),
                 "selected_regions": run.get("selected_regions", []),
                 "dropped_predictions": presented_drops,
+                "dropped_strategic_advice": presented_advice_drops,
                 "protocol": settlement.get("protocol"),
                 "settlement_status": settlement.get("status", "not_available"),
                 "timing_score_pct": settlement.get("timing_score_pct"),

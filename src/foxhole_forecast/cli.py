@@ -8,7 +8,7 @@ from pathlib import Path
 from .collector import collect_once
 from .config import Settings
 from .dashboard import build_dashboard_data
-from .forecasting import run_forecast_cohort
+from .forecasting import run_forecast_cohort, salvage_invalid_run
 from .foxholestats import SOURCE_URL, import_foxholestats_html
 from .scoring import settle_and_score
 
@@ -20,6 +20,10 @@ def main(argv: list[str] | None = None) -> int:
     forecast = subcommands.add_parser("forecast", help="Run a forecast cohort if due")
     forecast.add_argument("--force", action="store_true", help="Ignore the three-hour slot guard")
     forecast.add_argument("--series", help="Run only one configured model series")
+    salvage = subcommands.add_parser(
+        "salvage-run", help="Revalidate one invalid run from its stored response"
+    )
+    salvage.add_argument("--run-id", required=True)
     subcommands.add_parser("score", help="Settle matured forecasts and rebuild scores")
     subcommands.add_parser("build-dashboard", help="Generate the static dashboard JSON")
     importer = subcommands.add_parser("import-foxholestats", help="Import a saved FoxholeStats event-log page")
@@ -36,6 +40,8 @@ def main(argv: list[str] | None = None) -> int:
             result = collect_once(settings)
         elif args.command == "forecast":
             result = run_forecast_cohort(settings, force=args.force, series_id=args.series)
+        elif args.command == "salvage-run":
+            result = salvage_invalid_run(settings, args.run_id)
         elif args.command == "score":
             result = settle_and_score(settings)
         elif args.command == "build-dashboard":
