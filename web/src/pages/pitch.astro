@@ -1,0 +1,48 @@
+---
+import "../styles/global.css";
+import { Content as Pitch } from "../content/pitch.md";
+
+const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content="The human-written pitch behind Foxhole Forecast: why a persistent multiplayer war could make an interesting evaluation for LLM forecasting and strategy." />
+    <title>Foxhole as an Evaluation · Foxhole Forecast</title>
+  </head>
+  <body>
+    <header class="essay-masthead">
+      <div class="masthead__eyebrow">A NOTE FROM THE HUMAN · THE IDEA BEHIND THE EXPERIMENT</div>
+      <div class="essay-masthead__inner page-width">
+        <div>
+          <p class="kicker">The long version</p>
+          <p class="essay-masthead__lede">Why use a deeply complicated war game to find out what language models understand?</p>
+        </div>
+        <a class="method-back" href={basePath}>← Return to dashboard</a>
+      </div>
+    </header>
+
+    <nav class="section-nav" aria-label="Pitch navigation">
+      <div class="page-width">
+        <a href={basePath}>Live dashboard</a>
+        <a href="#contents">Contents</a>
+        <a href="#what-is-foxhole">What is Foxhole?</a>
+        <a href="#so-whats-the-actual-eval">The eval</a>
+        <a href="#tinfoil-hat-zone">Tinfoil Hat Zone</a>
+      </div>
+    </nav>
+
+    <main class="pitch-page page-width">
+      <article class="pitch-article">
+        <Pitch />
+      </article>
+      <p class="pitch-endmark" aria-hidden="true">— END OF DISPATCH —</p>
+      <a class="method-back pitch-return" href={basePath}>← Return to Foxhole Forecast</a>
+    </main>
+
+    <footer><div class="page-width"><strong>FOXHOLE FORECAST</strong><a href={basePath}>Live dashboard</a></div></footer>
+  </body>
+</html>

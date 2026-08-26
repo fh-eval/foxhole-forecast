@@ -80,6 +80,10 @@ the paper/card surfaces:
 ## Layout and interaction
 
 - Content column `min(1180px, 100% - 40px)`; prose capped ~620–850px.
+- Longform human essays use a ~790px Newsreader column, a field-index contents
+  card, and distinct epigraph/disclaimer treatments. Preserve the author's
+  wording; visual hierarchy should do the editorial work instead of rewriting
+  personal prose into the site's explanatory voice.
 - Wide audit tables may scroll horizontally; `.table-shell` shows
   scroll-shadow affordances so they never look truncated.
 - `:focus-visible` gets a 3px `--accent` outline. Motion (the status pulse,
