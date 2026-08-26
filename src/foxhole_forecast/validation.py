@@ -11,6 +11,15 @@ class ValidationError(ValueError):
     pass
 
 
+def _canonical_region_name(name: Any, allowed: set[str]) -> Any:
+    """Repair the API's inconsistent terminal ``Hex`` suffix when unambiguous."""
+    if not isinstance(name, str) or name in allowed:
+        return name
+    stem = name.removesuffix("Hex")
+    matches = [candidate for candidate in allowed if candidate.removesuffix("Hex") == stem]
+    return matches[0] if len(matches) == 1 else name
+
+
 def validate_scout(
     value: dict[str, Any], packet: dict[str, Any], settings: Settings
 ) -> dict[str, Any]:
@@ -23,9 +32,10 @@ def validate_scout(
     selected = value.get("selected_regions")
     if not isinstance(selected, list) or not selected:
         raise ValidationError("selected_regions must be a non-empty array")
+    allowed = {region["map_name"] for region in packet["regions"]}
+    selected = [_canonical_region_name(name, allowed) for name in selected]
     if len(selected) > settings.scout_region_limit or len(selected) != len(set(selected)):
         raise ValidationError("selected_regions exceeds limit or contains duplicates")
-    allowed = {region["map_name"] for region in packet["regions"]}
     if any(not isinstance(name, str) or name not in allowed for name in selected):
         raise ValidationError("selected_regions contains an unknown region")
     return {

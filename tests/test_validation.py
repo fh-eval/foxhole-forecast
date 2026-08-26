@@ -10,7 +10,13 @@ from foxhole_forecast.validation import ValidationError, validate_forecast, vali
 class ValidationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.settings = Settings.load()
-        self.scout = {"regions": [{"map_name": "DeadLandsHex"}, {"map_name": "UmbralWildwoodHex"}]}
+        self.scout = {
+            "regions": [
+                {"map_name": "DeadLandsHex"},
+                {"map_name": "UmbralWildwoodHex"},
+                {"map_name": "MarbanHollow"},
+            ]
+        }
         metric_id = "region.DeadLandsHex.wardenCasualties.delta_2h"
         self.packet = {
             "cutoff": "2026-01-01T00:00:00Z",
@@ -62,6 +68,33 @@ class ValidationTests(unittest.TestCase):
                 self.settings,
             )
         validate_forecast(self.valid, self.packet, self.settings)
+
+    def test_scout_repairs_unambiguous_hex_suffix_mismatch(self) -> None:
+        overview = {
+            "headline": "The Central Front Stirs",
+            "war_summary": "The central front is active.",
+            "selected_regions": ["MarbanHollowHex"],
+        }
+        validated = validate_scout(overview, self.scout, self.settings)
+        self.assertEqual(validated["selected_regions"], ["MarbanHollow"])
+
+    def test_scout_still_rejects_unknown_region(self) -> None:
+        overview = {
+            "headline": "The Central Front Stirs",
+            "war_summary": "The central front is active.",
+            "selected_regions": ["DefinitelyNotARegionHex"],
+        }
+        with self.assertRaisesRegex(ValidationError, "unknown region"):
+            validate_scout(overview, self.scout, self.settings)
+
+    def test_scout_rejects_duplicate_created_by_suffix_repair(self) -> None:
+        overview = {
+            "headline": "The Central Front Stirs",
+            "war_summary": "The central front is active.",
+            "selected_regions": ["MarbanHollow", "MarbanHollowHex"],
+        }
+        with self.assertRaisesRegex(ValidationError, "duplicates"):
+            validate_scout(overview, self.scout, self.settings)
 
     def test_fewer_predictions_are_valid_after_dropped_bets(self) -> None:
         value = copy.deepcopy(self.valid)

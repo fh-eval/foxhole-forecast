@@ -188,7 +188,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       <section id="rounds" class="section-block">
         <div class="section-heading">
           <div><p class="kicker">Receipts</p><h2>Latest calls</h2></div>
-          <p>Here are the two newest shared three-hour windows: every model’s compact briefing, ranked calls, and settlement status.</p>
+          <p>Here are the three newest shared three-hour windows: every model’s compact briefing, ranked calls, and settlement status.</p>
         </div>
         <div id="round-list" class="round-list"></div>
         <p class="section-followup"><a class="section-heading__link" href={`${basePath}predictions/`}>Browse the full round history →</a></p>
@@ -1216,24 +1216,26 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const list = document.querySelector("#round-list");
         list.replaceChildren();
         const groups = groupedRounds(rounds);
-        const visibleGroups = latestOnly ? groups.slice(0, 2) : groups;
+        const visibleGroups = latestOnly ? groups.slice(0, 3) : groups;
         if (!visibleGroups.length) {
           list.append(element("p", "empty-state", "The first valid timed prediction round has not landed yet."));
           return;
         }
-        visibleGroups.forEach((group) => {
-          const roundSection = element("article", "round round--latest");
+        visibleGroups.forEach((group, groupIndex) => {
+          const roundSection = element("details", "round round--latest");
           const roundSlots = [...new Set(groups.filter((item) => item.warId === group.warId).map((item) => item.slot))].sort((a, b) => new Date(a) - new Date(b));
           const roundNumber = roundSlots.indexOf(group.slot) + 1;
           const groupPredictions = group.participants.flatMap((round) => round.predictions || []);
           const dropped = group.participants.reduce((count, round) => count + (round.dropped_predictions || []).length, 0);
           const roundStatuses = roundStatusBadges(groupPredictions, dropped);
-          const summaryTop = element("header", "round__header round__summary-top");
+          const roundSummary = element("summary", "round__summary");
+          const summaryTop = element("span", "round__summary-top");
           summaryTop.append(
             element("strong", "", `${group.warNumber ? `War ${group.warNumber} · ` : ""}Round ${String(roundNumber).padStart(2, "0")} · ${roundWindow(group)}`),
             element("time", "", `${group.participants.length} participating model${group.participants.length === 1 ? "" : "s"}`),
             roundStatuses,
           );
+          roundSummary.append(summaryTop, element("span", "round__summary-toggle"));
           const models = element("div", "round__models");
           group.participants.forEach((round) => {
             const participant = element("details", "round-model round-model--latest");
@@ -1317,13 +1319,20 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             participant.append(participantSummary, participantBody);
             participant.addEventListener("toggle", () => {
               if (!participant.open) return;
-              list.querySelectorAll(".round-model--latest[open]").forEach((other) => {
+              roundSection.querySelectorAll(".round-model--latest[open]").forEach((other) => {
                 if (other !== participant) other.open = false;
               });
             });
             models.append(participant);
           });
-          roundSection.append(summaryTop, models);
+          roundSection.append(roundSummary, models);
+          roundSection.open = groupIndex === 0;
+          roundSection.addEventListener("toggle", () => {
+            if (roundSection.open) return;
+            roundSection.querySelectorAll(".round-model--latest[open]").forEach((participant) => {
+              participant.open = false;
+            });
+          });
           list.append(roundSection);
         });
       }
