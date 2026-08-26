@@ -39,7 +39,7 @@ web/                       Astro GitHub Pages dashboard
 .github/workflows/         Collection, CI, and Pages automation
 ```
 
-The configured model series are GPT-5.6 Luna through OpenRouter (pinned to OpenAI), Gemini 3.7 Flash through OpenRouter (pinned to Google Vertex), DeepSeek V4 Flash through DeepSeek's direct API, Inkling and Nemotron 3 Ultra 550B A55B through NVIDIA NIM, and Ox Alpha through OpenRouter. Gateway, requested model, returned model, and upstream provider are recorded so silent routing changes cannot masquerade as the same series. Raw provider responses remain in the repository data but are excluded from the public dashboard JSON.
+The configured model series are GPT-5.6 Luna through OpenRouter (pinned to OpenAI), Gemini 3.7 Flash through OpenRouter (pinned to Google Vertex), GLM 5.3 Flash through OpenRouter (pinned to Z.AI), DeepSeek V4 Flash through DeepSeek's direct API, and Nemotron 3 Ultra 550B A55B through NVIDIA NIM. Gateway, requested model, returned model, and upstream provider are recorded so silent routing changes cannot masquerade as the same series. Raw provider responses remain in the repository data but are excluded from the public dashboard JSON. Historical Ox Alpha runs retain their original label and series identity.
 
 ## Run locally
 
@@ -67,7 +67,7 @@ PYTHONPATH=src python -m foxhole_forecast import-foxholestats --html /path/to/fo
 
 The importer preserves source IDs, URL, timestamp precision, and a SHA-256 provenance manifest in `data/imports/`. It stores the normalized archive separately in `data/historical_events.jsonl` and automatically stops the backfill at the first successful official-API poll to prevent overlap. Only matched strategic ownership events enter cutoff-safe prompt history; `data/events.jsonl` remains official-API-only and is the sole source used to settle forecasts.
 
-`run` performs collection, a forecast when the current three-hour slot is due, settlement, and dashboard generation in one command. The paid-model software cap shared by Luna and Gemini is `$0.25` per UTC day. Direct DeepSeek usage has an independent `$0.10` daily ceiling. Provider-reported cost is recorded, with current published token rates used as a fallback. Missing keys skip the affected series without stopping collection or scoring.
+`run` performs collection, a forecast when the current three-hour slot is due, settlement, and dashboard generation in one command. The legacy shared OpenRouter software ceiling is `$3.00` per UTC day. GLM 5.3 Flash has an independent `$0.25` daily ceiling, and direct DeepSeek usage has an independent `$0.50` ceiling. Provider-reported cost is recorded, with published token rates used as a conservative fallback. Missing keys skip the affected series without stopping collection or scoring.
 
 ## Evaluation cautions
 

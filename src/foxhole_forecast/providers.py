@@ -244,6 +244,9 @@ def _cost(model: str, usage: dict[str, Any]) -> float:
     prices = {
         "openai/gpt-5.6-luna": (0.20, 1.20),
         "google/gemini-3.7-flash": (0.375, 1.875),
+        # Conservative list-price fallback. OpenRouter normally reports exact
+        # cost, including Z.AI's time-limited 50% launch discount.
+        "z-ai/glm-5.3-flash": (0.15, 0.50),
     }
     if model in prices:
         prompt = usage.get("prompt_tokens", usage.get("input_tokens", 0)) or 0

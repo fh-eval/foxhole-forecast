@@ -84,6 +84,13 @@ class ProviderTests(unittest.TestCase):
         )
         self.assertEqual(cost, 2.25)
 
+    def test_glm_flash_fallback_cost_uses_conservative_list_rate(self) -> None:
+        cost = _cost(
+            "z-ai/glm-5.3-flash",
+            {"prompt_tokens": 1_000_000, "completion_tokens": 1_000_000},
+        )
+        self.assertEqual(cost, 0.65)
+
     def test_reported_gateway_cost_takes_precedence(self) -> None:
         self.assertEqual(_cost("google/gemini-3.7-flash", {"cost": 0.0123}), 0.0123)
 
@@ -127,6 +134,19 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(nemotron["request_extra"]["reasoning_effort"], "medium")
         self.assertNotIn("reasoning_budget", nemotron["request_extra"])
 
+    def test_glm_flash_config_pins_official_zai_with_max_reasoning(self) -> None:
+        glm = next(
+            model
+            for model in load_models()
+            if model["series_id"] == "openrouter-z-ai-glm-5.3-flash-event-v4"
+        )
+
+        self.assertEqual(glm["model"], "z-ai/glm-5.3-flash")
+        self.assertEqual(glm["provider_only"], ["z-ai"])
+        self.assertFalse(glm["allow_fallbacks"])
+        self.assertEqual(glm["reasoning"], {"effort": "max", "exclude": False})
+        self.assertEqual(glm["max_paid_usd_per_day"], 0.25)
+
     def test_openrouter_uses_per_model_reasoning_and_token_budget(self) -> None:
         captured = {}
 
@@ -141,6 +161,7 @@ class ProviderTests(unittest.TestCase):
             "api_key_env": "TEST_OPENROUTER_KEY",
             "max_tokens": 32768,
             "reasoning": {"effort": "high", "exclude": False},
+            "provider_only": ["z-ai"],
             "allow_fallbacks": False,
         }
         with patch.dict("os.environ", {"TEST_OPENROUTER_KEY": "secret"}), patch(
@@ -156,6 +177,9 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(captured["max_tokens"], 32768)
         self.assertEqual(
             captured["reasoning"], {"effort": "high", "exclude": False}
+        )
+        self.assertEqual(
+            captured["provider"], {"allow_fallbacks": False, "only": ["z-ai"]}
         )
         self.assertEqual(
             provider.attempts[0]["request_reasoning"],

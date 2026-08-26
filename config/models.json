@@ -75,19 +75,24 @@
       "enabled": true
     },
     {
-      "series_id": "openrouter-stealth-ox-alpha-event-v4",
-      "label": "Ox Alpha",
+      "series_id": "openrouter-z-ai-glm-5.3-flash-event-v4",
+      "label": "GLM 5.3 Flash",
       "gateway": "openrouter",
-      "model": "stealth/ox-alpha",
+      "model": "z-ai/glm-5.3-flash",
       "api_key_env": "OPENROUTER_API_KEY",
+      "provider_only": ["z-ai"],
       "max_tokens": 32768,
       "request_timeout_seconds": 300,
       "reasoning": {
-        "effort": "high",
+        "effort": "max",
         "exclude": false
       },
-      "paid": false,
+      "paid": true,
+      "budget_group": "openrouter-zai-glm-5.3-flash",
+      "max_paid_usd_per_day": 0.25,
+      "budget_reserve_usd": 0.02,
       "structured_outputs": false,
+      "omit_temperature": true,
       "allow_fallbacks": false,
       "enabled": true
     }
