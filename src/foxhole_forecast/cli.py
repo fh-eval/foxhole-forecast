@@ -10,6 +10,8 @@ from .config import Settings
 from .dashboard import build_dashboard_data
 from .forecasting import retry_invalid_run, run_forecast_cohort, salvage_invalid_run
 from .foxholestats import SOURCE_URL, import_foxholestats_html
+from .health import audit_model_runs
+from .storage import parse_time
 from .scoring import settle_and_score
 
 
@@ -31,6 +33,12 @@ def main(argv: list[str] | None = None) -> int:
     retry.add_argument("--snapshot", type=Path, required=True)
     subcommands.add_parser("score", help="Settle matured forecasts and rebuild scores")
     subcommands.add_parser("build-dashboard", help="Generate the static dashboard JSON")
+    audit = subcommands.add_parser(
+        "audit-model-runs", help="Find expected models missing from recent full cohorts"
+    )
+    audit_scope = audit.add_mutually_exclusive_group(required=True)
+    audit_scope.add_argument("--not-before", help="Audit cohort cutoffs at/after this UTC time")
+    audit_scope.add_argument("--cohort-id", help="Audit exactly one newly-created cohort")
     importer = subcommands.add_parser("import-foxholestats", help="Import a saved FoxholeStats event-log page")
     importer.add_argument("--html", type=Path, required=True, help="Saved FoxholeStats HTML file")
     importer.add_argument("--source-url", default=SOURCE_URL, help="URL the saved page came from")
@@ -53,6 +61,11 @@ def main(argv: list[str] | None = None) -> int:
             result = settle_and_score(settings)
         elif args.command == "build-dashboard":
             result = build_dashboard_data()
+        elif args.command == "audit-model-runs":
+            result = audit_model_runs(
+                parse_time(args.not_before) if args.not_before else None,
+                cohort_ids={args.cohort_id} if args.cohort_id else None,
+            )
         elif args.command == "import-foxholestats":
             result = import_foxholestats_html(args.html, settings, args.source_url)
         elif args.command == "run":

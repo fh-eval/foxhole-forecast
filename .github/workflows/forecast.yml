@@ -62,6 +62,7 @@ jobs:
           RETRY_RUN_ID: ${{ inputs.retry_run_id }}
           RETRY_SOURCE_WORKFLOW_RUN: ${{ inputs.retry_source_workflow_run }}
         run: |
+          mkdir -p .workflow
           if [[ -n "$RETRY_RUN_ID" ]]; then
             if [[ -z "$RETRY_SOURCE_WORKFLOW_RUN" ]]; then
               echo "retry_source_workflow_run is required for a retry" >&2
@@ -79,9 +80,11 @@ jobs:
             series_args+=(--series "$SERIES_ID")
           fi
           if [[ "${{ inputs.force_forecast }}" == "true" ]]; then
-            PYTHONPATH=src python -m foxhole_forecast forecast --force "${series_args[@]}" >/dev/null
+            PYTHONPATH=src python -m foxhole_forecast forecast --force "${series_args[@]}" \
+              > .workflow/forecast-result.json
           else
-            PYTHONPATH=src python -m foxhole_forecast forecast "${series_args[@]}" >/dev/null
+            PYTHONPATH=src python -m foxhole_forecast forecast "${series_args[@]}" \
+              > .workflow/forecast-result.json
           fi
           PYTHONPATH=src python -m foxhole_forecast score >/dev/null
           PYTHONPATH=src python -m foxhole_forecast build-dashboard >/dev/null
@@ -92,8 +95,9 @@ jobs:
           path: |
             data
             web/public/data/dashboard.json
+            .workflow/forecast-result.json
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7
 
   persist:
     needs: evaluate
@@ -126,3 +130,132 @@ jobs:
             git rebase origin/main
             git push
           fi
+
+  audit:
+    needs: persist
+    if: ${{ needs.persist.result == 'success' && inputs.series_id == '' && inputs.retry_run_id == '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Download the exact forecast result from this workflow run
+        uses: actions/download-artifact@v8
+        with:
+          name: foxhole-forecast-data
+          path: .
+      - name: Audit only the cohort created during this workflow run
+        run: |
+          cohort_id="$(python3 -c 'import json; print(json.load(open(".workflow/forecast-result.json")).get("cohort_id", ""))')"
+          if [[ -z "$cohort_id" ]]; then
+            echo '{"status":"no_new_cohort","audited_cohorts":[],"incidents":[]}' \
+              > /tmp/model-run-audit.json
+          else
+            PYTHONPATH=src python3 -m foxhole_forecast audit-model-runs \
+              --cohort-id "$cohort_id" > /tmp/model-run-audit.json
+          fi
+      - name: Record and dispatch missing-model incidents
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const audit = JSON.parse(fs.readFileSync('/tmp/model-run-audit.json', 'utf8'));
+            if (!audit.incidents.length) {
+              core.info(`No missing model runs in ${audit.audited_cohorts.length} new cohort(s).`);
+              return;
+            }
+
+            const labels = [
+              ['model-failure', 'b60205', 'An expected model is absent from a forecast cohort'],
+              ['agent-triage-running', 'd4a72c', 'Automated read-only diagnosis is in progress'],
+              ['agent-triaged', '0e8a16', 'Automated read-only diagnosis completed'],
+              ['agent-triage-failed', 'b60205', 'Automated diagnosis did not return a report'],
+            ];
+            for (const [name, color, description] of labels) {
+              try {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name,
+                  color,
+                  description,
+                });
+              } catch (error) {
+                if (error.status !== 422) throw error;
+              }
+            }
+
+            const allIssues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'all',
+              labels: 'model-failure',
+              per_page: 100,
+            });
+            for (const incident of audit.incidents) {
+              const title = `[model failure] ${incident.cohort_id}`;
+              const failures = incident.failures.map((failure) => [
+                `### ${failure.label}`,
+                `- Series: \`${failure.series_id}\``,
+                `- Run: \`${failure.run_id}\``,
+                `- Detection: \`${failure.reason}\``,
+                `- Stored status: \`${failure.status}\``,
+                `- Stored predictions: ${failure.stored_prediction_count}`,
+                `- Evidence path: \`${failure.raw_cohort_path}\``,
+                failure.error ? `- Error excerpt: ${failure.error}` : '- Error excerpt: none stored',
+              ].join('\n')).join('\n\n');
+              const body = [
+                '<!-- foxhole-model-failure -->',
+                'An enabled model is absent from this prediction round. This alert is not caused by individual dropped bets.',
+                '',
+                `- War: ${incident.war_number ?? 'unknown'}`,
+                `- Round slot: \`${incident.slot}\``,
+                `- Data cutoff: \`${incident.cutoff}\``,
+                `- Source workflow: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                '',
+                failures,
+                '',
+                'The automated agent is diagnostic only: it cannot edit code, retry models, or access GitHub credentials.',
+              ].join('\n');
+
+              let issue = allIssues.find((candidate) => candidate.title === title);
+              if (!issue) {
+                issue = (await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title,
+                  body,
+                  labels: ['model-failure', 'agent-triage-running'],
+                })).data;
+              } else {
+                const names = issue.labels.map((label) => typeof label === 'string' ? label : label.name);
+                if (names.includes('agent-triage-running') || names.includes('agent-triaged')) {
+                  core.info(`Incident #${issue.number} already dispatched.`);
+                  continue;
+                }
+                issue = (await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  state: 'open',
+                  body,
+                  labels: [...new Set([...names, 'model-failure', 'agent-triage-running'])],
+                })).data;
+              }
+
+              await github.rest.actions.createWorkflowDispatch({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'model-triage.yml',
+                ref: 'main',
+                inputs: {issue_number: String(issue.number)},
+              });
+              core.notice(`Dispatched Luna triage for issue #${issue.number}.`);
+            }

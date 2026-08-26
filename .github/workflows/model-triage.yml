@@ -1,0 +1,98 @@
+name: Diagnose missing model run
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: GitHub issue containing the compact incident packet
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: model-triage-${{ inputs.issue_number }}
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Install pinned OpenCode CLI
+        run: npm install --global opencode-ai@1.18.23
+      - name: Fetch the incident packet without exposing GitHub credentials to the agent
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+        run: |
+          if [[ ! "$ISSUE_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "issue_number must contain digits only" >&2
+            exit 2
+          fi
+          gh issue view "$ISSUE_NUMBER" --json number,title,body,url,labels \
+            > .opencode/runtime-incident.json
+      - name: Ask Luna for a read-only diagnosis
+        id: agent
+        continue-on-error: true
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_MAINTAINER_KEY }}
+          OPENCODE_AUTO_SHARE: "false"
+          OPENCODE_DISABLE_AUTOUPDATE: "true"
+        run: |
+          opencode run \
+            --agent failure-triage \
+            --model openrouter/openai/gpt-5.6-luna \
+            --variant high \
+            --format json \
+            "Diagnose the missing-model incident in .opencode/runtime-incident.json." \
+            > "$RUNNER_TEMP/opencode-events.jsonl"
+      - name: Extract the final diagnosis
+        id: result
+        env:
+          AGENT_OUTCOME: ${{ steps.agent.outcome }}
+        run: |
+          PYTHONPATH=src python3 - "$RUNNER_TEMP/opencode-events.jsonl" "$RUNNER_TEMP/diagnosis.md" <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+          from foxhole_forecast.opencode_output import last_text_event
+
+          source, destination = map(Path, sys.argv[1:])
+          answer = last_text_event(source) if source.exists() else None
+          succeeded = os.environ["AGENT_OUTCOME"] == "success" and bool(answer)
+          if succeeded:
+              body = "## Automated Luna triage\n\n" + answer + "\n"
+          else:
+              body = (
+                  "## Automated Luna triage failed\n\n"
+                  "The read-only diagnostic agent did not return a usable report. "
+                  "The incident is still recorded here for ChatGPT/Codex or human review.\n"
+              )
+          destination.write_text(body, encoding="utf-8")
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              output.write(f"succeeded={'true' if succeeded else 'false'}\n")
+          PY
+      - name: Post the report using a credential the agent never received
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          SUCCEEDED: ${{ steps.result.outputs.succeeded }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body-file "$RUNNER_TEMP/diagnosis.md"
+          gh issue edit "$ISSUE_NUMBER" --remove-label agent-triage-running
+          if [[ "$SUCCEEDED" == "true" ]]; then
+            gh issue edit "$ISSUE_NUMBER" --add-label agent-triaged
+          else
+            gh issue edit "$ISSUE_NUMBER" --add-label agent-triage-failed
+          fi
