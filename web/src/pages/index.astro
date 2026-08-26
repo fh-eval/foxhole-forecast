@@ -1175,36 +1175,56 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         return `${provider} · ${reasoning.effort ? `${reasoning.effort} reasoning` : "reasoning used"}`;
       }
 
-      function roundModelPreview(round) {
+      function compactPredictionPreview(bet) {
+        const preview = element("span", "dispatch-call");
+        const meta = element("small", "dispatch-call__meta", `#${bet.rank ?? "—"} · ${trancheLabel(bet.tranche)} · ${regionLabel(bet.map_name)}`);
+        const line = element("span", "dispatch-call__line");
+        line.append(
+          element("strong", "dispatch-call__confidence", percentage(bet.confidence)),
+          baseIdentity(bet),
+        );
+        const outcome = bet.predicted_outcome || bet.outcome || bet.event_type;
+        if (outcome === "DESTROYED" || outcome === "SELF_CAPTURE") {
+          line.append(document.createTextNode(" destroyed · "));
+        } else if (outcome === "CAPTURED_BY_WARDENS") {
+          line.append(document.createTextNode(" captured by "), factionName("WARDENS"), document.createTextNode(" · "));
+        } else if (outcome === "CAPTURED_BY_COLONIALS") {
+          line.append(document.createTextNode(" captured by "), factionName("COLONIALS"), document.createTextNode(" · "));
+        } else {
+          line.append(document.createTextNode(` ${compactOutcome(bet)} · `));
+        }
+        line.append(element("time", "dispatch-call__time", predictionTime(bet.eta_utc)));
+        preview.append(meta, line);
+        return preview;
+      }
+
+      function roundModelDispatch(round) {
         const bets = round.predictions || [];
-        const shortCount = bets.filter((bet) => bet.tranche === "IMMEDIATE").length;
-        const longCount = bets.filter((bet) => bet.tranche === "EXTENDED").length;
-        const confidences = bets.map((bet) => Number(bet.confidence)).filter(Number.isFinite);
-        const averageConfidence = confidences.length
-          ? confidences.reduce((total, value) => total + value, 0) / confidences.length
-          : null;
-        const lead = [...bets].sort((a, b) => (Number(a.rank) || 999) - (Number(b.rank) || 999))[0];
+        const ranked = [...bets].sort((a, b) => (Number(a.rank) || 999) - (Number(b.rank) || 999));
+        const scored = bets.filter((bet) => bet.crps_minutes != null).length;
+        const resolved = bets.filter((bet) => bet.status && bet.status !== "open").length;
         const dropped = (round.dropped_predictions || []).length;
         const droppedAdvice = (round.dropped_strategic_advice || []).length;
-        const preview = element("span", "round-preview__model");
-        preview.append(
-          element("strong", "", modelLabel(round)),
-          element(
-            "small",
-            "",
-            `${bets.length} valid call${bets.length === 1 ? "" : "s"} · ${averageConfidence == null ? "confidence unavailable" : `${percentage(averageConfidence)} avg confidence`} · ${shortCount} within 6h / ${longCount} at 6–24h${dropped ? ` · ${dropped} dropped` : ""}${droppedAdvice ? ` · ${droppedAdvice} adviser note excluded` : ""} · ${reasoningLabel(round)}`,
-          ),
+        const dispatch = element("span", "dispatch-model");
+        const header = element("span", "dispatch-model__header");
+        header.append(
+          element("strong", "dispatch-model__name", modelLabel(round)),
+          element("span", "dispatch-model__progress", `${resolved}/${bets.length} resolved · ${scored}/${bets.length} scored`),
         );
-        if (lead) {
-          preview.append(element(
-            "span",
-            "round-preview__call",
-            `Lead call: ${percentage(lead.confidence)} · ${lead.base_type || "Base"} ${lead.base_name || "Unknown base"} ${compactOutcome(lead)} · ${predictionTime(lead.eta_utc)}`,
-          ));
-        } else {
-          preview.append(element("span", "round-preview__call round-preview__call--empty", "No valid calls were retained for this model."));
+        const calls = element("span", "dispatch-model__calls");
+        ranked.slice(0, 2).forEach((bet) => calls.append(compactPredictionPreview(bet)));
+        if (!ranked.length) {
+          calls.append(element("span", "dispatch-call dispatch-call--empty", "No valid predictions were retained."));
         }
-        return preview;
+        const footer = element("span", "dispatch-model__footer");
+        const hiddenCount = Math.max(0, bets.length - 2);
+        footer.append(element("span", "dispatch-model__more", hiddenCount ? `+${hiddenCount} more prediction${hiddenCount === 1 ? "" : "s"}` : "Full prediction set shown"));
+        const issues = dropped + droppedAdvice;
+        if (issues) {
+          footer.append(element("span", "dispatch-model__issue", `${issues} output note${issues === 1 ? "" : "s"}`));
+        }
+        dispatch.append(header, calls, footer);
+        return dispatch;
       }
 
       function renderRounds(rounds, latestOnly = false) {
@@ -1232,42 +1252,16 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             const participant = element("details", "round-model round-model--latest");
             const participantSummary = element("summary", "round-model__summary round-model__summary--preview");
             participantSummary.append(
-              roundModelPreview(round),
-              roundStatusBadges(round.predictions, (round.dropped_predictions || []).length),
-              element("span", "round-model__toggle round-model__toggle--open", `Read briefing and ${round.predictions?.length || 0} calls ↓`),
-              element("span", "round-model__toggle round-model__toggle--close", "Close model report ↑"),
+              roundModelDispatch(round),
+              element("span", "round-model__toggle round-model__toggle--open", `View all ${round.predictions?.length || 0} predictions ↓`),
+              element("span", "round-model__toggle round-model__toggle--close", "Close predictions ↑"),
             );
             const participantBody = element("div", "round-model__body");
-            participantBody.append(
-              element("p", `reasoning-note${round?.reasoning?.enabled === false ? " reasoning-note--disabled" : ""}`, `${reasoningLabel(round)} · Data cutoff ${formatDate(round.cutoff)}`),
-              briefingHeadline(round),
-              briefingByline(round),
-              briefingSummary(round.war_summary),
-              element("p", "region-list", (round.selected_regions || []).map(regionLabel).join(" · ")),
+            const predictionHeading = element("div", "dispatch-section-heading");
+            predictionHeading.append(
+              element("strong", "", `All ${round.predictions?.length || 0} predictions`),
+              element("span", "", "Ranked by the model · evidence is frozen at the data cutoff"),
             );
-            const advice = renderStrategicAdvice(round.strategic_advice);
-            if (advice) participantBody.append(advice);
-            const adviceWarning = droppedAdviceWarning(round.dropped_strategic_advice);
-            if (adviceWarning) participantBody.append(adviceWarning);
-            if (round.dropped_predictions?.length) {
-              const warning = element("div", "method-note");
-              warning.append(element(
-                "strong",
-                "",
-                `Model error: ${round.dropped_predictions.length} invalid bet${round.dropped_predictions.length === 1 ? " was" : "s were"} dropped and will not be scored.`,
-              ));
-              const droppedList = element("ul", "rationale-list");
-              round.dropped_predictions.forEach((dropped) => {
-                const target = String(dropped.outcome || "").replace("CAPTURED_BY_", "");
-                droppedList.append(element(
-                  "li",
-                  "",
-                  `#${dropped.rank ?? "—"} ${dropped.base_type || "Base"} ${dropped.base_name || dropped.base_id}: predicted capture by ${teamLabel(target)}, but ${teamLabel(dropped.current_owner)} already owned it.`,
-                ));
-              });
-              warning.append(droppedList);
-              participantBody.append(warning);
-            }
             const bets = element("div", "round__bets");
             (round.predictions || []).forEach((bet) => {
               const row = element("article", "round-bet");
@@ -1279,7 +1273,60 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
               row.append(meta, predictionHeadline(bet), supportingEvidence(bet.evidence));
               bets.append(row);
             });
-            participantBody.append(bets);
+            participantBody.append(predictionHeading, bets);
+
+            const briefing = element("details", "dispatch-secondary");
+            const briefingSummaryRow = element("summary", "dispatch-secondary__summary");
+            briefingSummaryRow.append(
+              element("strong", "", "Read the model’s field report"),
+              element("span", "", summaryHeadline(round)),
+              element("span", "dispatch-secondary__toggle"),
+            );
+            const briefingBody = element("div", "dispatch-secondary__body briefing");
+            briefingBody.append(
+              briefingHeadline(round),
+              briefingByline(round),
+              briefingSummary(round.war_summary),
+              element("p", "region-list", (round.selected_regions || []).map(regionLabel).join(" · ")),
+            );
+            briefing.append(briefingSummaryRow, briefingBody);
+            participantBody.append(briefing);
+
+            const advice = renderStrategicAdvice(round.strategic_advice);
+            if (advice) participantBody.append(advice);
+
+            const outputIssueCount = (round.dropped_predictions || []).length + (round.dropped_strategic_advice || []).length;
+            if (outputIssueCount) {
+              const outputNotes = element("details", "dispatch-secondary dispatch-output-notes");
+              const outputSummary = element("summary", "dispatch-secondary__summary");
+              outputSummary.append(
+                element("strong", "", "Model output notes"),
+                element("span", "", `${outputIssueCount} excluded item${outputIssueCount === 1 ? "" : "s"}`),
+                element("span", "dispatch-secondary__toggle"),
+              );
+              const outputBody = element("div", "dispatch-secondary__body");
+              const adviceWarning = droppedAdviceWarning(round.dropped_strategic_advice);
+              if (adviceWarning) outputBody.append(adviceWarning);
+              if (round.dropped_predictions?.length) {
+                const warning = element("div", "method-note");
+                warning.append(element("strong", "", `Model error: ${round.dropped_predictions.length} invalid bet${round.dropped_predictions.length === 1 ? " was" : "s were"} dropped and will not be scored.`));
+                const droppedList = element("ul", "rationale-list");
+                round.dropped_predictions.forEach((dropped) => {
+                  const target = String(dropped.outcome || "").replace("CAPTURED_BY_", "");
+                  droppedList.append(element("li", "", `#${dropped.rank ?? "—"} ${dropped.base_type || "Base"} ${dropped.base_name || dropped.base_id}: predicted capture by ${teamLabel(target)}, but ${teamLabel(dropped.current_owner)} already owned it.`));
+                });
+                warning.append(droppedList);
+                outputBody.append(warning);
+              }
+              outputNotes.append(outputSummary, outputBody);
+              participantBody.append(outputNotes);
+            }
+
+            participantBody.append(element(
+              "p",
+              `dispatch-audit${round?.reasoning?.enabled === false ? " dispatch-audit--limited" : ""}`,
+              `${reasoningLabel(round)} · Data cutoff ${formatDate(round.cutoff)}`,
+            ));
             participant.append(participantSummary, participantBody);
             participant.addEventListener("toggle", () => {
               if (!participant.open) return;
