@@ -4,7 +4,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from foxhole_forecast.config import Settings
+from foxhole_forecast.config import Settings, load_models
 from foxhole_forecast.providers import ModelProvider, _cost, _parse_json_content
 
 
@@ -116,6 +116,16 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(
             captured["chat_template_kwargs"], {"enable_thinking": False}
         )
+
+    def test_nemotron_config_omits_unsupported_reasoning_budget(self) -> None:
+        nemotron = next(
+            model
+            for model in load_models()
+            if model["series_id"] == "nvidia-nemotron-3-ultra-550b-a55b-event-v4"
+        )
+
+        self.assertEqual(nemotron["request_extra"]["reasoning_effort"], "medium")
+        self.assertNotIn("reasoning_budget", nemotron["request_extra"])
 
     def test_openrouter_uses_per_model_reasoning_and_token_budget(self) -> None:
         captured = {}
