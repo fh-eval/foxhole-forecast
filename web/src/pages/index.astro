@@ -1211,34 +1211,30 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           list.append(element("p", "empty-state", "The first valid timed prediction round has not landed yet."));
           return;
         }
-        visibleGroups.forEach((group, index) => {
-          const details = element("details", "round");
-          if (index === 0) details.open = true;
-          const summary = element("summary", "round__summary");
+        visibleGroups.forEach((group) => {
+          const roundSection = element("article", "round round--latest");
           const groupPredictions = group.participants.flatMap((round) => round.predictions || []);
           const dropped = group.participants.reduce((count, round) => count + (round.dropped_predictions || []).length, 0);
           const roundStatuses = roundStatusBadges(groupPredictions, dropped);
-          const summaryTop = element("span", "round__summary-top");
+          const summaryTop = element("header", "round__header round__summary-top");
           summaryTop.append(
             element("strong", "", `${group.warNumber ? `War ${group.warNumber} · ` : ""}${roundWindow(group)}`),
             element("time", "", `${group.participants.length} participating model${group.participants.length === 1 ? "" : "s"}`),
             roundStatuses,
           );
-          const preview = element("span", "round__preview");
-          group.participants.forEach((round) => preview.append(roundModelPreview(round)));
-          summary.append(summaryTop, preview, element("span", "round__summary-toggle", ""));
-          const body = element("div", "round__body");
+          const models = element("div", "round__models");
           group.participants.forEach((round) => {
-            const participant = element("details", "round-model");
-            const participantSummary = element("summary", "round-model__summary");
+            const participant = element("details", "round-model round-model--latest");
+            const participantSummary = element("summary", "round-model__summary round-model__summary--preview");
             participantSummary.append(
-              element("strong", "", modelLabel(round)),
-              element("time", "", `Data cutoff ${formatDate(round.cutoff)}`),
-              element("span", `reasoning-note${round?.reasoning?.enabled === false ? " reasoning-note--disabled" : ""}`, reasoningLabel(round)),
+              roundModelPreview(round),
               roundStatusBadges(round.predictions, (round.dropped_predictions || []).length),
+              element("span", "round-model__toggle round-model__toggle--open", `Read briefing and ${round.predictions?.length || 0} calls ↓`),
+              element("span", "round-model__toggle round-model__toggle--close", "Close model report ↑"),
             );
             const participantBody = element("div", "round-model__body");
             participantBody.append(
+              element("p", `reasoning-note${round?.reasoning?.enabled === false ? " reasoning-note--disabled" : ""}`, `${reasoningLabel(round)} · Data cutoff ${formatDate(round.cutoff)}`),
               briefingHeadline(round),
               briefingByline(round),
               briefingSummary(round.war_summary),
@@ -1280,10 +1276,16 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             });
             participantBody.append(bets);
             participant.append(participantSummary, participantBody);
-            body.append(participant);
+            participant.addEventListener("toggle", () => {
+              if (!participant.open) return;
+              models.querySelectorAll(".round-model--latest[open]").forEach((other) => {
+                if (other !== participant) other.open = false;
+              });
+            });
+            models.append(participant);
           });
-          details.append(summary, body);
-          list.append(details);
+          roundSection.append(summaryTop, models);
+          list.append(roundSection);
         });
       }
 
