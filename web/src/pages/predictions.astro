@@ -219,8 +219,13 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         if (!advice || typeof advice !== "object") return null;
         const items = Object.entries(advice).filter(([, value]) => value && (value.base_name || value.base_id));
         if (!items.length) return null;
-        const section = element("section", "strategic-advice");
-        section.append(element("small", "strategic-advice__label", "Strategic adviser note · separate from scored predictions"));
+        const section = element("details", "strategic-advice");
+        const summary = element("summary", "strategic-advice__summary");
+        summary.append(
+          element("span", "strategic-advice__label", "Strategic adviser note"),
+          element("span", "strategic-advice__count", `${items.length} note${items.length === 1 ? "" : "s"} · separate from scored predictions`),
+          element("span", "strategic-advice__toggle"),
+        );
         const list = element("div", "strategic-advice__grid");
         items.forEach(([key, item]) => {
           const card = element("article", "strategic-advice__item");
@@ -229,7 +234,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           if (Array.isArray(item.evidence) && item.evidence.length) { const evidence = element("div", "evidence-list"); item.evidence.forEach((entry) => evidence.append(evidenceChip(entry))); card.append(evidence); }
           list.append(card);
         });
-        section.append(list); return section;
+        section.append(summary, list); return section;
       }
 
       function droppedAdviceWarning(items) {

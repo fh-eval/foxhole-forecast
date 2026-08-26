@@ -620,9 +620,17 @@ tbody tr:hover { background: var(--wash); }
 .archive-round__body { display: grid; gap: 14px; padding: 16px; border-top: 2px solid var(--inkline); background: var(--wash); }
 .archive-round[open] > .archive-round__summary { background: var(--wash); }
 
-.strategic-advice { margin: 22px 0 4px; padding: 18px; border: 2px solid var(--accent); background: rgba(242,220,155,.28); }
-.strategic-advice__label { display: block; margin-bottom: 11px; color: var(--accent-ink); font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; }
-.strategic-advice__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.strategic-advice { margin: 22px 0 4px; border: 2px solid var(--accent); background: rgba(242,220,155,.28); }
+.strategic-advice__summary { padding: 15px 18px; display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: baseline; cursor: pointer; list-style: none; }
+.strategic-advice__summary::-webkit-details-marker { display: none; }
+.strategic-advice__summary:hover { background: rgba(242,220,155,.32); }
+.strategic-advice__label { color: var(--accent-ink); font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; }
+.strategic-advice__count { color: var(--faint); font-size: 11px; }
+.strategic-advice__toggle { color: var(--accent-ink); font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.strategic-advice__toggle::before { content: "Open ↓"; }
+.strategic-advice[open] > .strategic-advice__summary { border-bottom: 1px dashed var(--accent); }
+.strategic-advice[open] > .strategic-advice__summary .strategic-advice__toggle::before { content: "Close ↑"; }
+.strategic-advice__grid { padding: 18px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .strategic-advice__item { min-width: 0; padding: 13px; background: var(--card); border: 1px solid var(--line); }
 .strategic-advice__item > strong { display: block; color: var(--accent-ink); font-size: 11px; letter-spacing: .07em; text-transform: uppercase; }
 .strategic-advice__item h4 { margin: 9px 0 6px; font: 650 17px/1.15 var(--serif); }
@@ -773,6 +781,8 @@ footer strong { color: var(--accent-ink); letter-spacing: .12em; }
   .investigation-intro__copy { padding-top: 0; }
   .adviser-guide, .limitations-grid, .method-limitations__grid { grid-template-columns: 1fr; }
   .strategic-advice__grid, .prompt-example-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .strategic-advice__summary { grid-template-columns: 1fr auto; gap: 4px 10px; }
+  .strategic-advice__label { grid-column: 1 / -1; }
   .clipping-grid { grid-template-columns: 1fr; }
   .status-strip, .telemetry-grid { grid-template-columns: repeat(2, 1fr); }
   .status-strip > div:nth-child(odd) { border-right: 1px solid var(--line); }

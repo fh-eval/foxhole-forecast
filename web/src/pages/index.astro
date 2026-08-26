@@ -1001,8 +1001,13 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         if (!advice || typeof advice !== "object") return null;
         const items = Object.entries(advice).filter(([, value]) => value && (value.base_name || value.base_id));
         if (!items.length) return null;
-        const section = element("section", "strategic-advice");
-        section.append(element("small", "strategic-advice__label", "Strategic adviser recommendations · descriptive and not scored"));
+        const section = element("details", "strategic-advice");
+        const summary = element("summary", "strategic-advice__summary");
+        summary.append(
+          element("span", "strategic-advice__label", "Strategic adviser recommendations"),
+          element("span", "strategic-advice__count", `${items.length} note${items.length === 1 ? "" : "s"} · descriptive, not scored`),
+          element("span", "strategic-advice__toggle"),
+        );
         const list = element("div", "strategic-advice__grid");
         items.forEach(([key, item]) => {
           const card = element("article", "strategic-advice__item");
@@ -1015,7 +1020,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           if (item.evidence?.length) card.append(supportingEvidence(item.evidence));
           list.append(card);
         });
-        section.append(list);
+        section.append(summary, list);
         return section;
       }
 
