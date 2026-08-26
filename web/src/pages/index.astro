@@ -22,7 +22,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         </div>
         <div class="human-note__copy">
           <HumanNote />
-          <p class="human-note__credit">Project directed by its human researcher. Site built collaboratively with Codex and Luna.</p>
+          <p class="human-note__credit">Built collaboratively with OpenAI Codex, GPT-5.6 Luna, and Kimi K3: Codex handled engineering and integration, Luna shaped the ongoing reader-facing UI, and Kimi K3 contributed the visual redesign and design guidelines. The human project owner sets direction and decides what to publish.</p>
         </div>
       </div>
     </aside>
@@ -46,7 +46,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <a href="#scoreboard">The scoreboard</a>
         <a href="#war-data">War data</a>
         <a href="#rounds">The calls</a>
-        <a href="#briefings">Briefings</a>
+        <a href="#briefings">News from the Front</a>
         <a href="#probability">For nerds</a>
         <a href={`${basePath}predictions/`}>Round history</a>
         <a href={`${basePath}history/`}>Archive</a>
@@ -187,15 +187,16 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       <section id="rounds" class="section-block">
         <div class="section-heading">
           <div><p class="kicker">Receipts</p><h2>Latest calls</h2></div>
-          <p>Here is the newest shared three-hour window: every model’s briefing, ranked calls, and settlement status. <a class="section-heading__link" href={`${basePath}predictions/`}>Browse the full round history →</a></p>
+          <p>Here are the two newest shared three-hour windows: every model’s compact briefing, ranked calls, and settlement status.</p>
         </div>
         <div id="round-list" class="round-list"></div>
+        <p class="section-followup"><a class="section-heading__link" href={`${basePath}predictions/`}>Browse the full round history →</a></p>
       </section>
 
-      <section id="briefings" class="section-block">
-        <div class="section-heading section-heading--controls">
-          <div><p class="kicker">In their own words</p><h2>Latest briefings</h2></div>
-          <label class="select-label">Model <select id="briefing-model"></select></label>
+      <section id="briefings" class="section-block news-front">
+        <div class="section-heading">
+          <div><p class="kicker">The daily edition</p><h2>News from the Front</h2></div>
+          <p>One latest field report per model, presented as a dispatch from that model’s most recent valid cutoff. Cutoffs can differ when a model misses a cohort; these are summaries of what each model saw — not extra scored predictions.</p>
         </div>
         <div id="briefing-list" class="briefing-list"></div>
       </section>
@@ -363,7 +364,6 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         return element("p", "briefing__byline", `By ${author} · Filed ${formatDate(entry?.cutoff)}`);
       }
       let dashboard = null;
-      let briefingFilter = "all";
       let scoreScope = "current";
       let protocolRounds = [];
       let visibleSeries = new Set();
@@ -890,7 +890,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       function renderBriefings(models) {
         const list = document.querySelector("#briefing-list");
         list.replaceChildren();
-        const available = models.filter((model) => model.latest?.war_summary && (briefingFilter === "all" || model.series_id === briefingFilter));
+        const available = models.filter((model) => model.latest?.war_summary);
         if (!available.length) {
           list.append(element("p", "empty-state", "The first model briefing will appear after a valid forecast cohort."));
           return;
@@ -902,23 +902,6 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           const regions = element("p", "region-list", model.latest.selected_regions?.map(regionLabel).join(" · ") || "No selected regions");
           article.append(header, briefingHeadline(model.latest), briefingByline(model.latest, modelLabel(model)), briefingSummary(model.latest.war_summary), regions);
           list.append(article);
-        });
-      }
-
-      function setupBriefingFilter(models) {
-        const select = document.querySelector("#briefing-model");
-        select.replaceChildren();
-        const all = element("option", "", "All models");
-        all.value = "all";
-        select.append(all);
-        models.filter((model) => model.latest?.war_summary).forEach((model) => {
-          const option = element("option", "", modelLabel(model));
-          option.value = model.series_id;
-          select.append(option);
-        });
-        select.addEventListener("change", () => {
-          briefingFilter = select.value;
-          renderBriefings((dashboard.models || []).filter((model) => visibleSeries.has(model.series_id)));
         });
       }
 
@@ -1134,6 +1117,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           if (!groups.has(key)) {
             groups.set(key, {
               key,
+              warId: round.war_id,
               slot,
               end: round.round_end,
               warNumber: round.war_number,
@@ -1231,19 +1215,21 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const list = document.querySelector("#round-list");
         list.replaceChildren();
         const groups = groupedRounds(rounds);
-        const visibleGroups = latestOnly ? groups.slice(0, 1) : groups;
+        const visibleGroups = latestOnly ? groups.slice(0, 2) : groups;
         if (!visibleGroups.length) {
           list.append(element("p", "empty-state", "The first valid timed prediction round has not landed yet."));
           return;
         }
         visibleGroups.forEach((group) => {
           const roundSection = element("article", "round round--latest");
+          const roundSlots = [...new Set(groups.filter((item) => item.warId === group.warId).map((item) => item.slot))].sort((a, b) => new Date(a) - new Date(b));
+          const roundNumber = roundSlots.indexOf(group.slot) + 1;
           const groupPredictions = group.participants.flatMap((round) => round.predictions || []);
           const dropped = group.participants.reduce((count, round) => count + (round.dropped_predictions || []).length, 0);
           const roundStatuses = roundStatusBadges(groupPredictions, dropped);
           const summaryTop = element("header", "round__header round__summary-top");
           summaryTop.append(
-            element("strong", "", `${group.warNumber ? `War ${group.warNumber} · ` : ""}${roundWindow(group)}`),
+            element("strong", "", `${group.warNumber ? `War ${group.warNumber} · ` : ""}Round ${String(roundNumber).padStart(2, "0")} · ${roundWindow(group)}`),
             element("time", "", `${group.participants.length} participating model${group.participants.length === 1 ? "" : "s"}`),
             roundStatuses,
           );
@@ -1330,7 +1316,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             participant.append(participantSummary, participantBody);
             participant.addEventListener("toggle", () => {
               if (!participant.open) return;
-              models.querySelectorAll(".round-model--latest[open]").forEach((other) => {
+              list.querySelectorAll(".round-model--latest[open]").forEach((other) => {
                 if (other !== participant) other.open = false;
               });
             });
@@ -1365,7 +1351,6 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           renderWarData(dashboard.war_api_snapshot);
           renderScoreboard();
           renderRounds(currentRounds, true);
-          setupBriefingFilter(currentModels);
           renderBriefings(currentModels);
         } catch (error) {
           const empty = document.querySelector("#score-empty");

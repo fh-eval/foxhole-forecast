@@ -74,7 +74,7 @@ the paper/card surfaces:
   and settlement details stay reachable — the technical tables simply live
   behind clearly labeled "Audit view" disclosure widgets. Plain answer
   first, technical depth on demand.
-- The human-note block at the top is the researcher's own corner; its tone
+- The human-note block at the top is the project owner's own corner; its tone
   is personal, not institutional.
 
 ## Layout and interaction
