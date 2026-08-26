@@ -352,8 +352,12 @@ def build_scout_packet(settings: Settings) -> dict[str, Any]:
     }
 
 
-def build_detail_packet(settings: Settings, selected_regions: list[str]) -> dict[str, Any]:
-    latest = read_json(DATA_DIR / "raw" / "latest.json")
+def build_detail_packet(
+    settings: Settings,
+    selected_regions: list[str],
+    latest_snapshot: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    latest = latest_snapshot or read_json(DATA_DIR / "raw" / "latest.json")
     if not latest:
         raise RuntimeError("No current snapshot. Run collect first.")
     cutoff = latest["observed_at"]

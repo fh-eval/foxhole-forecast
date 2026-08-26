@@ -193,6 +193,81 @@ def salvage_invalid_run(settings: Settings, run_id: str) -> dict[str, Any]:
     }
 
 
+def retry_invalid_run(
+    settings: Settings, run_id: str, snapshot_path: Path
+) -> dict[str, Any]:
+    """Retry an invalid model run using its original frozen cutoff snapshot."""
+    runs_path = DATA_DIR / "model_runs.jsonl"
+    runs = read_jsonl(runs_path)
+    matching = [index for index, run in enumerate(runs) if run.get("run_id") == run_id]
+    if len(matching) != 1:
+        raise ValueError(f"Expected exactly one stored run for {run_id}; found {len(matching)}")
+    index = matching[0]
+    original = runs[index]
+    if original.get("status") != "invalid":
+        raise ValueError(f"Run {run_id} is not invalid")
+
+    models = load_models()
+    matching_models = [
+        model for model in models if model.get("series_id") == original.get("series_id")
+    ]
+    if len(matching_models) != 1:
+        raise ValueError(
+            f"Expected exactly one model configuration for {original.get('series_id')}"
+        )
+
+    cohort_dir = DATA_DIR / "raw" / "cohorts" / original["cohort_id"]
+    scout_packet = read_json(
+        cohort_dir / f"{original['series_id']}-scout-packet.json",
+        default=read_json(cohort_dir / "scout-packet.json", default=None),
+    )
+    snapshot = read_json(snapshot_path, default=None)
+    if not isinstance(scout_packet, dict) or not isinstance(snapshot, dict):
+        raise ValueError("The frozen scout packet and snapshot are both required")
+    if snapshot.get("observed_at") != scout_packet.get("cutoff"):
+        raise ValueError("Frozen snapshot timestamp does not match the original cutoff")
+    if snapshot.get("war", {}).get("warId") != scout_packet.get("war", {}).get("warId"):
+        raise ValueError("Frozen snapshot war does not match the original cohort")
+
+    state_path = DATA_DIR / "state.json"
+    state = read_json(state_path, default={})
+    retried = _run_model(
+        settings,
+        matching_models[0],
+        scout_packet,
+        original["cohort_id"],
+        cohort_dir,
+        state,
+        detail_snapshot=snapshot,
+    )
+    retry_history = copy.deepcopy(original.get("retry_history", []))
+    retry_history.append(
+        copy.deepcopy({key: value for key, value in original.items() if key != "retry_history"})
+    )
+    retried["retried_at"] = isoformat()
+    retried["retried_from_frozen_cutoff"] = scout_packet["cutoff"]
+    retried["retry_history"] = retry_history
+    runs[index] = retried
+    write_jsonl(runs_path, runs)
+
+    cohorts_path = DATA_DIR / "cohorts.jsonl"
+    cohorts = read_jsonl(cohorts_path)
+    for cohort in cohorts:
+        if cohort.get("cohort_id") != original.get("cohort_id"):
+            continue
+        for model in cohort.get("models", []):
+            if model.get("run_id") == run_id:
+                model["status"] = retried["status"]
+    write_jsonl(cohorts_path, cohorts)
+    return {
+        "run_id": run_id,
+        "status": retried["status"],
+        "predictions": len(retried.get("forecast", {}).get("predictions", [])),
+        "retried_from_frozen_cutoff": scout_packet["cutoff"],
+        **({"error": retried["error"]} if retried.get("error") else {}),
+    }
+
+
 def _run_model(
     settings: Settings,
     config: dict[str, Any],
@@ -200,6 +275,7 @@ def _run_model(
     cohort_id: str,
     cohort_dir: Path,
     state: dict[str, Any],
+    detail_snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     run_id = f"{cohort_id}:{config['series_id']}"
     base = {
@@ -265,7 +341,9 @@ def _run_model(
                 "selected_regions": selected,
             },
         )
-        detail_packet = build_detail_packet(settings, selected)
+        detail_packet = build_detail_packet(
+            settings, selected, latest_snapshot=detail_snapshot
+        )
         write_json(cohort_dir / f"{config['series_id']}-detail-packet.json", detail_packet)
         forecast_contract = forecast_schema(settings)
         forecast_messages = _messages(FORECAST_SYSTEM, detail_packet, forecast_contract)

@@ -10,6 +10,39 @@ from foxhole_forecast.storage import append_jsonl, write_json
 
 
 class PacketTests(unittest.TestCase):
+    def test_detail_packet_can_use_a_frozen_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            frozen = {
+                "observed_at": "2026-01-02T00:00:00Z",
+                "war": {"warId": "war-1", "warNumber": 1},
+                "maps": {
+                    "TestHex": {
+                        "report": {"colonialCasualties": 10, "wardenCasualties": 20},
+                        "bases": {
+                            "base-1": {
+                                "base_id": "base-1",
+                                "name": "Frozen Base",
+                                "map_name": "TestHex",
+                                "team": "WARDENS",
+                                "icon_type": 45,
+                            }
+                        },
+                    }
+                },
+            }
+            write_json(
+                data / "raw" / "latest.json",
+                {"observed_at": "2026-01-02T01:00:00Z", "war": {}, "maps": {}},
+            )
+            with patch.object(packets, "DATA_DIR", data):
+                packet = packets.build_detail_packet(
+                    packets.Settings.load(), ["TestHex"], latest_snapshot=frozen
+                )
+
+            self.assertEqual(packet["cutoff"], frozen["observed_at"])
+            self.assertEqual(packet["strategic_bases"][0]["name"], "Frozen Base")
+
     def test_future_rows_never_enter_history(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             data = Path(directory)

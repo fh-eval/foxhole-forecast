@@ -286,6 +286,8 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
             "dropped_strategic_advice": presented_advice_drops,
             "reasoning": _run_reasoning(run),
             "provider_label": _provider_label(run),
+            "retried_at": run.get("retried_at"),
+            "retried_from_frozen_cutoff": run.get("retried_from_frozen_cutoff"),
             "cost_usd": run.get("cost_usd", 0),
         }
         by_series[series].append(history)
@@ -392,6 +394,8 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                 "selected_regions": run.get("selected_regions", []),
                 "reasoning": _run_reasoning(run),
                 "provider_label": _provider_label(run),
+                "retried_at": run.get("retried_at"),
+                "retried_from_frozen_cutoff": run.get("retried_from_frozen_cutoff"),
                 "dropped_predictions": presented_drops,
                 "dropped_strategic_advice": presented_advice_drops,
                 "protocol": settlement.get("protocol"),

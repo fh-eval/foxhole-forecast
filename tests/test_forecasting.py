@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -16,13 +18,77 @@ from foxhole_forecast.forecasting import (
     _messages,
     _drop_invalid_predictions,
     _previous_model_summary,
+    retry_invalid_run,
     run_forecast_cohort,
 )
 from foxhole_forecast.schemas import forecast_schema
+from foxhole_forecast.storage import read_jsonl, write_json, write_jsonl
 from foxhole_forecast.validation import ValidationError
 
 
 class ForecastBudgetTests(unittest.TestCase):
+    def test_retry_invalid_run_preserves_failure_and_uses_frozen_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            run_id = "cohort-1:model-1"
+            original = {
+                "run_id": run_id,
+                "cohort_id": "cohort-1",
+                "series_id": "model-1",
+                "status": "invalid",
+                "created_at": "2026-01-02T00:05:00Z",
+                "error": "HTTP 400",
+            }
+            write_jsonl(data / "model_runs.jsonl", [original])
+            write_jsonl(
+                data / "cohorts.jsonl",
+                [{"cohort_id": "cohort-1", "models": [{"run_id": run_id, "status": "invalid"}]}],
+            )
+            scout = {
+                "cutoff": "2026-01-02T00:00:00Z",
+                "war": {"warId": "war-1"},
+            }
+            write_json(
+                data / "raw" / "cohorts" / "cohort-1" / "model-1-scout-packet.json",
+                scout,
+            )
+            snapshot = data / "frozen-latest.json"
+            write_json(
+                snapshot,
+                {
+                    "observed_at": scout["cutoff"],
+                    "war": {"warId": "war-1"},
+                    "maps": {},
+                },
+            )
+            replacement = {
+                **original,
+                "status": "valid",
+                "created_at": "2026-01-02T01:00:00Z",
+                "forecast": {"predictions": [{"base_id": "base-1"}]},
+            }
+            replacement.pop("error")
+            with patch("foxhole_forecast.forecasting.DATA_DIR", data), patch(
+                "foxhole_forecast.forecasting.load_models",
+                return_value=[{"series_id": "model-1"}],
+            ), patch(
+                "foxhole_forecast.forecasting._run_model", return_value=replacement
+            ) as run_model:
+                result = retry_invalid_run(Settings.load(), run_id, snapshot)
+
+            saved = read_jsonl(data / "model_runs.jsonl")[0]
+            self.assertEqual(result["status"], "valid")
+            self.assertEqual(saved["retry_history"][0]["error"], "HTTP 400")
+            self.assertEqual(saved["retried_from_frozen_cutoff"], scout["cutoff"])
+            self.assertEqual(
+                run_model.call_args.kwargs["detail_snapshot"]["observed_at"],
+                scout["cutoff"],
+            )
+            self.assertEqual(
+                read_jsonl(data / "cohorts.jsonl")[0]["models"][0]["status"],
+                "valid",
+            )
+
     def test_inactive_war_does_not_call_models(self) -> None:
         with patch(
             "foxhole_forecast.forecasting.read_json", return_value={}
