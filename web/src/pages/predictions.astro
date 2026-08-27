@@ -96,6 +96,43 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       const factionName = (team) => element("span", `faction-name faction-name--${String(team || "none").toLowerCase()}`, teamLabel(team));
       const baseIdentity = (bet) => element("strong", `base-identity base-identity--${String(bet.current_team || "none").toLowerCase()}`, `${bet.base_type || "Strategic Base"} ${bet.base_name || "Unknown base"}`);
 
+      function summaryHeadline(entry) {
+        if (entry?.headline) return String(entry.headline);
+        const text = String(entry?.war_summary || "");
+        const match = text.match(/\bday\s+(\d+)\b|\b(\d+)(?:st|nd|rd|th)\s+day\b/i);
+        return match ? `Day ${match[1] || match[2]}` : `War ${entry?.war_number || "—"} dispatch`;
+      }
+
+      function strategicAdviceLabel(key) {
+        const label = eventLabel(key);
+        const match = label.match(/^(Colonial|Warden)\s+(.+)$/i);
+        const wrapper = element("span", "strategic-advice__advice-label");
+        if (!match) {
+          wrapper.textContent = label;
+          return wrapper;
+        }
+        const faction = match[1].toLowerCase() === "colonial" ? "COLONIALS" : "WARDENS";
+        wrapper.append(factionName(faction), document.createTextNode(` · ${match[2]}`));
+        return wrapper;
+      }
+
+      function strategicAdvicePreview(items) {
+        const [key, item] = items[0] || [];
+        const preview = element("span", "strategic-advice__preview");
+        if (!item) return preview;
+        preview.append(
+          strategicAdviceLabel(key),
+          document.createTextNode(` ${item.base_type || "Strategic Base"} ${item.base_name || item.base_id}: ${item.reason || "No explanation was retained."}`),
+        );
+        return preview;
+      }
+
+      function strategicAdviceHeading(key) {
+        const heading = element("strong", "");
+        heading.append(strategicAdviceLabel(key));
+        return heading;
+      }
+
       function briefingSummary(text) {
         const content = String(text || "No briefing was retained for this round.");
         const wrapper = element("div", "briefing-summary");
@@ -223,13 +260,14 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const summary = element("summary", "strategic-advice__summary");
         summary.append(
           element("span", "strategic-advice__label", "Strategic adviser note"),
+          strategicAdvicePreview(items),
           element("span", "strategic-advice__count", `${items.length} note${items.length === 1 ? "" : "s"} · separate from scored predictions`),
           element("span", "strategic-advice__toggle"),
         );
         const list = element("div", "strategic-advice__grid");
         items.forEach(([key, item]) => {
           const card = element("article", "strategic-advice__item");
-          card.append(element("strong", "", eventLabel(key).replace("Colonial ", "Colonial: ").replace("Warden ", "Warden: ")), element("h4", "", `${item.base_type || "Strategic Base"} ${item.base_name || item.base_id}`), element("p", "", item.reason || "No reason retained."));
+          card.append(strategicAdviceHeading(key), element("h4", "", `${item.base_type || "Strategic Base"} ${item.base_name || item.base_id}`), element("p", "", item.reason || "No reason retained."));
           if (item.map_name || item.current_team) card.append(element("small", "", `${regionLabel(item.map_name)} · currently ${teamLabel(item.current_team)}`));
           if (Array.isArray(item.evidence) && item.evidence.length) { const evidence = element("div", "evidence-list"); item.evidence.forEach((entry) => evidence.append(evidenceChip(entry))); card.append(evidence); }
           list.append(card);
@@ -282,7 +320,9 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           const body = element("div", "archive-round__body");
           group.participants.forEach((round) => {
             const participant = element("details", "round-model"); const participantSummary = element("summary", "round-model__summary");
-            participantSummary.append(element("strong", "", modelLabel(round)), element("time", "", `Cutoff ${formatDate(round.cutoff)}`), element("span", `reasoning-note${round?.reasoning?.enabled === false ? " reasoning-note--disabled" : ""}`, reasoningLabel(round)), roundStatusBadges(round.predictions, (round.dropped_predictions || []).length));
+            const identity = element("span", "round-model__identity");
+            identity.append(element("strong", "", modelLabel(round)), element("span", "round-model__report-headline", summaryHeadline(round)));
+            participantSummary.append(identity, element("time", "", `Cutoff ${formatDate(round.cutoff)}`), element("span", `reasoning-note${round?.reasoning?.enabled === false ? " reasoning-note--disabled" : ""}`, reasoningLabel(round)), roundStatusBadges(round.predictions, (round.dropped_predictions || []).length));
             const participantBody = element("div", "round-model__body"); participantBody.append(briefingSummary(round.war_summary), element("p", "region-list", (round.selected_regions || []).map(regionLabel).join(" · ") || "No selected regions"));
             const advice = renderStrategicAdvice(round.strategic_advice); if (advice) participantBody.append(advice);
             const adviceWarning = droppedAdviceWarning(round.dropped_strategic_advice); if (adviceWarning) participantBody.append(adviceWarning);

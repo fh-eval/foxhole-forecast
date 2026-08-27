@@ -364,6 +364,33 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const author = entry?.model_label || fallbackLabel;
         return element("p", "briefing__byline", `By ${author} · Filed ${formatDate(entry?.cutoff)}`);
       }
+      function strategicAdviceLabel(key) {
+        const label = eventLabel(key);
+        const match = label.match(/^(Colonial|Warden)\s+(.+)$/i);
+        const wrapper = element("span", "strategic-advice__advice-label");
+        if (!match) {
+          wrapper.textContent = label;
+          return wrapper;
+        }
+        const faction = match[1].toLowerCase() === "colonial" ? "COLONIALS" : "WARDENS";
+        wrapper.append(factionName(faction), document.createTextNode(` · ${match[2]}`));
+        return wrapper;
+      }
+      function strategicAdvicePreview(items) {
+        const [key, item] = items[0] || [];
+        const preview = element("span", "strategic-advice__preview");
+        if (!item) return preview;
+        preview.append(
+          strategicAdviceLabel(key),
+          document.createTextNode(` ${item.base_type || "Strategic Base"} ${item.base_name || item.base_id}: ${item.reason || "No explanation was retained."}`),
+        );
+        return preview;
+      }
+      function strategicAdviceHeading(key) {
+        const heading = element("strong", "");
+        heading.append(strategicAdviceLabel(key));
+        return heading;
+      }
       let dashboard = null;
       let scoreScope = "current";
       let protocolRounds = [];
@@ -989,6 +1016,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const summary = element("summary", "strategic-advice__summary");
         summary.append(
           element("span", "strategic-advice__label", "Strategic adviser recommendations"),
+          strategicAdvicePreview(items),
           element("span", "strategic-advice__count", `${items.length} note${items.length === 1 ? "" : "s"} · descriptive, not scored`),
           element("span", "strategic-advice__toggle"),
         );
@@ -996,7 +1024,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         items.forEach(([key, item]) => {
           const card = element("article", "strategic-advice__item");
           card.append(
-            element("strong", "", eventLabel(key).replace("Colonial ", "Colonial: ").replace("Warden ", "Warden: ")),
+            strategicAdviceHeading(key),
             element("h4", "", `${item.base_type || "Strategic Base"} ${item.base_name || item.base_id}`),
             element("p", "", item.reason || "No explanation was retained."),
           );
@@ -1196,6 +1224,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           element("strong", "dispatch-model__name", modelLabel(round)),
           element("span", "dispatch-model__progress", `${resolved}/${bets.length} resolved · ${scored}/${bets.length} scored`),
         );
+        const headline = element("span", "dispatch-model__headline", summaryHeadline(round));
         const calls = element("span", "dispatch-model__calls");
         ranked.slice(0, 2).forEach((bet) => calls.append(compactPredictionPreview(bet)));
         if (!ranked.length) {
@@ -1208,7 +1237,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         if (issues) {
           footer.append(element("span", "dispatch-model__issue", `${issues} output note${issues === 1 ? "" : "s"}`));
         }
-        dispatch.append(header, calls, footer);
+        dispatch.append(header, headline, calls, footer);
         return dispatch;
       }
 
@@ -1268,7 +1297,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             const briefingSummaryRow = element("summary", "dispatch-secondary__summary");
             briefingSummaryRow.append(
               element("strong", "", "Read the model’s field report"),
-              element("span", "", summaryHeadline(round)),
+              element("span", "dispatch-secondary__headline", summaryHeadline(round)),
               element("span", "dispatch-secondary__toggle"),
             );
             const briefingBody = element("div", "dispatch-secondary__body briefing");
