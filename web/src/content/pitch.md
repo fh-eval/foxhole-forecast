@@ -13,7 +13,7 @@
   - [1. Predict Foxhole game events](#1-predict-foxhole-game-events) <span class="pitch-contents__descriptor">— the more feasible option</span>
   - [2. Build your own Foxhole-lite](#2-build-your-own-foxhole-lite-and-pit-llms-head-to-head-at-the-strategic-level) <span class="pitch-contents__descriptor">— the more fun option</span>
   - [Secret Option Three: Both?](#secret-option-three-both)
-- [Tinfoil Hat Zone](#tinfoil-hat-zone) <span class="pitch-contents__descriptor">— bespoke AI psychosis</span>
+- [Tinfoil Hat Zone](#tinfoil-hat-zone) <span class="pitch-contents__descriptor">— We all have one. AGI-pill = bespoke AI psychosis (also why I'm doing this)</span>
 
 ---
 
@@ -22,20 +22,20 @@
 [Foxhole](https://store.steampowered.com/app/505460/Foxhole/) is a videogame, a massively multiplayer top-down shooter, set in an alternate universe WW2 where players handle every part of the war, including production, logistics, construction, and the actual combat.
 
 <figure class="pitch-figure">
-  <img src="https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/505460/ss_1c1d60f0dd0c75837caca2aff1babf66401e7984.1920x1080.jpg?t=1785273455" alt="Three Colonial Bardiche tanks rolling through a southern European-style town.">
+  <img src="../images/pitch/colonial-bardiche-tanks.jpg" alt="Three Colonial Bardiche tanks rolling through a southern European-style town." loading="lazy" decoding="async">
   <figcaption>Three Colonial Bardiche tanks rolling through a southern European-style town. <a href="https://store.steampowered.com/app/505460/Foxhole/">Steam store image.</a></figcaption>
 </figure>
 
 The Wardens and Colonials, the two factions at war, have asymmetrical firearms, vehicles of all types (including battleships and most recently airplanes), emplacements, and uniforms.
 
-Players form clans, gather resources, build factories, produce equipment and ammunition, drive equipment and resources to the frontline, dig trenches, construct automated bunkers, and try to blow up the other team’s stuff. This is all *Very Serious* such that control of resource fields within a faction has resulted in small-scale [civil wars](https://youtu.be/HZfydL5VYbo?t=106) — the most famous one being the [Jade Cove incident](https://www.presscorpsgaming.com/history/history-part-4) in 2018 where the Wardens nuked themselves — and logistics players going [on strike](https://www.nme.com/features/how-a-logistics-strike-in-foxhole-created-a-war-like-no-other-3163884) in 2022 over dissatisfaction with the in-game logistics system.
+Players form clans, gather resources, build factories, produce equipment and ammunition, drive equipment and resources to the frontline, dig trenches, construct automated bunkers, and try to blow up the other team’s stuff. This is all *Very Serious* such that control of resource fields within a faction has resulted in small-scale [civil wars](https://youtu.be/HZfydL5VYbo?t=106) (the most famous one being the [Jade Cove incident](https://www.presscorpsgaming.com/history/history-part-4) in 2018 where the Wardens nuked themselves) and logistics players going [on strike](https://www.nme.com/features/how-a-logistics-strike-in-foxhole-created-a-war-like-no-other-3163884) in 2022 over dissatisfaction with the in-game logistics system.
 
 <figure class="pitch-figure">
-  <img src="https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/505460/ss_6e9b7371549f032a4affed0517f92848ebacbb95.1920x1080.jpg?t=1785273455" alt="A Colonial soldier loading an artillery shell onto a truck trailer parked beside a gasoline trailer.">
+  <img src="../images/pitch/colonial-artillery-logistics.jpg" alt="A Colonial soldier loading an artillery shell onto a truck trailer parked beside a gasoline trailer." loading="lazy" decoding="async">
   <figcaption>A Colonial soldier loading an artillery shell onto a truck trailer, parked beside another truck with a gasoline trailer. <a href="https://store.steampowered.com/app/505460/Foxhole/">Steam store image.</a></figcaption>
 </figure>
 
-As I understand the Colonials sort out the resource pecking-order on the [SIGIL](https://sigilhq.com/) Discord server, while Wardens use WERCS (Warden Expedited Resource Claim System) in the [Warden Unity Hub](https://discord.com/servers/warden-unity-hub-735418874102677514) Discord. I haven't scoped these Discords out personally because I played casually and they require verification. The point is there's enough complexity in Foxhole that players developed emergent systems for coordination.
+As I understand the Colonials sort out the resource pecking-order on the [SIGIL](https://sigilhq.com/) Discord server, while Wardens use WERCS (Warden Expedited Resource Claim System) in the [Warden Unity Hub](https://discord.com/servers/warden-unity-hub-735418874102677514) Discord. I haven't scoped these Discords out personally. I play casually every once in a while and the Discords require verification — I'm not the type to get mixed up in capital 'G' Gamer business. The point is there's enough complexity in Foxhole that players developed emergent systems for coordination.
 
 The (non-civil) wars run for weeks, ending primarily through secured Victory Points. Sometimes the developers pull the plug on an extended stalemate or release an update that requires a fresh war. The current war as of August 26th is \#140.
 
@@ -45,9 +45,9 @@ Data, data, and more data!
 
 Each base in Foxhole has a huge inventory crammed with junk for the war effort. Medical supplies and medic uniforms. Gas masks and filters to survive gas grenades. Tripods for 30mm cannons and HMGs. Barbed wire and shovels. Basic materials to build bunkers and reinforce trenches. Not to mention firearms, grenades, fuel, and ammunition.
 
-<figure class="pitch-figure pitch-figure--compact">
-  <a href="https://foxhole.wiki.gg/wiki/Stockpile"><img src="https://foxhole.wiki.gg/images/thumb/Stockpile.png/300px-Stockpile.png?894b27" alt="A Foxhole stockpile containing gas masks, rifles, uniforms, bayonets, and other supplies."></a>
-  <figcaption>A Foxhole stockpile containing gas masks, rifles, uniforms, bayonets, and other supplies. <a href="https://foxhole.wiki.gg/wiki/Stockpile">Foxhole Wiki.</a></figcaption>
+<figure class="pitch-figure">
+  <img src="../images/pitch/stockpile-screenshot.png" alt="A Foxhole town-base stockpile containing weapons, ammunition, building materials, medical supplies, and uniforms." loading="lazy" decoding="async">
+  <figcaption>A Foxhole town-base stockpile containing weapons, ammunition, building materials, medical supplies, and uniforms. Screenshot captured in-game.</figcaption>
 </figure>
 
 The website [foxholestats](https://foxholestats.com/) has a territory map with casualty rates pulled from the [official API](https://github.com/clapfoot/warapi). In Foxhole, higher casualty rates are sometimes a positive indicator. If more players of a faction are fighting in a region, usually a higher, sustained casualty rate means they’re better supplied, unless there's a large population gap faction-wide rendering the defenders both undersupplied and outmanned. Poor faction morale shows as players quitting until the next war instead of fighting an attritional defeat. The map as shown is noisy and not a good indicator of much beyond combat intensity.
@@ -61,7 +61,7 @@ What I want to know is if the LLMs can understand the headline story in the data
 In theory, an LLM should be able to take a guess at what tanks are deployed where and in what numbers, based on where the tanks get unboxed (at which specific factory or warehouse) and where petrol stocks decrease en route to the front. It could even reason *why* the tanks are going to that specific region, based on casualty data. Has a clan identified a weakness in the enemy lines? Are they responding to an enemy tank battalion? Is that just where the best fighting is? (It is a video game, after all.) Or is it Thursday operation night so everyone in a specific clan logs on and turns out in force?
 
 <figure class="pitch-figure">
-  <img src="https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/505460/ss_59358512ce9daf7c68e74c3d809514c7e9b55633.1920x1080.jpg?t=1785273455" alt="Three Warden Outlaw tanks crossing a dam.">
+  <img src="../images/pitch/warden-outlaw-tanks.jpg" alt="Three Warden Outlaw tanks crossing a dam." loading="lazy" decoding="async">
   <figcaption>Three Warden Outlaw tanks crossing a dam. <a href="https://store.steampowered.com/app/505460/Foxhole/">Steam store image.</a></figcaption>
 </figure>
 
@@ -73,11 +73,13 @@ I’ve got ideas for two. Both are longshots, but what the hell. Evals are suppo
 
 ### 1. Predict Foxhole game events
 
-*The more feasible option, and the one the [Foxhole Forecast](https://fh-eval.github.io/foxhole-forecast/) website is aimed at.*
+*The more feasible option, which [Foxhole Forecast](https://fh-eval.github.io/foxhole-forecast/) is the public data pilot for.*
 
 We reach out to Siege Camp and ask for more extensive API access. Give our LLMs all the data for each base and factory for a specific faction, as well as player cause of death plus location. The LLM should be able to do quite a lot with this data. The goal is to give the LLM data close to what crosses an analyst’s desk — and y’all would know better than me.
 
 There’s no reason a sufficiently smart LLM couldn’t generate a heatmap of mustard gas deaths, compare that to burn/supply rates on gas masks at the most affected bases, overlay that with structure damage/repair rates, and predict the fate of the defenders. Evaluating based on percent chance this specific base falls in 5m, 10m, 30m, 1hr and so on gives metrics to measure against. 
+
+(The existing website uses Continuous Ranked Probability Score (CRPS) but that's because I asked the models how to score the eval. Even so, as currently implemented the scoring is mainly what's sensible and convenient for me rather than the correct way to score forecasting for the data collected. If it didn't look "right" to me, I changed it.)
 
 There’s also rough OSINT in the form of discussion forums and various clan Discords. An enterprising model could infiltrate and keep tabs on the biggest groups. To make it even more fun, big clans keep their eyes out for spies because, of course, Foxhole is *Very Serious*. The Discords I’ve been in restrict access to the strategy channels to only senior members. Can our worst social engineer defeat flimsy gamer opsec? Let’s find out!
  
