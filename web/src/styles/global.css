@@ -501,17 +501,23 @@ h1 span { color: var(--accent); }
 .prediction-score__value { min-width: 0; position: relative; z-index: 0; isolation: isolate; display: inline-block; padding-inline: .18em; color: var(--ink); overflow-wrap: anywhere; }
 
 /* A card's status explains the result; the weathered marker belongs only on the number. */
+.prediction-result .status,
 .prediction-result .status--hit,
 .prediction-result .status--partial,
 .prediction-result .status--miss,
 .prediction-result .status--scored,
 .prediction-result .status--complete {
+  min-width: 0;
+  width: auto;
+  max-width: 100%;
   position: static;
   z-index: auto;
   isolation: auto;
   border-color: currentColor;
   border-radius: 999px;
   background: var(--card);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .prediction-result .status--hit { color: var(--olive) !important; }
 .prediction-result .status--partial { color: var(--signal) !important; }
