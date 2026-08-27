@@ -75,13 +75,41 @@ def summarize_selection(
         for bet in scored
         if bet.get("selection_capture_baseline") is not None
     ]
+    map_capture_baselines = [
+        float(bet["selection_capture_map_baseline"])
+        for bet in scored
+        if bet.get("selection_capture_map_baseline") is not None
+    ]
     capture_rate = _boolean_rate(scored, "selection_capture_observed")
     baseline_rate = _mean(capture_baselines)
+    map_baseline_rate = _mean(map_capture_baselines)
     capture_lift = (
         capture_rate / baseline_rate
         if capture_rate is not None and baseline_rate is not None and baseline_rate > 0
         else None
     )
+    scout_lift = (
+        baseline_rate / map_baseline_rate
+        if baseline_rate is not None
+        and map_baseline_rate is not None
+        and map_baseline_rate > 0
+        else None
+    )
+    pipeline_capture_lift = (
+        capture_rate / map_baseline_rate
+        if capture_rate is not None
+        and map_baseline_rate is not None
+        and map_baseline_rate > 0
+        else None
+    )
+    sigma_bets = [
+        bet
+        for bet in scored
+        if bet.get("selection_exact_outcome") is True
+        and bet.get("eta_error_minutes") is not None
+        and bet.get("sigma_minutes") is not None
+        and bet.get("sigma_source") == "model"
+    ]
 
     return {
         "selection_scored_bets": len(scored),
@@ -111,8 +139,17 @@ def summarize_selection(
             "selection_exact_outcome",
         ),
         **_rate_fields("top_rank_capture", top_ranked, "selection_capture_observed"),
+        **_rate_fields(
+            "sigma_coverage",
+            sigma_bets,
+            lambda bet: float(bet["eta_error_minutes"])
+            <= float(bet["sigma_minutes"]),
+        ),
         "capture_baseline_rate": _round(baseline_rate),
+        "capture_map_baseline_rate": _round(map_baseline_rate),
         "capture_lift": _round(capture_lift),
+        "scout_lift": _round(scout_lift),
+        "pipeline_capture_lift": _round(pipeline_capture_lift),
     }
 
 

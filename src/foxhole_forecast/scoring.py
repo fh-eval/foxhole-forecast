@@ -169,6 +169,17 @@ def _settle_timed_run(
 ) -> dict[str, Any]:
     cutoff = parse_time(run["cutoff"])
     eligible_base_ids = set(cohort.get("strategic_base_ids", []))
+    selected_regions = set(run.get("selected_regions", []))
+    scoped_base_ids = {
+        base_id
+        for base_id in eligible_base_ids
+        if base_id.partition(":")[0] in selected_regions
+    }
+    # Older protocols did not always retain the scout-stage regions. Fall back
+    # to the full cohort rather than constructing a biased pool from only the
+    # bases that happened to be predicted.
+    if not scoped_base_ids:
+        scoped_base_ids = eligible_base_ids
     deadline = max(
         parse_time(prediction["eta_utc"]) + timedelta(hours=3)
         for prediction in run["forecast"]["predictions"]
@@ -210,13 +221,23 @@ def _settle_timed_run(
         }
         selection_transition_observed = prediction["base_id"] in transition_base_ids
         selection_capture_observed = prediction["base_id"] in capture_base_ids
-        transition_baseline = (
-            len(transition_base_ids) / len(eligible_base_ids)
+        capture_baseline = (
+            len(capture_base_ids & scoped_base_ids) / len(scoped_base_ids)
+            if scoped_base_ids
+            else None
+        )
+        map_capture_baseline = (
+            len(capture_base_ids) / len(eligible_base_ids)
             if eligible_base_ids
             else None
         )
-        capture_baseline = (
-            len(capture_base_ids) / len(eligible_base_ids)
+        transition_baseline = (
+            len(transition_base_ids & scoped_base_ids) / len(scoped_base_ids)
+            if scoped_base_ids
+            else None
+        )
+        map_transition_baseline = (
+            len(transition_base_ids) / len(eligible_base_ids)
             if eligible_base_ids
             else None
         )
@@ -458,6 +479,18 @@ def _settle_timed_run(
                     if outcome is not None and capture_baseline is not None
                     else None
                 ),
+                "selection_capture_map_baseline": (
+                    round(map_capture_baseline, 8)
+                    if outcome is not None and map_capture_baseline is not None
+                    else None
+                ),
+                "selection_transition_map_baseline": (
+                    round(map_transition_baseline, 8)
+                    if outcome is not None and map_transition_baseline is not None
+                    else None
+                ),
+                "selection_scout_pool_size": len(scoped_base_ids),
+                "selection_map_pool_size": len(eligible_base_ids),
                 "settlement_reason": settlement_reason,
                 "settlement_sources": _settlement_sources(
                     collector_runs,

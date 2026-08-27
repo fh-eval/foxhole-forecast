@@ -362,6 +362,14 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                 "selection_capture_baseline": bet.get(
                     "selection_capture_baseline"
                 ),
+                "selection_capture_map_baseline": bet.get(
+                    "selection_capture_map_baseline"
+                ),
+                "selection_transition_map_baseline": bet.get(
+                    "selection_transition_map_baseline"
+                ),
+                "selection_scout_pool_size": bet.get("selection_scout_pool_size"),
+                "selection_map_pool_size": bet.get("selection_map_pool_size"),
                 "settlement_reason": bet.get("settlement_reason"),
                 "settlement_sources": bet.get("settlement_sources", []),
             }
@@ -539,8 +547,11 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                 "transition": "Selected base had any physical ownership transition by its scoring deadline",
                 "exact_outcome": "Observed outcome exactly matched the model's named outcome",
                 "top_ranks": [1, 5],
-                "baseline": "Share of all strategic bases available at the round cutoff captured during the same bet window",
-                "lift": "Model capture rate divided by the matched eligible-base baseline",
+                "scouted_baseline": "Share of strategic bases in that model's six selected regions captured during the same bet window",
+                "map_baseline": "Share of all strategic bases at the round cutoff captured during the same bet window",
+                "base_pick_lift": "Model capture rate divided by its scouted-region baseline",
+                "scout_lift": "Scouted-region baseline divided by the whole-map baseline",
+                "pipeline_lift": "Model capture rate divided by the whole-map baseline",
             },
             "neutral_alternative_state_credit": 0.75,
             "horizons_hours": [1, 6, 24],

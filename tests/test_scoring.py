@@ -225,6 +225,75 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(bet["selection_capture_baseline"], 0)
         self.assertEqual(settlement["protocol"], "event_outcome_v5_crps")
 
+    def test_selection_baseline_uses_the_models_scouted_regions(self) -> None:
+        settings = Settings.load()
+        cutoff = datetime(2026, 1, 1, tzinfo=UTC)
+        eta = cutoff + timedelta(hours=2)
+        run = {
+            "run_id": "run-scoped",
+            "cohort_id": "cohort-1",
+            "series_id": "model-scoped",
+            "cutoff": isoformat(cutoff),
+            "war_id": "war-1",
+            "selected_regions": ["TestHex"],
+            "forecast": {
+                "predictions": [
+                    {
+                        "rank": 1,
+                        "tranche": "IMMEDIATE",
+                        "base_id": "TestHex:base-1",
+                        "base_name": "Base One",
+                        "map_name": "TestHex",
+                        "current_team": "WARDENS",
+                        "outcome": "CAPTURED_BY_COLONIALS",
+                        "confidence": 0.7,
+                        "sigma_minutes": 60,
+                        "eta_utc": isoformat(eta),
+                        "evidence": [],
+                    }
+                ]
+            },
+        }
+        transition = {
+            "war_id": "war-1",
+            "base_id": "TestHex:base-1",
+            "base_name": "Base One",
+            "map_name": "TestHex",
+            "from_team": "WARDENS",
+            "to_team": "COLONIALS",
+            "event_type": "CAPTURED_BY_COLONIALS",
+            "actor": "COLONIALS",
+            "observed_from": isoformat(eta - timedelta(minutes=15)),
+            "observed_to": isoformat(eta),
+        }
+        collectors = [
+            {
+                "war_id": "war-1",
+                "observed_at": isoformat(cutoff + timedelta(minutes=15 * index)),
+            }
+            for index in range(0, 25)
+        ]
+
+        settlement = settle_run(
+            run,
+            {
+                "strategic_base_ids": [
+                    "TestHex:base-1",
+                    "OtherHex:base-2",
+                ]
+            },
+            [transition],
+            collectors,
+            settings,
+            cutoff + timedelta(hours=6),
+        )
+
+        bet = settlement["timed_predictions"][0]
+        self.assertEqual(bet["selection_capture_baseline"], 1)
+        self.assertEqual(bet["selection_capture_map_baseline"], 0.5)
+        self.assertEqual(bet["selection_scout_pool_size"], 1)
+        self.assertEqual(bet["selection_map_pool_size"], 2)
+
     def test_timed_prediction_is_censored_when_war_ends_before_window_closes(self) -> None:
         settings = Settings.load()
         cutoff = datetime(2026, 1, 1, tzinfo=UTC)

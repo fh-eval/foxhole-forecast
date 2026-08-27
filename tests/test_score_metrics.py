@@ -58,6 +58,9 @@ class ScoreMetricsTests(unittest.TestCase):
                 "selection_transition_observed": True,
                 "selection_exact_outcome": True,
                 "selection_capture_baseline": 0.25,
+                "selection_capture_map_baseline": 0.125,
+                "sigma_minutes": 30,
+                "sigma_source": "model",
             },
             {
                 "rank": 2,
@@ -68,6 +71,9 @@ class ScoreMetricsTests(unittest.TestCase):
                 "selection_transition_observed": True,
                 "selection_exact_outcome": True,
                 "selection_capture_baseline": 0.25,
+                "selection_capture_map_baseline": 0.125,
+                "sigma_minutes": 120,
+                "sigma_source": "model",
             },
             {
                 "rank": 5,
@@ -78,6 +84,7 @@ class ScoreMetricsTests(unittest.TestCase):
                 "selection_transition_observed": True,
                 "selection_exact_outcome": False,
                 "selection_capture_baseline": 0.5,
+                "selection_capture_map_baseline": 0.25,
             },
         ]
 
@@ -100,7 +107,13 @@ class ScoreMetricsTests(unittest.TestCase):
         self.assertAlmostEqual(summary["transition_exact_outcome_rate"], 2 / 3)
         self.assertEqual(summary["top_rank_capture_rate"], 1)
         self.assertAlmostEqual(summary["capture_baseline_rate"], 1 / 3)
+        self.assertAlmostEqual(summary["capture_map_baseline_rate"], 1 / 6)
         self.assertEqual(summary["capture_lift"], 2)
+        self.assertEqual(summary["scout_lift"], 2)
+        self.assertEqual(summary["pipeline_capture_lift"], 4)
+        self.assertEqual(summary["sigma_coverage_hits"], 1)
+        self.assertEqual(summary["sigma_coverage_bets"], 2)
+        self.assertEqual(summary["sigma_coverage_rate"], 0.5)
 
     def test_actionable_exact_outcome_keeps_all_scoreable_bets_in_denominator(self) -> None:
         bets = [
