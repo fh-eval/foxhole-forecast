@@ -915,15 +915,29 @@ tbody tr:hover { background: var(--wash); }
   font: 650 clamp(25px, 3vw, 32px)/1.14 var(--serif);
   scroll-margin-top: 68px;
 }
-.pitch-article h3 + p > em:only-child {
+.pitch-article h3 + p > em:only-child,
+.pitch-article #tinfoil-hat-zone + p > em:only-child {
   display: block;
-  margin-bottom: 26px;
-  color: var(--faint);
-  font-family: var(--mono);
-  font-size: 12px;
+  margin: 18px 0 26px;
+  padding: 12px 15px;
+  color: var(--accent-ink);
+  border-top: 1px dashed var(--accent);
+  border-right: 0;
+  border-bottom: 1px dashed var(--accent);
+  border-left: 5px solid var(--accent);
+  background: rgba(242,220,155,.25);
+  box-shadow: var(--hard-sm);
+  font: 600 13px/1.55 var(--mono);
   font-style: normal;
   letter-spacing: .07em;
   text-transform: uppercase;
+}
+.pitch-article h3 + p > em:only-child::before,
+.pitch-article #tinfoil-hat-zone + p > em:only-child::before {
+  content: "FIELD NOTE · ";
+  color: var(--faint);
+  font-size: 11px;
+  letter-spacing: .1em;
 }
 .pitch-article p,
 .pitch-article li {
@@ -992,6 +1006,7 @@ tbody tr:hover { background: var(--wash); }
 .pitch-article #contents + ul ul li::before { content: "↳"; position: absolute; left: 0; color: var(--faint); }
 .pitch-article #contents + ul a { color: var(--ink); text-decoration: none; }
 .pitch-article #contents + ul a:hover { color: var(--accent-ink); text-decoration: underline; }
+.pitch-contents__descriptor { color: var(--faint); font-size: 11px; }
 .pitch-article > p > strong:first-child { color: var(--accent-ink); }
 .pitch-article > blockquote:not(:first-of-type):not(:nth-of-type(2)) {
   margin: 34px 12px;

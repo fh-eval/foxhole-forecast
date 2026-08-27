@@ -10,10 +10,10 @@
 - [But why Foxhole?](#but-why-foxhole)
 - [Okay, so what do we expect the LLM to do with all this?](#okay-so-what-do-we-expect-the-llm-to-do-with-all-this)
 - [So what’s the actual eval?](#so-whats-the-actual-eval)
-  - [1. Predict Foxhole game events](#1-predict-foxhole-game-events)
-  - [2. Build your own Foxhole-lite](#2-build-your-own-foxhole-lite-and-pit-llms-head-to-head-at-the-strategic-level)
+  - [1. Predict Foxhole game events](#1-predict-foxhole-game-events) <span class="pitch-contents__descriptor">— the more feasible option</span>
+  - [2. Build your own Foxhole-lite](#2-build-your-own-foxhole-lite-and-pit-llms-head-to-head-at-the-strategic-level) <span class="pitch-contents__descriptor">— the more fun option</span>
   - [Secret Option Three: Both?](#secret-option-three-both)
-- [Tinfoil Hat Zone](#tinfoil-hat-zone)
+- [Tinfoil Hat Zone](#tinfoil-hat-zone) <span class="pitch-contents__descriptor">— bespoke AI psychosis</span>
 
 ---
 
