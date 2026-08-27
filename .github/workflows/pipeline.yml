@@ -64,7 +64,21 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: foxhole-collection-data
-          path: .
+          # upload-artifact removes the shared `data/` parent from this
+          # artifact. Keep the download isolated, then restore that parent
+          # explicitly so a successful run cannot silently score stale data.
+          path: /tmp/foxhole-collection-data
+      - name: Restore generated data at its repository paths
+        run: |
+          test -f /tmp/foxhole-collection-data/collector_runs.jsonl
+          test -f /tmp/foxhole-collection-data/raw/latest.json
+          cp /tmp/foxhole-collection-data/collector_runs.jsonl data/collector_runs.jsonl
+          cp /tmp/foxhole-collection-data/events.jsonl data/events.jsonl
+          cp /tmp/foxhole-collection-data/observations.jsonl data/observations.jsonl
+          cp -a /tmp/foxhole-collection-data/observations/. data/observations/
+          cp /tmp/foxhole-collection-data/raw/latest.json data/raw/latest.json
+          cp /tmp/foxhole-collection-data/state.json data/state.json
+          cp /tmp/foxhole-collection-data/wars.json data/wars.json
       - name: Rebuild scores and dashboard with the checked-out source
         run: |
           PYTHONPATH=src python3 -m foxhole_forecast score >/dev/null
