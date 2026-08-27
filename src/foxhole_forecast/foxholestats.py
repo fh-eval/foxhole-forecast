@@ -75,7 +75,14 @@ def import_foxholestats_html(
     settings: Settings,
     source_url: str = SOURCE_URL,
     fetched_at: datetime | None = None,
+    import_from: datetime | None = None,
+    import_to: datetime | None = None,
 ) -> dict[str, Any]:
+    if (import_from is None) != (import_to is None):
+        raise ValueError("import_from and import_to must be provided together")
+    if import_from and import_to and import_from >= import_to:
+        raise ValueError("import_from must be earlier than import_to")
+
     raw = html_path.read_bytes()
     html = raw.decode("utf-8", errors="replace")
     parsed, map_names = parse_foxholestats_html(html)
@@ -106,7 +113,9 @@ def import_foxholestats_html(
         fields = match.groupdict()
         timestamp = int(fields["timestamp"])
         observed_time = datetime.fromtimestamp(timestamp, tz=UTC)
-        if timestamp < start_epoch or observed_time >= backfill_before:
+        if timestamp < start_epoch or not _in_import_window(
+            observed_time, backfill_before, import_from, import_to
+        ):
             continue
         faction = fields["faction"].upper()
         action = fields["action"].strip()
@@ -117,7 +126,11 @@ def import_foxholestats_html(
         normalized.append(
             {
                 "schema_version": 1,
-                "source": "foxholestats_backfill",
+                "source": (
+                    "foxholestats_gap_recovery"
+                    if import_from is not None
+                    else "foxholestats_backfill"
+                ),
                 "source_event_id": source["source_event_id"],
                 "source_url": source_url,
                 "war_id": war["warId"],
@@ -140,10 +153,13 @@ def import_foxholestats_html(
         )
 
     path = DATA_DIR / "historical_events.jsonl"
+    import_source = (
+        "foxholestats_gap_recovery" if import_from is not None else "foxholestats_backfill"
+    )
     existing = [
         row
         for row in read_jsonl(path)
-        if not (row.get("source") == "foxholestats_backfill" and row.get("war_id") == war["warId"])
+        if not (row.get("source") == import_source and row.get("war_id") == war["warId"])
     ]
     merged = {
         (row.get("source"), row.get("source_event_id")): row
@@ -156,13 +172,15 @@ def import_foxholestats_html(
     matched = [row for row in canonical if row["base_id"]]
     summary = {
         "schema_version": 1,
-        "source": "foxholestats_backfill",
+        "source": import_source,
         "source_url": source_url,
         "source_sha256": hashlib.sha256(raw).hexdigest(),
         "fetched_at": isoformat(collected),
         "war_id": war["warId"],
         "war_number": war.get("warNumber"),
         "backfill_before": isoformat(backfill_before),
+        "import_from": isoformat(import_from) if import_from else None,
+        "import_to": isoformat(import_to) if import_to else None,
         "parsed_events": len(parsed),
         "current_war_events": len(normalized),
         "strategic_events": len(strategic),
@@ -173,6 +191,17 @@ def import_foxholestats_html(
     }
     write_json(DATA_DIR / "imports" / f"foxholestats-war-{war.get('warNumber')}.json", summary)
     return summary
+
+
+def _in_import_window(
+    observed_time: datetime,
+    backfill_before: datetime,
+    import_from: datetime | None,
+    import_to: datetime | None,
+) -> bool:
+    if import_from is not None and import_to is not None:
+        return import_from < observed_time <= import_to
+    return observed_time < backfill_before
 
 
 def _event_type(action: str, faction: str) -> str:

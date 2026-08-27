@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  activeRunSince,
   cacheBustedUrl,
   checkAndDispatch,
   forecastSlot,
@@ -67,6 +68,15 @@ test("a successful run inside the guard window suppresses a duplicate", () => {
   ];
   assert.equal(successfulRunSince(runs, Date.parse("2026-08-22T12:00:00Z"))?.id, 42);
   assert.equal(successfulRunSince(runs, Date.parse("2026-08-22T12:20:00Z")), undefined);
+});
+
+test("only a recent active run suppresses a replacement dispatch", () => {
+  const runs = [
+    { id: 41, status: "queued", created_at: "2026-08-22T10:00:00Z" },
+    { id: 42, status: "in_progress", created_at: "2026-08-22T11:50:00Z" },
+  ];
+  assert.equal(activeRunSince(runs, Date.parse("2026-08-22T11:46:00Z"))?.id, 42);
+  assert.equal(activeRunSince(runs, Date.parse("2026-08-22T11:55:00Z")), undefined);
 });
 
 test("an ended war pauses forecasts without triggering an extra collection", async () => {

@@ -37,6 +37,14 @@ export function successfulRunSince(runs, notBefore) {
   );
 }
 
+export function activeRunSince(runs, notBefore) {
+  if (!Number.isFinite(notBefore)) return undefined;
+  return runs.find((run) =>
+    ["queued", "in_progress", "waiting", "pending", "requested"].includes(run.status)
+    && Date.parse(run.created_at) >= notBefore
+  );
+}
+
 async function jsonResponse(response, label) {
   if (!response.ok) {
     const body = await response.text();
@@ -51,9 +59,7 @@ async function dispatchIfIdle(env, workflow, fetchImpl, notBefore) {
     headers: githubHeaders(env.GITHUB_TOKEN),
   });
   const runs = await jsonResponse(runsResponse, "Workflow run request");
-  const active = (runs.workflow_runs || []).find((run) =>
-    ["queued", "in_progress", "waiting", "pending", "requested"].includes(run.status)
-  );
+  const active = activeRunSince(runs.workflow_runs || [], notBefore);
   if (active) {
     return { action: "already_active", workflow, run_id: active.id };
   }

@@ -42,6 +42,14 @@ def main(argv: list[str] | None = None) -> int:
     importer = subcommands.add_parser("import-foxholestats", help="Import a saved FoxholeStats event-log page")
     importer.add_argument("--html", type=Path, required=True, help="Saved FoxholeStats HTML file")
     importer.add_argument("--source-url", default=SOURCE_URL, help="URL the saved page came from")
+    importer.add_argument(
+        "--from-time",
+        help="Recover only events after this UTC time (requires --to-time)",
+    )
+    importer.add_argument(
+        "--to-time",
+        help="Recover only events through this UTC time (requires --from-time)",
+    )
     run = subcommands.add_parser("run", help="Collect, forecast if due, score, and build dashboard")
     run.add_argument("--force-forecast", action="store_true")
     run.add_argument("--series", help="Run only one configured model series")
@@ -67,7 +75,15 @@ def main(argv: list[str] | None = None) -> int:
                 cohort_ids={args.cohort_id} if args.cohort_id else None,
             )
         elif args.command == "import-foxholestats":
-            result = import_foxholestats_html(args.html, settings, args.source_url)
+            if bool(args.from_time) != bool(args.to_time):
+                parser.error("--from-time and --to-time must be provided together")
+            result = import_foxholestats_html(
+                args.html,
+                settings,
+                args.source_url,
+                import_from=parse_time(args.from_time) if args.from_time else None,
+                import_to=parse_time(args.to_time) if args.to_time else None,
+            )
         elif args.command == "run":
             result = {
                 "collection": collect_once(settings),

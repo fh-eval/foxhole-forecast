@@ -1,8 +1,13 @@
 from __future__ import annotations
 
 import unittest
+from datetime import UTC, datetime
 
-from foxhole_forecast.foxholestats import _event_type, parse_foxholestats_html
+from foxhole_forecast.foxholestats import (
+    _event_type,
+    _in_import_window,
+    parse_foxholestats_html,
+)
 
 
 class FoxholeStatsTests(unittest.TestCase):
@@ -23,6 +28,20 @@ class FoxholeStatsTests(unittest.TestCase):
         self.assertEqual(_event_type("Lost", "COLONIALS"), "OWNER_LOSES")
         self.assertEqual(_event_type("Taken", "WARDENS"), "CAPTURED_BY_WARDENS")
         self.assertEqual(_event_type("Under Construction", "WARDENS"), "UNDER_CONSTRUCTION")
+
+    def test_explicit_recovery_window_excludes_lower_and_includes_upper_bound(self) -> None:
+        lower = datetime(2026, 8, 26, 17, 0, tzinfo=UTC)
+        upper = datetime(2026, 8, 27, 4, 45, tzinfo=UTC)
+        backfill_before = datetime(2026, 8, 20, tzinfo=UTC)
+
+        self.assertFalse(_in_import_window(lower, backfill_before, lower, upper))
+        self.assertTrue(
+            _in_import_window(datetime(2026, 8, 26, 17, 1, tzinfo=UTC), backfill_before, lower, upper)
+        )
+        self.assertTrue(_in_import_window(upper, backfill_before, lower, upper))
+        self.assertFalse(
+            _in_import_window(datetime(2026, 8, 27, 4, 46, tzinfo=UTC), backfill_before, lower, upper)
+        )
 
 
 if __name__ == "__main__":
