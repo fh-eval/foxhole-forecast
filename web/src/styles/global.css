@@ -935,7 +935,8 @@ tbody tr:hover { background: var(--wash); }
 .pitch-article p { margin-bottom: 24px; }
 .pitch-article a { color: var(--accent-ink); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .pitch-article a:hover { color: var(--ink); text-decoration-thickness: 2px; }
-.pitch-article hr { margin: 52px 0 0; border: 0; border-top: 2px dashed var(--faint); }
+.pitch-article hr { margin: 48px 0 18px; border: 0; border-top: 2px dashed var(--faint); }
+.pitch-article hr + h2 { margin-top: 0; }
 .pitch-article img {
   display: block;
   max-width: 100%;
@@ -947,6 +948,11 @@ tbody tr:hover { background: var(--wash); }
 }
 .pitch-article img[src*="steamstatic"] { width: 100%; max-height: 470px; object-fit: cover; }
 .pitch-article img[src*="Stockpile"] { width: min(100%, 430px); }
+.pitch-figure { margin: 38px 0 46px; }
+.pitch-figure > a { display: block; color: inherit; text-decoration: none; }
+.pitch-figure img { margin: 0 auto; }
+.pitch-figure figcaption { max-width: 680px; margin: 12px auto 0; padding: 10px 0 0 14px; color: var(--faint); border-top: 1px dashed var(--faint); font: 500 15px/1.5 var(--serif); }
+.pitch-figure figcaption::before { content: "FIELD NOTE · "; color: var(--accent-ink); font: 600 11px/1.5 var(--mono); letter-spacing: .1em; }
 .pitch-article ul { margin: 22px 0 34px; padding-left: 28px; }
 .pitch-article li { margin-bottom: 17px; padding-left: 5px; }
 .pitch-article li::marker { color: var(--accent); }
@@ -970,17 +976,20 @@ tbody tr:hover { background: var(--wash); }
 .pitch-article #contents + ul {
   margin: 0 0 64px;
   padding: 20px 24px 16px;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px 28px;
-  list-style-position: inside;
+  display: block;
+  list-style: none;
   background: var(--card);
   border: 2px solid var(--inkline);
   box-shadow: var(--hard-sm);
 }
-.pitch-article #contents + ul > li { margin: 0; padding: 7px 0; font-family: var(--mono); font-size: 12px; line-height: 1.45; }
-.pitch-article #contents + ul ul { margin: 7px 0 0 15px; padding: 0; }
-.pitch-article #contents + ul ul li { margin: 0; padding: 4px 0; font-family: var(--mono); font-size: 11px; line-height: 1.4; }
+.pitch-article #contents + ul > li { margin: 0; padding: 9px 0 9px 42px; position: relative; font-family: var(--mono); font-size: 12px; line-height: 1.45; }
+.pitch-article #contents + ul > li + li { border-top: 1px dashed var(--line); }
+.pitch-article #contents + ul > li::before { content: counter(contents-item, decimal-leading-zero); position: absolute; top: 9px; left: 0; color: var(--accent-ink); font: 600 11px/1.45 var(--mono); letter-spacing: .08em; }
+.pitch-article #contents + ul { counter-reset: contents-item; }
+.pitch-article #contents + ul > li { counter-increment: contents-item; }
+.pitch-article #contents + ul ul { margin: 7px 0 0; padding: 0 0 0 18px; list-style: none; }
+.pitch-article #contents + ul ul li { margin: 0; padding: 4px 0 4px 25px; position: relative; font-family: var(--mono); font-size: 11px; line-height: 1.4; }
+.pitch-article #contents + ul ul li::before { content: "↳"; position: absolute; left: 0; color: var(--faint); }
 .pitch-article #contents + ul a { color: var(--ink); text-decoration: none; }
 .pitch-article #contents + ul a:hover { color: var(--accent-ink); text-decoration: underline; }
 .pitch-article > p > strong:first-child { color: var(--accent-ink); }
@@ -1071,7 +1080,7 @@ footer strong { color: var(--accent-ink); letter-spacing: .12em; }
   .pitch-article h2 { margin-top: 58px; font-size: 36px; }
   .pitch-article h3 { margin-top: 42px; font-size: 27px; }
   .pitch-article p, .pitch-article li { font-size: 17px; line-height: 1.68; }
-  .pitch-article #contents + ul { grid-template-columns: 1fr; padding: 16px 18px 12px; }
+  .pitch-article #contents + ul { padding: 16px 18px 12px; }
   .pitch-article > blockquote:not(:first-of-type):not(:nth-of-type(2)) { margin-inline: 0; padding: 20px 18px; }
   .briefing__header, footer div { flex-direction: column; }
   .event-feed__viewport { height: 326px; padding: 6px 4px 52px; }

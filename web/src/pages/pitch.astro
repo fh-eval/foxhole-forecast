@@ -43,6 +43,27 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       <a class="method-back pitch-return" href={basePath}>← Return to Foxhole Forecast</a>
     </main>
 
+    <script>
+      const pitchImages = document.querySelectorAll<HTMLImageElement>(".pitch-article img");
+      pitchImages.forEach((image, index) => {
+        const paragraph = image.closest("p");
+        if (!paragraph || image.closest("figure") || paragraph.children.length !== 1 || !image.alt) return;
+        const figure = document.createElement("figure");
+        figure.className = "pitch-figure";
+        const caption = document.createElement("figcaption");
+        caption.id = `pitch-figure-caption-${index + 1}`;
+        caption.textContent = image.alt;
+        figure.setAttribute("aria-labelledby", caption.id);
+        paragraph.replaceWith(figure);
+        if (image.parentElement?.tagName === "A" && image.parentElement.parentElement === paragraph) {
+          figure.append(image.parentElement);
+        } else {
+          figure.append(image);
+        }
+        figure.append(caption);
+      });
+    </script>
+
     <footer><div class="page-width"><strong>FOXHOLE FORECAST</strong><a href={basePath}>Live dashboard</a></div></footer>
   </body>
 </html>

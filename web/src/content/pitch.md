@@ -2,7 +2,7 @@
 
 > “All em-dashes in these slides were human-generated” — Terence Tao, slide 5, presenting to the [2026 International Congress of Mathematicians](https://youtu.be/M0--ZH1lOzg?t=269).
 
-> **Disclaimer:** I’m not an expert in any of this, not even an amateur. So forgive my poor use of jargon. This writing is a nose-bleed-seat spectator trying to speak dugout because that’s who I’m pitching to. It’s an open contest though and I’ve got *opinions*, so fuck it, let’s ball.
+> **Disclaimer:** I’m not an expert in any of this, not even an amateur. So forgive my poor use of jargon. This writing is a nose-bleed-seat spectator trying to speak dugout because that’s who I’m pitching to. It’s an open contest though and I’ve got *opinions*, so fuck it, we ball.
 
 ## Contents
 
@@ -21,11 +21,19 @@
 
 [Foxhole](https://store.steampowered.com/app/505460/Foxhole/) is a videogame, a massively multiplayer top-down shooter, set in an alternate universe WW2 where players handle every part of the war, including production, logistics, construction, and the actual combat.
 
-![Steam store image of three Colonial Bardiche tanks rolling through a southern European style town.](https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/505460/ss_1c1d60f0dd0c75837caca2aff1babf66401e7984.1920x1080.jpg?t=1785273455)
+<figure class="pitch-figure">
+  <img src="https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/505460/ss_1c1d60f0dd0c75837caca2aff1babf66401e7984.1920x1080.jpg?t=1785273455" alt="Three Colonial Bardiche tanks rolling through a southern European-style town.">
+  <figcaption>Three Colonial Bardiche tanks rolling through a southern European-style town. <a href="https://store.steampowered.com/app/505460/Foxhole/">Steam store image.</a></figcaption>
+</figure>
 
 The Wardens and Colonials, the two factions at war, have asymmetrical firearms, vehicles of all types (including battleships and most recently airplanes), emplacements, and uniforms.
 
 Players form clans, gather resources, build factories, produce equipment and ammunition, drive equipment and resources to the frontline, dig trenches, construct automated bunkers, and try to blow up the other team’s stuff. This is all *Very Serious* such that control of resource fields within a faction has resulted in small-scale [civil wars](https://youtu.be/HZfydL5VYbo?t=106) — the most famous one being the [Jade Cove incident](https://www.presscorpsgaming.com/history/history-part-4) in 2018 where the Wardens nuked themselves — and logistics players going [on strike](https://www.nme.com/features/how-a-logistics-strike-in-foxhole-created-a-war-like-no-other-3163884) in 2022 over dissatisfaction with the in-game logistics system.
+
+<figure class="pitch-figure">
+  <img src="https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/505460/ss_6e9b7371549f032a4affed0517f92848ebacbb95.1920x1080.jpg?t=1785273455" alt="A Colonial soldier loading an artillery shell onto a truck trailer parked beside a gasoline trailer.">
+  <figcaption>A Colonial soldier loading an artillery shell onto a truck trailer, parked beside another truck with a gasoline trailer. <a href="https://store.steampowered.com/app/505460/Foxhole/">Steam store image.</a></figcaption>
+</figure>
 
 As I understand the Colonials sort out the resource pecking-order on the [SIGIL](https://sigilhq.com/) Discord server, while Wardens use WERCS (Warden Expedited Resource Claim System) in the [Warden Unity Hub](https://discord.com/servers/warden-unity-hub-735418874102677514) Discord. I haven't scoped these Discords out personally because I played casually and they require verification. The point is there's enough complexity in Foxhole that players developed emergent systems for coordination.
 
@@ -37,7 +45,10 @@ Data, data, and more data!
 
 Each base in Foxhole has a huge inventory crammed with junk for the war effort. Medical supplies and medic uniforms. Gas masks and filters to survive gas grenades. Tripods for 30mm cannons and HMGs. Barbed wire and shovels. Basic materials to build bunkers and reinforce trenches. Not to mention firearms, grenades, fuel, and ammunition.
 
-[![Screenshot of Foxhole Stockpile with various items, such as gas masks, rifles, uniforms, bayonets.](https://foxhole.wiki.gg/images/thumb/Stockpile.png/300px-Stockpile.png?894b27)](https://foxhole.wiki.gg/wiki/Stockpile)
+<figure class="pitch-figure pitch-figure--compact">
+  <a href="https://foxhole.wiki.gg/wiki/Stockpile"><img src="https://foxhole.wiki.gg/images/thumb/Stockpile.png/300px-Stockpile.png?894b27" alt="A Foxhole stockpile containing gas masks, rifles, uniforms, bayonets, and other supplies."></a>
+  <figcaption>A Foxhole stockpile containing gas masks, rifles, uniforms, bayonets, and other supplies. <a href="https://foxhole.wiki.gg/wiki/Stockpile">Foxhole Wiki.</a></figcaption>
+</figure>
 
 The website [foxholestats](https://foxholestats.com/) has a territory map with casualty rates pulled from the [official API](https://github.com/clapfoot/warapi). In Foxhole, higher casualty rates are sometimes a positive indicator. If more players of a faction are fighting in a region, usually a higher, sustained casualty rate means they’re better supplied, unless there's a large population gap faction-wide rendering the defenders both undersupplied and outmanned. Poor faction morale shows as players quitting until the next war instead of fighting an attritional defeat. The map as shown is noisy and not a good indicator of much beyond combat intensity.
 
@@ -48,6 +59,11 @@ The official API is relatively barebones because gamers would use any additional
 What I want to know is if the LLMs can understand the headline story in the data. If we get expansive API access, there’s no reason a frontier model couldn’t build a data analytics suite to generate heatmaps of casualties to artillery, or track where tanks are deployed based on drawdowns in 40mm shells and petrol. It can write code and understand numbers; it can build whatever it needs. The challenge is identifying what is useful to know and why.
 
 In theory, an LLM should be able to take a guess at what tanks are deployed where and in what numbers, based on where the tanks get unboxed (at which specific factory or warehouse) and where petrol stocks decrease en route to the front. It could even reason *why* the tanks are going to that specific region, based on casualty data. Has a clan identified a weakness in the enemy lines? Are they responding to an enemy tank battalion? Is that just where the best fighting is? (It is a video game, after all.) Or is it Thursday operation night so everyone in a specific clan logs on and turns out in force?
+
+<figure class="pitch-figure">
+  <img src="https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/505460/ss_59358512ce9daf7c68e74c3d809514c7e9b55633.1920x1080.jpg?t=1785273455" alt="Three Warden Outlaw tanks crossing a dam.">
+  <figcaption>Three Warden Outlaw tanks crossing a dam. <a href="https://store.steampowered.com/app/505460/Foxhole/">Steam store image.</a></figcaption>
+</figure>
 
 Despite being a video game, Foxhole has both the chaos and data required to simulate real-world scenarios. Unlike Sid Meier’s Civilization, the LLM doesn’t get estimated damage when targeting a warrior unit with a chariot archer. The narrative is opaque where the rubber meets the road and has to be reconstructed. API access is a gamified, transparent method compared to Perun hiring satellites to take pictures of Russian tank fields, but the style of thinking we’re trying to assess is the same.
 
