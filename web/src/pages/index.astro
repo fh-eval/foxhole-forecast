@@ -941,7 +941,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           const regions = element("p", "region-list", model.latest.selected_regions?.map(regionLabel).join(" · ") || "No selected regions");
           const body = element("div", "field-report__body");
           body.append(briefingSummary(model.latest.war_summary, "briefing__copy", false), regions);
-          article.append(fieldReportSummary(model.latest, modelLabel(model)), body);
+          article.append(fieldReportSummary(model.latest, modelLabel(model), "Field Report"), body);
           list.append(article);
         });
       }
