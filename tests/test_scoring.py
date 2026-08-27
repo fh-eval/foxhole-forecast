@@ -8,6 +8,8 @@ from foxhole_forecast.scoring import (
     _event_time_crps_minutes,
     _outcome_credit,
     _prediction_sigma_minutes,
+    _recovered_transition,
+    _settlement_sources,
     _timing_credit,
     settle_run,
 )
@@ -15,6 +17,42 @@ from foxhole_forecast.storage import isoformat
 
 
 class ScoringTests(unittest.TestCase):
+    def test_gap_recovery_event_becomes_a_scoreable_physical_transition(self) -> None:
+        recovered = _recovered_transition(
+            {
+                "source": "foxholestats_gap_recovery",
+                "strategic": True,
+                "base_id": "base-1",
+                "event_type": "CAPTURED_BY_COLONIALS",
+                "actor": "COLONIALS",
+            }
+        )
+
+        self.assertEqual(recovered["from_team"], "NONE")
+        self.assertEqual(recovered["to_team"], "COLONIALS")
+
+    def test_settlement_provenance_includes_synthetic_recovery_coverage(self) -> None:
+        cutoff = datetime(2026, 8, 26, 17, 0, tzinfo=UTC)
+        sources = _settlement_sources(
+            [
+                {"war_id": "war-1", "observed_at": isoformat(cutoff), "status": "ok"},
+                {
+                    "war_id": "war-1",
+                    "observed_at": isoformat(cutoff + timedelta(minutes=15)),
+                    "status": "ok",
+                    "source": "foxholestats_gap_recovery",
+                },
+            ],
+            "war-1",
+            cutoff,
+            cutoff + timedelta(minutes=30),
+            None,
+        )
+
+        self.assertEqual(
+            sources, ["foxholestats_gap_recovery", "official_war_api"]
+        )
+
     def _single_timed_run(
         self, cutoff: datetime, eta: datetime, confidence: float = 0.55
     ) -> dict:

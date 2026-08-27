@@ -1055,12 +1055,15 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       }
 
       function predictionStatus(bet) {
+        const source = bet.settlement_sources?.includes("foxholestats_gap_recovery")
+          ? " · FoxholeStats recovery"
+          : "";
         if (bet.status === "censored" && bet.settlement_reason === "ambiguous_transition_interval") {
-          return "Not scored · transition time ambiguous";
+          return `Not scored · transition time ambiguous${source}`;
         }
-        if (bet.status === "censored") return "Not scored · missing observations";
+        if (bet.status === "censored") return `Not scored · missing observations${source}`;
         if (bet.crps_minutes != null && bet.settlement_reason === "no_transition_by_deadline") {
-          return "Scored · no qualifying transition by deadline";
+          return `Scored · no qualifying transition by deadline${source}`;
         }
         if (bet.crps_minutes != null && bet.settlement_reason === "observed_transition") {
           const observation = Number(bet.state_credit) === 1
@@ -1069,9 +1072,9 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
               ? "related outcome observed"
               : "different outcome observed";
           const timing = bet.eta_error_minutes != null ? ` · ${bet.eta_error_minutes}m from ETA` : "";
-          return `Scored · ${observation}${timing}`;
+          return `Scored · ${observation}${timing}${source}`;
         }
-        if (bet.crps_minutes != null) return "Scored";
+        if (bet.crps_minutes != null) return `Scored${source}`;
         return eventLabel(bet.status);
       }
 

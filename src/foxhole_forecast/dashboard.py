@@ -363,6 +363,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                     "selection_capture_baseline"
                 ),
                 "settlement_reason": bet.get("settlement_reason"),
+                "settlement_sources": bet.get("settlement_sources", []),
             }
             presented_round_bets.append(presented)
         if run.get("status") == "valid":
@@ -547,8 +548,8 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
             "timing_precision_minutes": 15,
             "sigma_minutes": {"minimum": 15, "maximum": 180},
             "legacy_sigma_rule": "max(15, 180 * (1 - confidence))",
-            "data_source": "Official Foxhole War API, with a provenance-tagged one-time FoxholeStats history backfill",
-            "settlement_source": "Official Foxhole War API only",
+            "data_source": "Official Foxhole War API, with provenance-tagged FoxholeStats event-log recovery for documented collection gaps",
+            "settlement_source": "Official Foxhole War API by default; affected outage windows use visibly labeled FoxholeStats events and simulated 15-minute coverage",
         },
     }
     write_json(

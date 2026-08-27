@@ -2,7 +2,7 @@
 
 Foxhole Forecast is a prospective LLM evaluation: every three hours, several models receive the same cutoff-safe public war data and make eight probabilistic, exact-ETA predictions about strategic base transitions. Later API observations settle those predictions, and a static dashboard publishes short- and long-range CRPS results.
 
-The implementation deliberately starts with the [official Foxhole War API](https://github.com/clapfoot/warapi). FoxholeStats or other community data can be added as a separately versioned data source later; it is not scraped by this version.
+The implementation uses the [official Foxhole War API](https://github.com/clapfoot/warapi) by default. Provenance-tagged FoxholeStats event logs can recover documented polling outages without being presented as official observations.
 
 ## What the evaluation measures
 
@@ -57,15 +57,15 @@ npm ci
 npm run build
 ```
 
-### Optional one-time FoxholeStats backfill
+### Optional FoxholeStats import
 
-Historical context can be imported from a saved FoxholeStats event-log page without allowing community data to settle prospective scores:
+Historical context can be imported from a saved FoxholeStats event-log page:
 
 ```bash
 PYTHONPATH=src python -m foxhole_forecast import-foxholestats --html /path/to/foxholestats.html
 ```
 
-The importer preserves source IDs, URL, timestamp precision, and a SHA-256 provenance manifest in `data/imports/`. It stores the normalized archive separately in `data/historical_events.jsonl` and automatically stops the backfill at the first successful official-API poll to prevent overlap. Only matched strategic ownership events enter cutoff-safe prompt history; `data/events.jsonl` remains official-API-only and is the sole source used to settle forecasts.
+The importer preserves source IDs, URL, timestamp precision, and a SHA-256 provenance manifest in `data/imports/`. By default it stops at the first official poll. With `--recover-gaps`, it selects only official polling gaps longer than two expected intervals, records simulated 15-minute coverage separately, and permits the matched third-party ownership events to settle affected bets. Those scores retain FoxholeStats provenance in the settlement and public dashboard; `data/events.jsonl` remains official-only.
 
 `run` performs collection, a forecast when the current three-hour slot is due, settlement, and dashboard generation in one command. The legacy shared OpenRouter software ceiling is `$3.00` per UTC day. GLM 5.3 Flash has an independent `$0.25` daily ceiling, and direct DeepSeek usage has an independent `$0.50` ceiling. Provider-reported cost is recorded, with published token rates used as a conservative fallback. Missing keys skip the affected series without stopping collection or scoring.
 

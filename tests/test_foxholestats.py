@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from foxhole_forecast.foxholestats import (
     _event_type,
-    _in_import_window,
+    _in_import_windows,
+    _missing_poll_intervals,
+    _synthetic_coverage_points,
     parse_foxholestats_html,
 )
 
@@ -34,13 +36,41 @@ class FoxholeStatsTests(unittest.TestCase):
         upper = datetime(2026, 8, 27, 4, 45, tzinfo=UTC)
         backfill_before = datetime(2026, 8, 20, tzinfo=UTC)
 
-        self.assertFalse(_in_import_window(lower, backfill_before, lower, upper))
+        windows = [(lower, upper)]
+        self.assertFalse(_in_import_windows(lower, backfill_before, windows))
         self.assertTrue(
-            _in_import_window(datetime(2026, 8, 26, 17, 1, tzinfo=UTC), backfill_before, lower, upper)
+            _in_import_windows(datetime(2026, 8, 26, 17, 1, tzinfo=UTC), backfill_before, windows)
         )
-        self.assertTrue(_in_import_window(upper, backfill_before, lower, upper))
+        self.assertTrue(_in_import_windows(upper, backfill_before, windows))
         self.assertFalse(
-            _in_import_window(datetime(2026, 8, 27, 4, 46, tzinfo=UTC), backfill_before, lower, upper)
+            _in_import_windows(datetime(2026, 8, 27, 4, 46, tzinfo=UTC), backfill_before, windows)
+        )
+
+    def test_missing_poll_intervals_only_select_true_coverage_gaps(self) -> None:
+        start = datetime(2026, 8, 26, 14, 0, tzinfo=UTC)
+        polls = [
+            start,
+            start + timedelta(minutes=15),
+            start + timedelta(minutes=45),
+            start + timedelta(minutes=91),
+        ]
+
+        self.assertEqual(
+            _missing_poll_intervals(polls, 15),
+            [(start + timedelta(minutes=45), start + timedelta(minutes=91))],
+        )
+
+    def test_recovery_coverage_simulates_poll_cadence_inside_gap(self) -> None:
+        lower = datetime(2026, 8, 26, 17, 0, tzinfo=UTC)
+        upper = datetime(2026, 8, 26, 17, 47, tzinfo=UTC)
+
+        self.assertEqual(
+            _synthetic_coverage_points(lower, upper, 15),
+            [
+                datetime(2026, 8, 26, 17, 15, tzinfo=UTC),
+                datetime(2026, 8, 26, 17, 30, tzinfo=UTC),
+                datetime(2026, 8, 26, 17, 45, tzinfo=UTC),
+            ],
         )
 
 

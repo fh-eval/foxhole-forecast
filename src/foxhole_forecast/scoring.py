@@ -25,8 +25,18 @@ def settle_and_score(settings: Settings, now: datetime | None = None) -> dict[st
     current = (now or datetime.now(UTC)).astimezone(UTC)
     runs = read_jsonl(DATA_DIR / "model_runs.jsonl")
     cohorts = {row["cohort_id"]: row for row in read_jsonl(DATA_DIR / "cohorts.jsonl")}
-    events = read_jsonl(DATA_DIR / "events.jsonl")
-    collector_runs = read_jsonl(DATA_DIR / "collector_runs.jsonl")
+    events = [
+        *read_jsonl(DATA_DIR / "events.jsonl"),
+        *[
+            transition
+            for row in read_jsonl(DATA_DIR / "historical_events.jsonl")
+            if (transition := _recovered_transition(row)) is not None
+        ],
+    ]
+    collector_runs = [
+        *read_jsonl(DATA_DIR / "collector_runs.jsonl"),
+        *read_jsonl(DATA_DIR / "recovered_coverage.jsonl"),
+    ]
     settlements = read_json(DATA_DIR / "settlements.json", default={})
     wars = read_json(DATA_DIR / "wars.json", default={}).get("wars", {})
 
@@ -449,6 +459,17 @@ def _settle_timed_run(
                     else None
                 ),
                 "settlement_reason": settlement_reason,
+                "settlement_sources": _settlement_sources(
+                    collector_runs,
+                    run["war_id"],
+                    cutoff,
+                    (
+                        parse_time(matched["observed_to"])
+                        if matched is not None and outcome is not None
+                        else bet_deadline
+                    ),
+                    matched,
+                ),
                 "matched_transition": matched,
             }
         )
@@ -503,6 +524,42 @@ def _physical_transitions(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
         )
         unique.setdefault(key, event)
     return sorted(unique.values(), key=lambda row: row["observed_to"])
+
+
+def _recovered_transition(event: dict[str, Any]) -> dict[str, Any] | None:
+    if (
+        event.get("source") != "foxholestats_gap_recovery"
+        or not event.get("strategic")
+        or not event.get("base_id")
+    ):
+        return None
+    event_type = event.get("event_type")
+    actor = event.get("actor")
+    if event_type == "OWNER_LOSES" and actor in {"WARDENS", "COLONIALS"}:
+        from_team, to_team = actor, "NONE"
+    elif event_type in {"CAPTURED_BY_WARDENS", "CAPTURED_BY_COLONIALS"}:
+        from_team, to_team = "NONE", actor
+    else:
+        return None
+    return {**event, "from_team": from_team, "to_team": to_team}
+
+
+def _settlement_sources(
+    collector_runs: list[dict[str, Any]],
+    war_id: str,
+    cutoff: datetime,
+    deadline: datetime,
+    matched: dict[str, Any] | None,
+) -> list[str]:
+    sources = {
+        row.get("source", "official_war_api")
+        for row in collector_runs
+        if row.get("war_id") == war_id
+        and cutoff <= parse_time(row["observed_at"]) <= deadline
+    }
+    if matched is not None:
+        sources.add(matched.get("source", "official_war_api"))
+    return sorted(source for source in sources if source)
 
 
 def _transition_is_covered(

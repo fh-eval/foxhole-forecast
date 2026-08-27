@@ -50,6 +50,11 @@ def main(argv: list[str] | None = None) -> int:
         "--to-time",
         help="Recover only events through this UTC time (requires --from-time)",
     )
+    importer.add_argument(
+        "--recover-gaps",
+        action="store_true",
+        help="Recover every official polling gap longer than 30 minutes in the saved page",
+    )
     run = subcommands.add_parser("run", help="Collect, forecast if due, score, and build dashboard")
     run.add_argument("--force-forecast", action="store_true")
     run.add_argument("--series", help="Run only one configured model series")
@@ -77,12 +82,15 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "import-foxholestats":
             if bool(args.from_time) != bool(args.to_time):
                 parser.error("--from-time and --to-time must be provided together")
+            if args.recover_gaps and args.from_time:
+                parser.error("--recover-gaps cannot be combined with --from-time/--to-time")
             result = import_foxholestats_html(
                 args.html,
                 settings,
                 args.source_url,
                 import_from=parse_time(args.from_time) if args.from_time else None,
                 import_to=parse_time(args.to_time) if args.to_time else None,
+                recover_gaps=args.recover_gaps,
             )
         elif args.command == "run":
             result = {

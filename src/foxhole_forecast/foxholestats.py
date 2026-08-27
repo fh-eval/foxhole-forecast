@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import re
 import unicodedata
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
@@ -77,11 +77,14 @@ def import_foxholestats_html(
     fetched_at: datetime | None = None,
     import_from: datetime | None = None,
     import_to: datetime | None = None,
+    recover_gaps: bool = False,
 ) -> dict[str, Any]:
     if (import_from is None) != (import_to is None):
         raise ValueError("import_from and import_to must be provided together")
     if import_from and import_to and import_from >= import_to:
         raise ValueError("import_from must be earlier than import_to")
+    if recover_gaps and import_from is not None:
+        raise ValueError("recover_gaps cannot be combined with an explicit import window")
 
     raw = html_path.read_bytes()
     html = raw.decode("utf-8", errors="replace")
@@ -97,6 +100,13 @@ def import_foxholestats_html(
         if row.get("war_id") == war["warId"] and row.get("status") == "ok"
     ]
     backfill_before = min(official_polls) if official_polls else parse_time(latest["observed_at"])
+    recovery_windows = (
+        _missing_poll_intervals(official_polls, settings.poll_minutes)
+        if recover_gaps
+        else [(import_from, import_to)]
+        if import_from is not None and import_to is not None
+        else []
+    )
     collected = (fetched_at or datetime.now(UTC)).astimezone(UTC)
     latest_bases = {
         map_name: list(map_state.get("bases", {}).values())
@@ -113,8 +123,8 @@ def import_foxholestats_html(
         fields = match.groupdict()
         timestamp = int(fields["timestamp"])
         observed_time = datetime.fromtimestamp(timestamp, tz=UTC)
-        if timestamp < start_epoch or not _in_import_window(
-            observed_time, backfill_before, import_from, import_to
+        if timestamp < start_epoch or not _in_import_windows(
+            observed_time, backfill_before, recovery_windows
         ):
             continue
         faction = fields["faction"].upper()
@@ -128,7 +138,7 @@ def import_foxholestats_html(
                 "schema_version": 1,
                 "source": (
                     "foxholestats_gap_recovery"
-                    if import_from is not None
+                    if recovery_windows
                     else "foxholestats_backfill"
                 ),
                 "source_event_id": source["source_event_id"],
@@ -154,7 +164,7 @@ def import_foxholestats_html(
 
     path = DATA_DIR / "historical_events.jsonl"
     import_source = (
-        "foxholestats_gap_recovery" if import_from is not None else "foxholestats_backfill"
+        "foxholestats_gap_recovery" if recovery_windows else "foxholestats_backfill"
     )
     existing = [
         row
@@ -167,6 +177,40 @@ def import_foxholestats_html(
     }
     rows = sorted(merged.values(), key=lambda row: (row["observed_to"], row.get("source_event_id", "")))
     write_jsonl(path, rows)
+    coverage_points: list[dict[str, Any]] = []
+    if recovery_windows:
+        coverage_points = [
+            {
+                "schema_version": 1,
+                "status": "ok",
+                "observed_at": isoformat(point),
+                "war_id": war["warId"],
+                "war_number": war.get("warNumber"),
+                "source": "foxholestats_gap_recovery",
+                "synthetic": True,
+                "source_url": source_url,
+            }
+            for import_start, import_end in recovery_windows
+            for point in _synthetic_coverage_points(
+                import_start, import_end, settings.poll_minutes
+            )
+        ]
+        coverage_path = DATA_DIR / "recovered_coverage.jsonl"
+        existing_coverage = [
+            row
+            for row in read_jsonl(coverage_path)
+            if not (
+                row.get("source") == "foxholestats_gap_recovery"
+                and row.get("war_id") == war["warId"]
+            )
+        ]
+        write_jsonl(
+            coverage_path,
+            sorted(
+                [*existing_coverage, *coverage_points],
+                key=lambda row: row["observed_at"],
+            ),
+        )
     strategic = [row for row in normalized if row["strategic"]]
     canonical = [row for row in strategic if row["event_type"].startswith(("OWNER_", "CAPTURED_"))]
     matched = [row for row in canonical if row["base_id"]]
@@ -179,13 +223,18 @@ def import_foxholestats_html(
         "war_id": war["warId"],
         "war_number": war.get("warNumber"),
         "backfill_before": isoformat(backfill_before),
-        "import_from": isoformat(import_from) if import_from else None,
-        "import_to": isoformat(import_to) if import_to else None,
+        "import_from": isoformat(recovery_windows[0][0]) if recovery_windows else None,
+        "import_to": isoformat(recovery_windows[-1][1]) if recovery_windows else None,
+        "recovery_windows": [
+            {"from": isoformat(start), "to": isoformat(end)}
+            for start, end in recovery_windows
+        ],
         "parsed_events": len(parsed),
         "current_war_events": len(normalized),
         "strategic_events": len(strategic),
         "canonical_ownership_events": len(canonical),
         "matched_canonical_events": len(matched),
+        "synthetic_coverage_points": len(coverage_points),
         "parse_failures": parse_failures,
         "history_path": str(path.relative_to(DATA_DIR.parent)),
     }
@@ -193,15 +242,38 @@ def import_foxholestats_html(
     return summary
 
 
-def _in_import_window(
+def _in_import_windows(
     observed_time: datetime,
     backfill_before: datetime,
-    import_from: datetime | None,
-    import_to: datetime | None,
+    recovery_windows: list[tuple[datetime, datetime]],
 ) -> bool:
-    if import_from is not None and import_to is not None:
-        return import_from < observed_time <= import_to
+    if recovery_windows:
+        return any(start < observed_time <= end for start, end in recovery_windows)
     return observed_time < backfill_before
+
+
+def _missing_poll_intervals(
+    poll_times: list[datetime], poll_minutes: int
+) -> list[tuple[datetime, datetime]]:
+    threshold = timedelta(minutes=poll_minutes * 2)
+    ordered = sorted(set(poll_times))
+    return [
+        (start, end)
+        for start, end in zip(ordered, ordered[1:])
+        if end - start > threshold
+    ]
+
+
+def _synthetic_coverage_points(
+    import_from: datetime, import_to: datetime, poll_minutes: int
+) -> list[datetime]:
+    step = timedelta(minutes=poll_minutes)
+    point = import_from + step
+    points: list[datetime] = []
+    while point < import_to:
+        points.append(point)
+        point += step
+    return points
 
 
 def _event_type(action: str, faction: str) -> str:
