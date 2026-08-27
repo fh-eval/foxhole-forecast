@@ -332,12 +332,12 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         return chip;
       };
 
-      function briefingSummary(text, copyClass = "briefing__copy") {
+      function briefingSummary(text, copyClass = "briefing__copy", truncate = true) {
         const content = String(text || "No briefing was retained for this round.");
         const wrapper = element("div", "briefing-summary");
         const copy = element("p", `${copyClass} briefing-summary__copy`, content);
         wrapper.append(copy);
-        if (content.length <= 420) return wrapper;
+        if (!truncate || content.length <= 420) return wrapper;
         copy.classList.add("briefing-summary__copy--collapsed");
         const toggle = element("button", "briefing-summary__toggle", "… Read full briefing");
         toggle.type = "button";
@@ -363,6 +363,19 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       function briefingByline(entry, fallbackLabel = "Foxhole Forecast desk") {
         const author = entry?.model_label || fallbackLabel;
         return element("p", "briefing__byline", `By ${author} · Filed ${formatDate(entry?.cutoff)}`);
+      }
+
+      function fieldReportSummary(entry, fallbackLabel = "Foxhole Forecast desk", desk = "The War Desk") {
+        const summary = element("summary", "field-report__summary");
+        const header = element("div", "briefing__header");
+        header.append(
+          element("span", "briefing__paper", desk),
+          element("time", "", formatDate(entry?.cutoff)),
+        );
+        const headline = element("div", "field-report__headline-block");
+        headline.append(briefingHeadline(entry), briefingByline(entry, fallbackLabel));
+        summary.append(header, headline, element("span", "field-report__toggle"));
+        return summary;
       }
       function strategicAdviceLabel(key) {
         const label = eventLabel(key);
@@ -924,11 +937,11 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           return;
         }
         available.forEach((model) => {
-          const article = element("article", "briefing");
-          const header = element("div", "briefing__header");
-          header.append(element("span", "briefing__paper", "The War Desk"), element("time", "", formatDate(model.latest.cutoff)));
+          const article = element("details", "briefing briefing--collapsible");
           const regions = element("p", "region-list", model.latest.selected_regions?.map(regionLabel).join(" · ") || "No selected regions");
-          article.append(header, briefingHeadline(model.latest), briefingByline(model.latest, modelLabel(model)), briefingSummary(model.latest.war_summary), regions);
+          const body = element("div", "field-report__body");
+          body.append(briefingSummary(model.latest.war_summary, "briefing__copy", false), regions);
+          article.append(fieldReportSummary(model.latest, modelLabel(model)), body);
           list.append(article);
         });
       }
@@ -1016,7 +1029,6 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const summary = element("summary", "strategic-advice__summary");
         summary.append(
           element("span", "strategic-advice__label", "Strategic adviser recommendations"),
-          strategicAdvicePreview(items),
           element("span", "strategic-advice__count", `${items.length} note${items.length === 1 ? "" : "s"} · descriptive, not scored`),
           element("span", "strategic-advice__toggle"),
         );
@@ -1297,20 +1309,13 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             participantBody.append(predictionHeading, bets);
 
             const briefing = element("details", "dispatch-secondary");
-            const briefingSummaryRow = element("summary", "dispatch-secondary__summary");
-            briefingSummaryRow.append(
-              element("strong", "", "Read the model’s field report"),
-              element("span", "dispatch-secondary__headline", summaryHeadline(round)),
-              element("span", "dispatch-secondary__toggle"),
-            );
-            const briefingBody = element("div", "dispatch-secondary__body briefing");
+            briefing.classList.add("dispatch-secondary--field-report");
+            const briefingBody = element("div", "dispatch-secondary__body field-report__body");
             briefingBody.append(
-              briefingHeadline(round),
-              briefingByline(round),
-              briefingSummary(round.war_summary),
+              briefingSummary(round.war_summary, "briefing__copy", false),
               element("p", "region-list", (round.selected_regions || []).map(regionLabel).join(" · ")),
             );
-            briefing.append(briefingSummaryRow, briefingBody);
+            briefing.append(fieldReportSummary(round, modelLabel(round), "Field Report"), briefingBody);
             participantBody.append(briefing);
 
             const advice = renderStrategicAdvice(round.strategic_advice);

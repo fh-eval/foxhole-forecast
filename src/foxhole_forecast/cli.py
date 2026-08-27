@@ -43,6 +43,10 @@ def main(argv: list[str] | None = None) -> int:
     importer.add_argument("--html", type=Path, required=True, help="Saved FoxholeStats HTML file")
     importer.add_argument("--source-url", default=SOURCE_URL, help="URL the saved page came from")
     importer.add_argument(
+        "--fetched-at",
+        help="UTC time the saved page was fetched (defaults to the import time)",
+    )
+    importer.add_argument(
         "--from-time",
         help="Recover only events after this UTC time (requires --to-time)",
     )
@@ -88,6 +92,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.html,
                 settings,
                 args.source_url,
+                fetched_at=parse_time(args.fetched_at) if args.fetched_at else None,
                 import_from=parse_time(args.from_time) if args.from_time else None,
                 import_to=parse_time(args.to_time) if args.to_time else None,
                 recover_gaps=args.recover_gaps,

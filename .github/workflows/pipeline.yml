@@ -39,8 +39,13 @@ jobs:
         with:
           name: foxhole-collection-data
           path: |
-            data
-            web/public/data/dashboard.json
+            data/collector_runs.jsonl
+            data/events.jsonl
+            data/observations.jsonl
+            data/observations
+            data/raw/latest.json
+            data/state.json
+            data/wars.json
           if-no-files-found: error
           retention-days: 1
 
@@ -60,8 +65,10 @@ jobs:
         with:
           name: foxhole-collection-data
           path: .
-      - name: Rebuild dashboard with the checked-out source
-        run: PYTHONPATH=src python3 -m foxhole_forecast build-dashboard >/dev/null
+      - name: Rebuild scores and dashboard with the checked-out source
+        run: |
+          PYTHONPATH=src python3 -m foxhole_forecast score >/dev/null
+          PYTHONPATH=src python3 -m foxhole_forecast build-dashboard >/dev/null
       - name: Commit new observations and results
         run: |
           git config user.name "foxhole-forecast[bot]"

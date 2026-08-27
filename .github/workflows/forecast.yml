@@ -93,8 +93,10 @@ jobs:
         with:
           name: foxhole-forecast-data
           path: |
-            data
-            web/public/data/dashboard.json
+            data/cohorts.jsonl
+            data/model_runs.jsonl
+            data/raw/cohorts
+            data/state.json
             .workflow/forecast-result.json
           if-no-files-found: error
           retention-days: 7
@@ -115,8 +117,10 @@ jobs:
         with:
           name: foxhole-forecast-data
           path: .
-      - name: Rebuild dashboard with the checked-out source
-        run: PYTHONPATH=src python3 -m foxhole_forecast build-dashboard >/dev/null
+      - name: Rebuild scores and dashboard with the checked-out source
+        run: |
+          PYTHONPATH=src python3 -m foxhole_forecast score >/dev/null
+          PYTHONPATH=src python3 -m foxhole_forecast build-dashboard >/dev/null
       - name: Commit new forecasts and scores
         run: |
           git config user.name "foxhole-forecast[bot]"
