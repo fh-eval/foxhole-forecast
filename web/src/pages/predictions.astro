@@ -47,6 +47,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <p class="plain-note"><strong>Why group by round?</strong> Every model in a round worked from the same frozen moment. Comparing them inside that window is fair; comparing random individual calls across days is not. <span class="format-note">Older experiments remain in the archive, marked <em>Legacy format</em>; compare those with care because their prompts and scoring rules were different.</span></p>
         <p class="prediction-browser__summary" id="round-summary">Loading round history…</p>
         <div id="round-history" class="round-history-list"></div>
+        <p class="archive-more"><button id="round-more" type="button" hidden>Load more rounds ↓</button></p>
       </section>
     </main>
 
@@ -287,7 +288,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         warning.append(list); return warning;
       }
 
-      let dashboard = null; let warFilter = "all"; let modelFilter = "all";
+      let dashboard = null; let warFilter = "all"; let modelFilter = "all"; let roundLimit = 6;
       const usableRound = (round) => Array.isArray(round.predictions) && round.predictions.length > 0 && round.predictions.some((bet) => bet.base_name && bet.eta_utc);
 
       function roundGroups() {
@@ -308,9 +309,11 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const list = document.querySelector("#round-history"); const summary = document.querySelector("#round-summary"); list.replaceChildren();
         const groups = roundGroups();
         summary.textContent = `${number(groups.length)} shared round${groups.length === 1 ? "" : "s"} · ${number(groups.reduce((count, group) => count + group.participants.length, 0))} model-round entries · newest first`;
-        if (!groups.length) { list.append(element("p", "empty-state", "No prediction rounds match these filters.")); return; }
+        const more = document.querySelector("#round-more");
+        if (!groups.length) { more.hidden = true; list.append(element("p", "empty-state", "No prediction rounds match these filters.")); return; }
+        const visibleGroups = groups.slice(0, roundLimit);
         const warGroups = new Map();
-        groups.forEach((group) => { const key = String(group.warId || "unknown"); if (!warGroups.has(key)) warGroups.set(key, { warNumber: group.warNumber, rounds: [] }); warGroups.get(key).rounds.push(group); });
+        visibleGroups.forEach((group) => { const key = String(group.warId || "unknown"); if (!warGroups.has(key)) warGroups.set(key, { warNumber: group.warNumber, rounds: [] }); warGroups.get(key).rounds.push(group); });
         [...warGroups.values()].forEach((war, warIndex) => {
           const warSection = element("section", "round-war-archive");
           const warHeading = element("div", "war-archive__heading"); warHeading.append(element("p", "kicker", "Filed by war"), element("h3", "", `War ${war.warNumber || "—"}`), element("span", "", `${war.rounds.length} shared rounds`)); warSection.append(warHeading);
@@ -342,16 +345,20 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           });
           warSection.append(warList); list.append(warSection);
         });
+        const pending = Math.max(0, Math.min(6, groups.length - roundLimit));
+        more.hidden = pending === 0;
+        more.textContent = `Load ${pending} more round${pending === 1 ? "" : "s"} ↓`;
       }
 
       async function boot() {
         try {
-          const base = import.meta.env.BASE_URL.replace(/\/?$/, "/"); const response = await fetch(`${base}data/dashboard.json`, { cache: "no-store" }); if (!response.ok) throw new Error(`HTTP ${response.status}`); dashboard = await response.json();
+          const base = import.meta.env.BASE_URL.replace(/\/?$/, "/"); const response = await fetch(`${base}data/round-history.json`); if (!response.ok) throw new Error(`HTTP ${response.status}`); dashboard = await response.json();
           const rounds = (dashboard.rounds || []).filter(usableRound); const warSelect = document.querySelector("#round-war"); const modelSelect = document.querySelector("#round-model"); const wars = new Map(); const models = new Map();
           rounds.forEach((round) => { wars.set(String(round.war_id), `War ${round.war_number || "—"}`); models.set(round.series_id, modelLabel(round)); });
           [...wars.entries()].sort((a, b) => b[1].localeCompare(a[1], undefined, { numeric: true })).forEach(([value, label]) => { const option = element("option", "", label); option.value = value; warSelect.append(option); });
           [...models.entries()].sort((a, b) => a[1].localeCompare(b[1])).forEach(([value, label]) => { const option = element("option", "", label); option.value = value; modelSelect.append(option); });
-          warSelect.addEventListener("change", () => { warFilter = warSelect.value; renderHistory(); }); modelSelect.addEventListener("change", () => { modelFilter = modelSelect.value; renderHistory(); });
+          warSelect.addEventListener("change", () => { warFilter = warSelect.value; roundLimit = 6; renderHistory(); }); modelSelect.addEventListener("change", () => { modelFilter = modelSelect.value; roundLimit = 6; renderHistory(); });
+          document.querySelector("#round-more").addEventListener("click", () => { roundLimit += 6; renderHistory(); });
           document.querySelector("#generated-at").textContent = `Generated ${formatDate(dashboard.generated_at)}`; renderHistory();
         } catch (error) { document.querySelector("#round-summary").textContent = `Round history unavailable: ${error.message}`; }
       }

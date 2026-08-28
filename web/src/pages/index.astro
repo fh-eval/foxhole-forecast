@@ -780,9 +780,9 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           : protocolRounds.filter((round) => String(round.war_id || "") === scoreScope);
         const summaries = scoreScope === "all"
           ? dashboard?.model_behavior?.all_time || []
-          : scoreScope === currentWarId
-            ? dashboard?.model_behavior?.current_war || []
-            : [];
+          : dashboard?.model_behavior?.by_war?.[scoreScope]
+            || (scoreScope === currentWarId ? dashboard?.model_behavior?.current_war : [])
+            || [];
         const scopedSeries = new Set(
           summaries.length
             ? summaries.map((summary) => summary.series_id)
@@ -797,9 +797,9 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         if (!select) return;
         const currentWarId = String(dashboard?.war?.warId || "");
         const wars = new Map();
-        protocolRounds.forEach((round) => {
-          if (!round.war_id) return;
-          wars.set(String(round.war_id), Number(round.war_number) || null);
+        (dashboard?.available_wars || []).forEach((war) => {
+          if (!war.war_id) return;
+          wars.set(String(war.war_id), Number(war.war_number) || null);
         });
         if (currentWarId) wars.set(currentWarId, Number(dashboard?.war?.warNumber) || wars.get(currentWarId) || null);
 
@@ -1446,7 +1446,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       async function boot() {
         try {
           const base = import.meta.env.BASE_URL.replace(/\/?$/, "/");
-          const response = await fetch(`${base}data/dashboard.json`, { cache: "no-store" });
+          const response = await fetch(`${base}data/dashboard-main.json`);
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           dashboard = await response.json();
           const currentRounds = (dashboard.rounds || []).filter(isCompleteCurrentRound);

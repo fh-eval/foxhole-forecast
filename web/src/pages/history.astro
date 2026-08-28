@@ -47,6 +47,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <p class="plain-note"><strong>Why keep these?</strong> A briefing shows what a model believed and how unsure it was at a frozen moment. Good context — but the scored evidence lives in the dated calls, not in the prose.</p>
         <p class="prediction-browser__summary" id="archive-summary">Loading summary archive…</p>
         <div id="summary-archive"></div>
+        <p class="archive-more"><button id="archive-more" type="button" hidden>Load more clippings ↓</button></p>
       </section>
     </main>
 
@@ -67,7 +68,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         ReaversPassHex: "Reaver's Pass",
       };
       const regionLabel = (value) => regionNames[value] || String(value || "Unknown region").replace(/Hex$/, "").replace(/([a-z])([A-Z])/g, "$1 $2");
-      let dashboard = null; let warFilter = "all"; let modelFilter = "all";
+      let dashboard = null; let warFilter = "all"; let modelFilter = "all"; let archiveLimit = 24;
 
       function briefingSummary(text) {
         const content = String(text || "No summary was retained for this cutoff.");
@@ -112,12 +113,17 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const groups = [...wars.values()].sort((a, b) => Number(b.warNumber || 0) - Number(a.warNumber || 0));
         groups.forEach((group) => group.entries.sort((a, b) => new Date(b.cutoff || 0) - new Date(a.cutoff || 0)));
         summary.textContent = `${number(filtered.length)} summary clipping${filtered.length === 1 ? "" : "s"} · ${number(groups.length)} war${groups.length === 1 ? "" : "s"}`;
-        if (!filtered.length) { root.append(element("p", "empty-state", "No model summaries match these filters.")); return; }
+        const more = document.querySelector("#archive-more");
+        if (!filtered.length) { more.hidden = true; root.append(element("p", "empty-state", "No model summaries match these filters.")); return; }
+        let remaining = archiveLimit;
         groups.forEach((group) => {
+          const visibleEntries = group.entries.slice(0, remaining);
+          remaining -= visibleEntries.length;
+          if (!visibleEntries.length) return;
           const section = element("section", "war-archive");
           const heading = element("div", "war-archive__heading"); heading.append(element("p", "kicker", "Filed by war"), element("h3", "", `War ${group.warNumber || "—"}`), element("span", "", `${group.entries.length} clipping${group.entries.length === 1 ? "" : "s"}`)); section.append(heading);
           const grid = element("div", "clipping-grid");
-          group.entries.forEach((entry) => {
+          visibleEntries.forEach((entry) => {
             const clipping = element("article", "clipping");
             const mast = element("div", "clipping__masthead"); mast.append(element("strong", "", "The War Desk"), element("span", "", formatDate(entry.cutoff))); clipping.append(mast);
             clipping.append(element("h4", "clipping__headline", summaryHeadline(entry)));
@@ -134,16 +140,20 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           });
           section.append(grid); root.append(section);
         });
+        const pending = Math.max(0, Math.min(24, filtered.length - archiveLimit));
+        more.hidden = pending === 0;
+        more.textContent = `Load ${pending} more clipping${pending === 1 ? "" : "s"} ↓`;
       }
 
       async function boot() {
         try {
-          const base = import.meta.env.BASE_URL.replace(/\/?$/, "/"); const response = await fetch(`${base}data/dashboard.json`, { cache: "no-store" }); if (!response.ok) throw new Error(`HTTP ${response.status}`); dashboard = await response.json();
+          const base = import.meta.env.BASE_URL.replace(/\/?$/, "/"); const response = await fetch(`${base}data/summary-history.json`); if (!response.ok) throw new Error(`HTTP ${response.status}`); dashboard = await response.json();
           const warSelect = document.querySelector("#archive-war"); const modelSelect = document.querySelector("#archive-model"); const wars = new Map(); const models = new Map();
           entries().forEach((entry) => { wars.set(String(entry.war_id), `War ${entry.war_number || "—"}`); models.set(entry.series_id, entry.model_label); });
           [...wars.entries()].sort((a, b) => Number(b[1].replace(/\D/g, "")) - Number(a[1].replace(/\D/g, ""))).forEach(([value, label]) => { const option = element("option", "", label); option.value = value; warSelect.append(option); });
           [...models.entries()].sort((a, b) => a[1].localeCompare(b[1])).forEach(([value, label]) => { const option = element("option", "", label); option.value = value; modelSelect.append(option); });
-          warSelect.addEventListener("change", () => { warFilter = warSelect.value; renderArchive(); }); modelSelect.addEventListener("change", () => { modelFilter = modelSelect.value; renderArchive(); });
+          warSelect.addEventListener("change", () => { warFilter = warSelect.value; archiveLimit = 24; renderArchive(); }); modelSelect.addEventListener("change", () => { modelFilter = modelSelect.value; archiveLimit = 24; renderArchive(); });
+          document.querySelector("#archive-more").addEventListener("click", () => { archiveLimit += 24; renderArchive(); });
           document.querySelector("#generated-at").textContent = `Generated ${formatDate(dashboard.generated_at)}`; renderArchive();
         } catch (error) { document.querySelector("#archive-summary").textContent = `Summary archive unavailable: ${error.message}`; }
       }

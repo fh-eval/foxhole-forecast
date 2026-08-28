@@ -124,6 +124,29 @@ def _median(values: list[float]) -> float | None:
     return round(statistics.median(values), 2) if values else None
 
 
+def _latest_round_groups(
+    rounds: list[dict[str, Any]],
+    protocol: str,
+    limit: int = 3,
+) -> list[dict[str, Any]]:
+    """Keep complete participant rows for only the newest shared round slots."""
+    selected: list[dict[str, Any]] = []
+    groups: set[tuple[Any, Any]] = set()
+    for round_record in rounds:
+        if round_record.get("protocol") != protocol:
+            continue
+        key = (
+            round_record.get("war_id"),
+            round_record.get("round_slot") or round_record.get("cutoff"),
+        )
+        if key not in groups:
+            if len(groups) >= limit:
+                continue
+            groups.add(key)
+        selected.append(round_record)
+    return selected
+
+
 def _run_reasoning(run: dict[str, Any]) -> dict[str, Any] | None:
     metadata = dict(run["reasoning"]) if isinstance(run.get("reasoning"), dict) else None
     trace_returned = False
@@ -496,6 +519,25 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
         key=lambda row: (row["round_slot"], row["cutoff"]),
         reverse=True,
     )
+    available_wars = sorted(
+        (
+            {
+                "war_id": war_id,
+                "war_number": max(
+                    (
+                        round_record.get("war_number")
+                        for round_record in rounds
+                        if round_record.get("war_id") == war_id
+                        and round_record.get("war_number") is not None
+                    ),
+                    default=None,
+                ),
+            }
+            for war_id in {round_record.get("war_id") for round_record in rounds if round_record.get("war_id")}
+        ),
+        key=lambda row: row.get("war_number") or -1,
+        reverse=True,
+    )
     behavior = {
         "current_war": _behavior_summary(
             rounds, current_war_id, current_settings.event_bet_limit
@@ -503,6 +545,12 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
         "all_time": _behavior_summary(
             rounds, None, current_settings.event_bet_limit
         ),
+        "by_war": {
+            row["war_id"]: _behavior_summary(
+                rounds, row["war_id"], current_settings.event_bet_limit
+            )
+            for row in available_wars
+        },
     }
     output = {
         "schema_version": 12,
@@ -525,6 +573,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
         }),
         "models": models,
         "model_behavior": behavior,
+        "available_wars": available_wars,
         "rounds": rounds[:500],
         "base_forecasts": base_forecasts[:500],
         "methodology": {

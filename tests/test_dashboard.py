@@ -6,6 +6,7 @@ from foxhole_forecast.dashboard import (
     _build_war_api_snapshot,
     _behavior_summary,
     _forecast_status,
+    _latest_round_groups,
     _metric_label,
     _predicted_outcome,
     _present_evidence,
@@ -16,6 +17,29 @@ from foxhole_forecast.forecasting import _freeze_evidence
 
 
 class DashboardTests(unittest.TestCase):
+    def test_latest_round_groups_keeps_every_participant_in_three_newest_slots(self) -> None:
+        rounds = [
+            {
+                "war_id": "war-2",
+                "round_slot": slot,
+                "protocol": protocol,
+                "series_id": model,
+            }
+            for slot, protocol, model in (
+                ("2026-01-01T09:00:00Z", "event_outcome_v5_crps", "a"),
+                ("2026-01-01T09:00:00Z", "event_outcome_v5_crps", "b"),
+                ("2026-01-01T06:00:00Z", "event_outcome_v5_crps", "a"),
+                ("2026-01-01T03:00:00Z", "event_outcome_v5_crps", "a"),
+                ("2026-01-01T00:00:00Z", "event_outcome_v5_crps", "a"),
+                ("2026-01-01T12:00:00Z", "legacy", "old"),
+            )
+        ]
+
+        selected = _latest_round_groups(rounds, "event_outcome_v5_crps")
+
+        self.assertEqual([row["series_id"] for row in selected], ["a", "b", "a", "a"])
+        self.assertNotIn("2026-01-01T00:00:00Z", {row["round_slot"] for row in selected})
+
     def test_behavior_summary_can_separate_current_war_from_all_time(self) -> None:
         def round_for(war_id: str, credit: float) -> dict:
             return {
