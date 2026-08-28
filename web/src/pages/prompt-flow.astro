@@ -54,23 +54,70 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       </section>
 
       <section class="prompt-example-section" aria-labelledby="examples-title">
-        <div class="scoring-section__heading"><p class="kicker">Illustrative, trimmed examples</p><h2 id="examples-title">What the model actually returns</h2></div>
-        <p class="method-caption">Here is the exchange in human terms, with fictional values. The model is not being asked to produce a mysterious score: it is asked to explain what it sees, choose where to look, then make a small set of timed calls.</p>
+        <div class="scoring-section__heading"><p class="kicker">A real run, lightly edited</p><h2 id="examples-title">What the model actually returned</h2></div>
+        <p class="method-caption">This is one continuous example from GPT-5.6 Luna in War 140, Round 13, using data frozen at 00:10 UTC on August 28. Quoted prose is the model’s own. An ellipsis (…) marks an omission; square brackets mark a small editorial clarification. Structured forecast fields are typeset as a sentence, but their values are unchanged.</p>
+        <div class="prompt-example__source" aria-label="Example provenance">
+          <strong>Example file</strong>
+          <span>GPT-5.6 Luna · War 140 · Round 13</span>
+          <span>Cutoff: 2026-08-28 00:10 UTC</span>
+        </div>
         <div class="prompt-example-grid">
           <article class="prompt-example">
             <div class="prompt-example__top"><span>01 · Scout</span><strong>Make sense of the map</strong></div>
-            <p>The model starts with the same frozen war report as every other model. It writes a brief in newspaper style and names the regions that deserve a closer look.</p>
-            <div class="prompt-example__output"><small>Example dispatch</small><blockquote>“FIELD DESK · Day 113 — Oarbreaker remains the busiest front, with pressure building around its eastern approaches.”</blockquote><small>Regions selected for a closer look</small><div class="prompt-chips"><span>Oarbreaker</span><span>Clahstra</span><span>Mooring County</span></div></div>
+            <div class="prompt-example__body">
+              <div class="prompt-example__explanation">
+                <p>The first box is broad: a frozen summary of all 53 regions, 55 hours of available history, and Luna’s own previous dispatch. The model writes a fresh overview and chooses no more than six regions for the second pass.</p>
+                <small>What goes forward</small>
+                <p>Its six choices determine which regional histories appear in the detailed packet.</p>
+              </div>
+              <div class="prompt-example__output">
+                <small>Headline</small>
+                <h3>Lykos Line Shifts as Main Fronts Cool</h3>
+                <small>Dispatch · excerpt</small>
+                <blockquote>“Since the previous edition, Lykos Isle has moved to a four-base Warden, three-base Colonial balance, with two ownership events in the latest two hours and fighting still brisk on both casualty ledgers. … Deadlands continues as a divided and exceptionally costly sector—four Warden bases against seven Colonial—with seven ownership events and renewed enlistment activity.”</blockquote>
+                <small>Regions it selected</small>
+                <div class="prompt-chips"><span>Lykos Isle</span><span>Fisherman’s Row</span><span>Linn Mercy</span><span>Deadlands</span><span>Stonecradle</span><span>Stlican Shelf</span></div>
+              </div>
+            </div>
           </article>
           <article class="prompt-example">
             <div class="prompt-example__top"><span>02 · Forecast</span><strong>Commit to eight calls</strong></div>
-            <p>After the deeper regional report arrives, the model must name a base, say what will happen, choose an exact time, and show how sure it is.</p>
-            <div class="prompt-example__output"><small>Example call</small><p class="prompt-call"><strong>62% confidence</strong>: Oarbreaker Base will be captured by the Colonials at <strong>08:15 UTC</strong>.</p><small>Why it said that</small><div class="prompt-evidence"><span>Enlistment activity rising</span><span>Recent ownership pressure</span></div></div>
+            <div class="prompt-example__body">
+              <div class="prompt-example__explanation">
+                <p>Luna then receives the detailed packet it requested: 56 strategic bases, 84 recent events, and 156 metric rows across those six regions. It returns eight structured calls. This is its first-ranked prediction.</p>
+                <small>What the JSON means</small>
+                <p>Confidence is the chance it assigns to the named event. The ±75-minute spread is its estimate of timing uncertainty—not an extra deadline.</p>
+              </div>
+              <div class="prompt-example__output">
+                <small>Rank 1 of 8 · rendered from exact fields</small>
+                <p class="prompt-call"><strong>42% confidence:</strong> <span class="base-identity base-identity--wardens">Callahan’s Gate · Town Base III</span> will be captured by the <span class="faction-name faction-name--colonials">Colonials</span> at <strong>02:25 UTC</strong>, with a <strong>±75 minute</strong> timing spread.</p>
+                <small>Evidence it cited</small>
+                <ul class="prompt-evidence-list">
+                  <li><strong>8/10 relevance</strong><span>Warden casualties: +6,207 over six hours</span></li>
+                  <li><strong>7/10 relevance</strong><span>Regional enlistments: +381 over six hours</span></li>
+                  <li><strong>6/10 relevance</strong><span>Colonial-to-Warden casualty ratio: 0.8048</span></li>
+                </ul>
+                <p class="prompt-example__note">… [seven other timed predictions omitted here]</p>
+              </div>
+            </div>
           </article>
           <article class="prompt-example">
             <div class="prompt-example__top"><span>03 · Advice</span><strong>Explain the strategy</strong></div>
-            <p>The same response includes four friendly recommendations: one reinforce choice and one attack choice for each faction. These are informative, not bets.</p>
-            <div class="prompt-example__output"><small>Example recommendation</small><p class="prompt-call"><strong>Colonials should reinforce</strong> Oarbreaker because recent pressure and ownership changes make it a fragile point.</p><small>Kept for comparison</small><p class="prompt-example__note">We can compare this reasoning with what happened next, but we do not pretend the model’s advice caused players to act.</p></div>
+            <div class="prompt-example__body">
+              <div class="prompt-example__explanation">
+                <p>The same response also contains one attack and one reinforce recommendation for each faction. They reuse the detailed packet and cite metrics, but do not enter the forecast score.</p>
+                <small>Why keep it?</small>
+                <p>It lets us inspect whether the model can turn the same evidence into recognizable strategic advice, even though later player behavior cannot validate the advice cleanly.</p>
+              </div>
+              <div class="prompt-example__output">
+                <small>Warden reinforce recommendation · excerpt</small>
+                <p class="prompt-call"><strong>Reinforce <span class="base-identity base-identity--wardens">Callahan’s Gate</span>.</strong></p>
+                <blockquote>“[Callahan’s Gate] lies in the packet’s most intensely active region, with the largest recent enlistment and casualty volumes.”</blockquote>
+                <small>Evidence it cited</small>
+                <div class="prompt-evidence"><span>Enlistments +381 / 6h · 10/10</span><span>Colonial casualties +4,521 / 6h · 9/10</span><span>Warden casualties +6,207 / 6h · 9/10</span></div>
+                <p class="prompt-example__note">… [three other faction recommendations omitted here]</p>
+              </div>
+            </div>
           </article>
         </div>
       </section>
