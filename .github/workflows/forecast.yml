@@ -287,3 +287,12 @@ jobs:
               });
               core.notice(`Dispatched Luna triage for issue #${issue.number}.`);
             }
+
+            const failedModels = audit.incidents.reduce(
+              (count, incident) => count + incident.failures.length,
+              0,
+            );
+            core.setFailed(
+              `${failedModels} enabled model run(s) remain unresolved across ` +
+              `${audit.incidents.length} forecast cohort(s). See the model-failure issue(s).`,
+            );
