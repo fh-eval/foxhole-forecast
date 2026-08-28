@@ -344,8 +344,6 @@ def recover_invalid_runs(
         model = models.get(run.get("series_id"))
         if model is None:
             reason = "missing_model_config"
-        elif model.get("paid", False):
-            reason = "paid_model_retry_requires_review"
         elif run.get("retry_history"):
             reason = "automatic_retry_already_attempted"
         elif not _transient_provider_failure(run):
@@ -356,6 +354,7 @@ def recover_invalid_runs(
                 {
                     "run_id": run_id,
                     "action": "retried" if result["status"] == "valid" else "retry_failed",
+                    "paid_retry": bool(model.get("paid", False)),
                     "salvage_error": salvage_error,
                     **result,
                 }

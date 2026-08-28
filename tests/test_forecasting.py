@@ -88,7 +88,7 @@ class ForecastBudgetTests(unittest.TestCase):
             self.assertEqual(run_model.call_count, 1)
             self.assertEqual(read_jsonl(data / "model_runs.jsonl")[0]["status"], "valid")
 
-    def test_automatic_recovery_does_not_retry_paid_model(self) -> None:
+    def test_automatic_recovery_allows_one_paid_transient_retry(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             data = Path(directory)
             run_id = "cohort-1:model-1"
@@ -114,19 +114,42 @@ class ForecastBudgetTests(unittest.TestCase):
                     }
                 ],
             )
+            scout = {
+                "cutoff": "2026-01-02T00:00:00Z",
+                "war": {"warId": "war-1"},
+            }
+            write_json(
+                data
+                / "raw"
+                / "cohorts"
+                / "cohort-1"
+                / "model-1-scout-packet.json",
+                scout,
+            )
+            snapshot = data / "snapshot.json"
+            write_json(
+                snapshot,
+                {"observed_at": scout["cutoff"], "war": {"warId": "war-1"}},
+            )
+            replacement = {
+                "run_id": run_id,
+                "cohort_id": "cohort-1",
+                "series_id": "model-1",
+                "status": "valid",
+                "forecast": {"predictions": [{"base_id": "base-1"}]},
+            }
             with patch("foxhole_forecast.forecasting.DATA_DIR", data), patch(
                 "foxhole_forecast.forecasting.load_models",
                 return_value=[{"series_id": "model-1", "paid": True}],
-            ), patch("foxhole_forecast.forecasting.retry_invalid_run") as retry:
-                result = recover_invalid_runs(
-                    Settings.load(), "cohort-1", data / "snapshot.json"
-                )
+            ), patch(
+                "foxhole_forecast.forecasting._run_model", return_value=replacement
+            ) as run_model:
+                result = recover_invalid_runs(Settings.load(), "cohort-1", snapshot)
 
-            self.assertEqual(result["status"], "unresolved")
-            self.assertEqual(
-                result["actions"][0]["reason"], "paid_model_retry_requires_review"
-            )
-            retry.assert_not_called()
+            self.assertEqual(result["status"], "recovered")
+            self.assertEqual(result["actions"][0]["action"], "retried")
+            self.assertTrue(result["actions"][0]["paid_retry"])
+            self.assertEqual(run_model.call_count, 1)
 
     def test_retry_invalid_run_preserves_failure_and_uses_frozen_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

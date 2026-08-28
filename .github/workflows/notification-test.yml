@@ -1,0 +1,31 @@
+name: Test model-failure notification
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Create an Actions-authored notification test
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[notification test] Actions model-failure alert ${context.runId}`,
+              body: [
+                '@fh-eval — this test was created by GitHub Actions, matching the real model-failure alert path.',
+                '',
+                'If email delivery is configured, this assignment and direct mention should generate a notification.',
+                '',
+                `Source workflow: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              ].join('\n'),
+              assignees: ['fh-eval'],
+            });
+            core.notice(`Created notification test issue #${issue.data.number}: ${issue.data.html_url}`);
