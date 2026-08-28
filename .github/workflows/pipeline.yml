@@ -21,12 +21,12 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: main
           fetch-depth: 1
           persist-credentials: false
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.13"
       - name: Collect official data, settle bets, and publish
@@ -35,7 +35,7 @@ jobs:
           PYTHONPATH=src python -m foxhole_forecast score >/dev/null
           PYTHONPATH=src python -m foxhole_forecast build-dashboard >/dev/null
       - name: Pass generated data to the persistence job
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: foxhole-collection-data
           path: |
@@ -56,12 +56,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: main
           fetch-depth: 1
       - name: Download generated data
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: foxhole-collection-data
           # upload-artifact removes the shared `data/` parent from this
