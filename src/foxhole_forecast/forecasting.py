@@ -149,15 +149,54 @@ def salvage_invalid_run(settings: Settings, run_id: str) -> dict[str, Any]:
     ]
     if not forecast_attempts:
         raise ValueError(f"No stored forecast response is available for {run_id}")
-    raw = forecast_attempts[-1]["raw_response"]
-    content = raw["choices"][0]["message"]["content"]
-    if isinstance(content, list):
-        content = "".join(
-            str(part.get("text", "")) for part in content if isinstance(part, dict)
-        )
-    parsed = _parse_json_content(str(content))
-    filtered, dropped_predictions, dropped_advice = _filter_forecast_output(
-        parsed, detail_packet, settings
+    candidates: list[
+        tuple[
+            int,
+            dict[str, Any],
+            dict[str, Any],
+            list[dict[str, Any]],
+            list[dict[str, Any]],
+        ]
+    ] = []
+    errors: list[Exception] = []
+    for attempt_index, attempt in enumerate(forecast_attempts):
+        raw = attempt["raw_response"]
+        try:
+            content = raw["choices"][0]["message"]["content"]
+            if isinstance(content, list):
+                content = "".join(
+                    str(part.get("text", ""))
+                    for part in content
+                    if isinstance(part, dict)
+                )
+            parsed = _parse_json_content(str(content))
+            filtered, dropped_predictions, dropped_advice = _filter_forecast_output(
+                parsed, detail_packet, settings
+            )
+            candidates.append(
+                (
+                    attempt_index,
+                    raw,
+                    filtered,
+                    dropped_predictions,
+                    dropped_advice,
+                )
+            )
+        except (ValidationError, ValueError, KeyError, json.JSONDecodeError) as error:
+            errors.append(error)
+    if not candidates:
+        if errors:
+            raise errors[-1]
+        raise ValueError(f"No salvageable forecast response is available for {run_id}")
+
+    # Prefer the response that preserves the most model-authored bets. A later
+    # correction wins ties, but never displaces an earlier, more complete answer.
+    attempt_index, raw, filtered, dropped_predictions, dropped_advice = max(
+        candidates,
+        key=lambda candidate: (
+            len(candidate[2].get("predictions", [])),
+            candidate[0],
+        ),
     )
     original_error = run.get("error")
     repaired = {
@@ -169,6 +208,8 @@ def salvage_invalid_run(settings: Settings, run_id: str) -> dict[str, Any]:
         "dropped_predictions": dropped_predictions,
         "dropped_strategic_advice": dropped_advice,
         "salvaged_at": isoformat(),
+        "salvaged_from_forecast_attempt": attempt_index + 1,
+        "salvage_forecast_attempts_considered": len(forecast_attempts),
         "salvaged_from_error": original_error,
         "settlement": {"status": "open", "horizons": {}},
     }
@@ -605,21 +646,35 @@ def _previous_model_summary(
 
 
 def _drop_invalid_predictions(
-    value: dict[str, Any], detail_packet: dict[str, Any]
+    value: dict[str, Any],
+    detail_packet: dict[str, Any],
+    settings: Settings | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Remove only bets that cannot describe a state change for their target base."""
+    """Remove invalid bets individually while preserving the model's valid bets.
+
+    Without ``settings`` this performs the narrow same-faction check used by the
+    strict correction pass. With settings it validates each row against the full
+    forecast contract, allowing the fallback and stored-response salvage paths to
+    retain valid rows from an otherwise imperfect batch.
+    """
     bases = {
         base["base_id"]: base for base in detail_packet.get("strategic_bases", [])
     }
     filtered = copy.deepcopy(value)
     kept: list[dict[str, Any]] = []
     dropped: list[dict[str, Any]] = []
-    for prediction in filtered.get("predictions", []):
+    predictions = filtered.get("predictions", [])
+    if not isinstance(predictions, list):
+        return filtered, dropped
+    for prediction in predictions:
+        if not isinstance(prediction, dict):
+            dropped.append({"reason": "prediction must be an object"})
+            continue
         outcome = prediction.get("outcome")
-        current_owner = bases.get(prediction.get("base_id"), {}).get("current_owner")
+        base = bases.get(prediction.get("base_id"), {})
+        current_owner = base.get("current_owner", base.get("team"))
         target = outcome.removeprefix("CAPTURED_BY_") if isinstance(outcome, str) else None
         if outcome == "SELF_CAPTURE" or (target and target == current_owner):
-            base = bases.get(prediction.get("base_id"), {})
             dropped.append(
                 {
                     "rank": prediction.get("rank"),
@@ -632,6 +687,26 @@ def _drop_invalid_predictions(
                 }
             )
             continue
+        if settings is not None:
+            candidate = copy.deepcopy(filtered)
+            candidate["predictions"] = [*kept, prediction]
+            candidate.pop("strategic_advice", None)
+            try:
+                validate_forecast(candidate, detail_packet, settings)
+            except ValidationError as error:
+                dropped.append(
+                    {
+                        "rank": prediction.get("rank"),
+                        "base_id": prediction.get("base_id"),
+                        "outcome": outcome,
+                        "eta_utc": prediction.get("eta_utc"),
+                        "base_name": base.get("name"),
+                        "current_owner": current_owner,
+                        "valid_outcomes": base.get("valid_outcomes", []),
+                        "reason": str(error),
+                    }
+                )
+                continue
         kept.append(prediction)
     filtered["predictions"] = kept
     return filtered, dropped
@@ -687,7 +762,9 @@ def _drop_invalid_strategic_advice(
 def _filter_forecast_output(
     value: dict[str, Any], detail_packet: dict[str, Any], settings: Settings
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
-    filtered, dropped_predictions = _drop_invalid_predictions(value, detail_packet)
+    filtered, dropped_predictions = _drop_invalid_predictions(
+        value, detail_packet, settings
+    )
     predictions_only = copy.deepcopy(filtered)
     predictions_only.pop("strategic_advice", None)
     validate_forecast(predictions_only, detail_packet, settings)
@@ -753,6 +830,7 @@ def _call_validated(
     active_messages = list(messages)
     validation_attempts = max(1, int(provider.config.get("validation_attempts", 2)))
     for attempt in range(validation_attempts):
+        response: ProviderResponse | None = None
         try:
             response = provider.complete_json(active_messages, schema_name, schema)
             validated = validator(response.parsed)
@@ -763,7 +841,7 @@ def _call_validated(
                 provider.attempts[-1].setdefault(
                     "error", f"{type(error).__name__}: {error}"
                 )
-            if attempt == validation_attempts - 1 and fallback_validator is not None:
+            if fallback_validator is not None and response is not None:
                 try:
                     validated = fallback_validator(response.parsed)
                     return response, validated
@@ -773,12 +851,12 @@ def _call_validated(
                         provider.attempts[-1]["fallback_error"] = (
                             f"{type(fallback_error).__name__}: {fallback_error}"
                         )
-            elif attempt < validation_attempts - 1:
+            if attempt < validation_attempts - 1:
                 active_messages = [
                     *messages,
                     {
                         "role": "user",
-                        "content": CORRECTION_USER.format(error=error),
+                        "content": CORRECTION_USER.format(error=last_error),
                     },
                 ]
     assert last_error is not None

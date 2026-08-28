@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import copy
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,12 +17,14 @@ from foxhole_forecast.forecasting import (
     _call_validated,
     _dropped_prediction_error,
     _drop_invalid_strategic_advice,
+    _filter_forecast_output,
     _messages,
     _drop_invalid_predictions,
     _previous_model_summary,
     recover_invalid_runs,
     retry_invalid_run,
     run_forecast_cohort,
+    salvage_invalid_run,
 )
 from foxhole_forecast.schemas import forecast_schema
 from foxhole_forecast.storage import read_jsonl, write_json, write_jsonl
@@ -326,6 +330,51 @@ class ForecastBudgetTests(unittest.TestCase):
         self.assertEqual(filtered["predictions"], [])
         self.assertEqual(dropped[0]["reason"], "same-faction capture is not a valid state change")
 
+    def test_out_of_window_bet_is_dropped_without_losing_valid_bets(self) -> None:
+        metric_id = "region.TestHex.activity.events_2h"
+        packet = {
+            "cutoff": "2026-01-01T00:00:00Z",
+            "strategic_bases": [
+                {
+                    "base_id": "base-1",
+                    "name": "First Base",
+                    "current_owner": "WARDENS",
+                },
+                {
+                    "base_id": "base-2",
+                    "name": "Second Base",
+                    "current_owner": "COLONIALS",
+                },
+            ],
+            "selected_metrics": [{"metric_id": metric_id}],
+        }
+
+        def prediction(rank: int, base_id: str, eta: str) -> dict:
+            return {
+                "rank": rank,
+                "base_id": base_id,
+                "outcome": "DESTROYED",
+                "confidence": 0.6,
+                "sigma_minutes": 60,
+                "eta_utc": eta,
+                "evidence": [{"metric_id": metric_id, "relevance": 8}],
+            }
+
+        filtered, dropped, _ = _filter_forecast_output(
+            {
+                "predictions": [
+                    prediction(1, "base-1", "2026-01-01T02:00:00Z"),
+                    prediction(2, "base-2", "2026-01-02T06:00:00Z"),
+                ]
+            },
+            packet,
+            Settings.load(),
+        )
+
+        self.assertEqual([row["base_id"] for row in filtered["predictions"]], ["base-1"])
+        self.assertEqual(dropped[0]["base_id"], "base-2")
+        self.assertIn("within 24 hours", dropped[0]["reason"])
+
     def test_same_faction_error_tells_model_exact_allowed_outcomes(self) -> None:
         message = _dropped_prediction_error(
             [
@@ -378,7 +427,7 @@ class ForecastBudgetTests(unittest.TestCase):
         self.assertEqual(dropped[0]["base_name"], "Warden Base")
         self.assertIn("COLONIALS-owned", dropped[0]["reason"])
 
-    def test_validation_retries_before_falling_back_to_individual_drops(self) -> None:
+    def test_validation_uses_safe_individual_drops_before_regenerating(self) -> None:
         class FakeProvider:
             config = {"validation_attempts": 2}
             attempts: list[dict] = []
@@ -404,9 +453,101 @@ class ForecastBudgetTests(unittest.TestCase):
             fallback_validator=lambda _value: {"predictions": []},
         )
 
-        self.assertEqual(provider.calls, 2)
+        self.assertEqual(provider.calls, 1)
         self.assertEqual(response.parsed, {"predictions": ["bad"]})
         self.assertEqual(validated, {"predictions": []})
+
+    def test_salvage_selects_attempt_with_most_valid_predictions(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            cohort_id = "cohort-1"
+            series_id = "model-1"
+            run_id = f"{cohort_id}:{series_id}"
+            metric_id = "region.TestHex.activity.events_2h"
+            packet = {
+                "cutoff": "2026-01-01T00:00:00Z",
+                "strategic_bases": [
+                    {
+                        "base_id": "base-1",
+                        "name": "First Base",
+                        "current_owner": "WARDENS",
+                    },
+                    {
+                        "base_id": "base-2",
+                        "name": "Second Base",
+                        "current_owner": "COLONIALS",
+                    },
+                ],
+                "selected_metrics": [{"metric_id": metric_id}],
+            }
+
+            def prediction(rank: int, base_id: str, eta: str) -> dict:
+                return {
+                    "rank": rank,
+                    "base_id": base_id,
+                    "outcome": "DESTROYED",
+                    "confidence": 0.6,
+                    "sigma_minutes": 60,
+                    "eta_utc": eta,
+                    "evidence": [{"metric_id": metric_id, "relevance": 8}],
+                }
+
+            first = {
+                "predictions": [
+                    prediction(1, "base-1", "2026-01-01T02:00:00Z"),
+                    prediction(2, "base-2", "2026-01-01T03:00:00Z"),
+                ]
+            }
+            second = copy.deepcopy(first)
+            second["predictions"][1]["eta_utc"] = "2026-01-02T06:00:00Z"
+
+            def stored_attempt(value: dict) -> dict:
+                return {
+                    "stage": "forecast",
+                    "raw_response": {
+                        "model": "test-model",
+                        "provider": "test-provider",
+                        "choices": [
+                            {"message": {"content": json.dumps(value)}}
+                        ],
+                    },
+                }
+
+            write_jsonl(
+                data / "model_runs.jsonl",
+                [
+                    {
+                        "run_id": run_id,
+                        "cohort_id": cohort_id,
+                        "series_id": series_id,
+                        "status": "invalid",
+                        "error": "ValidationError: invalid correction",
+                        "calls": [stored_attempt(first), stored_attempt(second)],
+                    }
+                ],
+            )
+            write_jsonl(
+                data / "cohorts.jsonl",
+                [
+                    {
+                        "cohort_id": cohort_id,
+                        "models": [{"run_id": run_id, "status": "invalid"}],
+                    }
+                ],
+            )
+            write_json(
+                data / "raw" / "cohorts" / cohort_id / f"{series_id}-detail-packet.json",
+                packet,
+            )
+
+            with patch("foxhole_forecast.forecasting.DATA_DIR", data):
+                result = salvage_invalid_run(Settings.load(), run_id)
+
+            saved = read_jsonl(data / "model_runs.jsonl")[0]
+            self.assertEqual(result["predictions"], 2)
+            self.assertEqual(saved["salvaged_from_forecast_attempt"], 1)
+            self.assertEqual(saved["salvage_forecast_attempts_considered"], 2)
+            self.assertEqual(len(saved["forecast"]["predictions"]), 2)
 
     @patch("foxhole_forecast.forecasting.read_jsonl")
     def test_previous_summary_is_latest_valid_same_model_and_war(
