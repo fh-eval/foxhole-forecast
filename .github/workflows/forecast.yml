@@ -217,6 +217,8 @@ jobs:
               ].join('\n')).join('\n\n');
               const body = [
                 '<!-- foxhole-model-failure -->',
+                '@fh-eval — an enabled model is missing from a prediction round and needs attention.',
+                '',
                 'An enabled model is absent from this prediction round. This alert is not caused by individual dropped bets.',
                 '',
                 `- War: ${incident.war_number ?? 'unknown'}`,
@@ -237,9 +239,19 @@ jobs:
                   title,
                   body,
                   labels: ['model-failure', 'agent-triage-running'],
+                  assignees: ['fh-eval'],
                 })).data;
               } else {
                 const names = issue.labels.map((label) => typeof label === 'string' ? label : label.name);
+                const assignees = (issue.assignees || []).map((assignee) => assignee.login);
+                if (!assignees.includes('fh-eval')) {
+                  issue = (await github.rest.issues.update({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issue.number,
+                    assignees: [...new Set([...assignees, 'fh-eval'])],
+                  })).data;
+                }
                 if (names.includes('agent-triage-running') || names.includes('agent-triaged')) {
                   core.info(`Incident #${issue.number} already dispatched.`);
                   continue;
