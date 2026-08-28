@@ -22,6 +22,10 @@ on:
         description: Workflow run containing the frozen cutoff snapshot
         required: false
         type: string
+      recovery_issue_number:
+        description: Model-failure issue to update after an automated retry
+        required: false
+        type: string
 
 permissions: {}
 
@@ -192,6 +196,9 @@ jobs:
               ['agent-triage-running', 'd4a72c', 'Automated read-only diagnosis is in progress'],
               ['agent-triaged', '0e8a16', 'Automated read-only diagnosis completed'],
               ['agent-triage-failed', 'b60205', 'Automated diagnosis did not return a report'],
+              ['agent-recovery-dispatched', 'd4a72c', 'A constrained frozen-data recovery was dispatched'],
+              ['agent-recovered', '0e8a16', 'Automated frozen-data recovery succeeded'],
+              ['agent-recovery-failed', 'b60205', 'Automated frozen-data recovery failed'],
             ];
             for (const [name, color, description] of labels) {
               try {
@@ -231,7 +238,7 @@ jobs:
                 '@fh-eval — an enabled model is missing from a prediction round and needs attention.',
                 '',
                 'An enabled model is absent from this prediction round. This alert is not caused by individual dropped bets.',
-                'Automatic stored-response salvage and the permitted budget-guarded retry were exhausted before this alert was opened.',
+                'Deterministic stored-response salvage and any rule-based retry were exhausted before this alert was opened.',
                 '',
                 `- War: ${incident.war_number ?? 'unknown'}`,
                 `- Round slot: \`${incident.slot}\``,
@@ -240,7 +247,7 @@ jobs:
                 '',
                 failures,
                 '',
-                'The automated agent is diagnostic only: it cannot edit code, retry models, or access GitHub credentials.',
+                'The agent cannot edit code or access GitHub credentials. It may recommend one frozen-data retry; a trusted workflow independently validates and executes that narrow action.',
               ].join('\n');
 
               let issue = allIssues.find((candidate) => candidate.title === title);
@@ -296,3 +303,144 @@ jobs:
               `${failedModels} enabled model run(s) remain unresolved across ` +
               `${audit.incidents.length} forecast cohort(s). See the model-failure issue(s).`,
             );
+
+  recovery-report:
+    needs: [evaluate, persist]
+    if: ${{ always() && inputs.retry_run_id != '' && inputs.recovery_issue_number != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: ${{ needs.persist.result == 'success' }}
+        with:
+          name: foxhole-forecast-data
+          path: .
+      - name: Report the exact recovered run
+        if: ${{ needs.persist.result == 'success' }}
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          ISSUE_NUMBER: ${{ inputs.recovery_issue_number }}
+          RETRY_RUN_ID: ${{ inputs.retry_run_id }}
+        with:
+          script: |
+            const fs = require('fs');
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            const runId = process.env.RETRY_RUN_ID;
+            if (!Number.isInteger(issueNumber) || !runId) {
+              throw new Error('Recovery report inputs are invalid.');
+            }
+            const issue = (await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+            })).data;
+            const labels = issue.labels.map((label) => typeof label === 'string' ? label : label.name);
+            if (!labels.includes('model-failure') || !issue.body.includes('`' + runId + '`')) {
+              throw new Error('Recovery issue does not authorize this run ID.');
+            }
+            const runs = fs.readFileSync('data/model_runs.jsonl', 'utf8')
+              .split(/\r?\n/)
+              .filter(Boolean)
+              .map((line) => JSON.parse(line));
+            const matching = runs.filter((run) => run.run_id === runId);
+            if (matching.length !== 1) {
+              throw new Error(`Expected one recovered run; found ${matching.length}.`);
+            }
+            const run = matching[0];
+            const predictionCount = (run.forecast?.predictions || []).length;
+            const succeeded = run.status === 'valid' && predictionCount > 0;
+            const label = succeeded ? 'agent-recovered' : 'agent-recovery-failed';
+            const color = succeeded ? '0e8a16' : 'b60205';
+            try {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: label,
+                color,
+                description: succeeded
+                  ? 'Automated frozen-data recovery succeeded'
+                  : 'Automated frozen-data recovery failed',
+              });
+            } catch (error) {
+              if (error.status !== 422) throw error;
+            }
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              labels: [label],
+            });
+            const body = succeeded
+              ? [
+                  '## Automated recovery succeeded',
+                  '',
+                  `The trusted forecast workflow retried \`${runId}\` against its original frozen cutoff.`,
+                  `The recovered run contains ${predictionCount} valid prediction(s).`,
+                  `Source workflow: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                ].join('\n')
+              : [
+                  '## Automated recovery did not succeed',
+                  '',
+                  `The one permitted frozen-data retry for \`${runId}\` remains invalid.`,
+                  `Stored error: ${run.error || 'none recorded'}`,
+                  'ChatGPT/Codex or human review is required; no further automatic retry will be attempted.',
+                ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body,
+            });
+            if (succeeded) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                state: 'closed',
+              });
+            }
+      - name: Report recovery workflow failure
+        if: ${{ needs.persist.result != 'success' }}
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          ISSUE_NUMBER: ${{ inputs.recovery_issue_number }}
+          RETRY_RUN_ID: ${{ inputs.retry_run_id }}
+        with:
+          script: |
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            if (!Number.isInteger(issueNumber)) {
+              throw new Error('Recovery issue number is invalid.');
+            }
+            try {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'agent-recovery-failed',
+                color: 'b60205',
+                description: 'Automated frozen-data recovery failed',
+              });
+            } catch (error) {
+              if (error.status !== 422) throw error;
+            }
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              labels: ['agent-recovery-failed'],
+            });
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: [
+                '## Automated recovery workflow failed',
+                '',
+                `The trusted retry workflow for \`${process.env.RETRY_RUN_ID}\` did not reach persistence.`,
+                `Workflow: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                'No additional automatic retry will be attempted; ChatGPT/Codex or human review is required.',
+              ].join('\n'),
+            });

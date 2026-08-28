@@ -1,4 +1,4 @@
-name: Diagnose missing model run
+name: Triage and recover missing model run
 
 on:
   workflow_dispatch:
@@ -9,6 +9,7 @@ on:
         type: string
 
 permissions:
+  actions: write
   contents: read
   issues: write
 
@@ -57,22 +58,45 @@ jobs:
             --format json \
             "Diagnose the missing-model incident in .opencode/runtime-incident.json." \
             > "$RUNNER_TEMP/opencode-events.jsonl"
-      - name: Extract the final diagnosis
+      - name: Extract the final diagnosis and constrained recovery plan
         id: result
         env:
           AGENT_OUTCOME: ${{ steps.agent.outcome }}
         run: |
-          PYTHONPATH=src python3 - "$RUNNER_TEMP/opencode-events.jsonl" "$RUNNER_TEMP/diagnosis.md" <<'PY'
+          PYTHONPATH=src python3 - \
+            "$RUNNER_TEMP/opencode-events.jsonl" \
+            "$RUNNER_TEMP/diagnosis.md" \
+            "$RUNNER_TEMP/recovery-plan.json" <<'PY'
+          import json
           import os
           import sys
           from pathlib import Path
-          from foxhole_forecast.opencode_output import last_text_event
+          from foxhole_forecast.opencode_output import (
+              last_text_event,
+              validated_recovery_plan,
+          )
+          from foxhole_forecast.storage import read_jsonl
 
-          source, destination = map(Path, sys.argv[1:])
+          source, destination, plan_path = map(Path, sys.argv[1:])
           answer = last_text_event(source) if source.exists() else None
           succeeded = os.environ["AGENT_OUTCOME"] == "success" and bool(answer)
+          plan = {"retries": []}
           if succeeded:
               body = "## Automated Luna triage\n\n" + answer + "\n"
+              try:
+                  incident = json.loads(
+                      Path(".opencode/runtime-incident.json").read_text(encoding="utf-8")
+                  )
+                  plan = validated_recovery_plan(
+                      answer,
+                      incident,
+                      read_jsonl(Path("data/model_runs.jsonl")),
+                  )
+              except (ValueError, json.JSONDecodeError) as error:
+                  body += (
+                      "\n> Recovery automation did not accept the machine-readable "
+                      f"recommendation: {type(error).__name__}: {error}\n"
+                  )
           else:
               body = (
                   "## Automated Luna triage failed\n\n"
@@ -80,8 +104,10 @@ jobs:
                   "The incident is still recorded here for ChatGPT/Codex or human review.\n"
               )
           destination.write_text(body, encoding="utf-8")
+          plan_path.write_text(json.dumps(plan, indent=2) + "\n", encoding="utf-8")
           with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
               output.write(f"succeeded={'true' if succeeded else 'false'}\n")
+              output.write(f"recovery_count={len(plan.get('retries', []))}\n")
           PY
       - name: Post the report using a credential the agent never received
         env:
@@ -96,3 +122,48 @@ jobs:
           else
             gh issue edit "$ISSUE_NUMBER" --add-label agent-triage-failed
           fi
+      - name: Dispatch only validated frozen-data retries
+        if: ${{ steps.result.outputs.recovery_count != '0' }}
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          RECOVERY_PLAN: ${{ runner.temp }}/recovery-plan.json
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = JSON.parse(fs.readFileSync(process.env.RECOVERY_PLAN, 'utf8'));
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            if (!Number.isInteger(issueNumber) || plan.issue_number !== issueNumber) {
+              throw new Error('Validated plan does not match the dispatched issue.');
+            }
+            try {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'agent-recovery-dispatched',
+                color: 'd4a72c',
+                description: 'A constrained frozen-data recovery was dispatched',
+              });
+            } catch (error) {
+              if (error.status !== 422) throw error;
+            }
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              labels: ['agent-recovery-dispatched'],
+            });
+            for (const retry of plan.retries) {
+              await github.rest.actions.createWorkflowDispatch({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'forecast.yml',
+                ref: 'main',
+                inputs: {
+                  retry_run_id: retry.run_id,
+                  retry_source_workflow_run: plan.source_workflow_run,
+                  recovery_issue_number: String(issueNumber),
+                },
+              });
+              core.notice(`Dispatched frozen-data retry for ${retry.run_id}.`);
+            }
