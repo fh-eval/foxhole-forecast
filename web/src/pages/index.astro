@@ -83,10 +83,13 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <div><p class="kicker">First look</p><h2>Did anyone call it?</h2></div>
           <div class="score-heading-controls">
             <p>The scoreboard in one sentence: did the model point at bases where something actually happened, name the right outcome, and land within three hours of its own ETA?</p>
-            <div class="segmented" role="group" aria-label="Score history scope">
-              <button class="active" data-score-scope="current">Current war</button>
-              <button data-score-scope="all">All wars</button>
-            </div>
+            <label class="select-label score-war-filter" for="score-war-select">
+              <span>Score history</span>
+              <select id="score-war-select" aria-label="Choose which war to include in the scoreboard">
+                <option value="current">Current war</option>
+                <option value="all">All wars</option>
+              </select>
+            </label>
           </div>
         </div>
         <div class="adviser-guide">
@@ -771,12 +774,15 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       }
 
       function renderScoreboard() {
-        const scopedRounds = scoreScope === "current"
-          ? protocolRounds.filter((round) => round.war_id === dashboard?.war?.warId)
-          : protocolRounds;
-        const summaries = scoreScope === "current"
-          ? dashboard?.model_behavior?.current_war || []
-          : dashboard?.model_behavior?.all_time || [];
+        const currentWarId = String(dashboard?.war?.warId || "");
+        const scopedRounds = scoreScope === "all"
+          ? protocolRounds
+          : protocolRounds.filter((round) => String(round.war_id || "") === scoreScope);
+        const summaries = scoreScope === "all"
+          ? dashboard?.model_behavior?.all_time || []
+          : scoreScope === currentWarId
+            ? dashboard?.model_behavior?.current_war || []
+            : [];
         const scopedSeries = new Set(
           summaries.length
             ? summaries.map((summary) => summary.series_id)
@@ -784,6 +790,32 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         );
         const scopedModels = (dashboard?.models || []).filter((model) => scopedSeries.has(model.series_id));
         renderScores(scopedModels, scopedRounds, summaries);
+      }
+
+      function populateScoreWarSelect() {
+        const select = document.querySelector("#score-war-select");
+        if (!select) return;
+        const currentWarId = String(dashboard?.war?.warId || "");
+        const wars = new Map();
+        protocolRounds.forEach((round) => {
+          if (!round.war_id) return;
+          wars.set(String(round.war_id), Number(round.war_number) || null);
+        });
+        if (currentWarId) wars.set(currentWarId, Number(dashboard?.war?.warNumber) || wars.get(currentWarId) || null);
+
+        select.replaceChildren();
+        [...wars.entries()]
+          .sort((left, right) => (right[1] ?? -Infinity) - (left[1] ?? -Infinity))
+          .forEach(([warId, warNumber]) => {
+            const option = element("option", "", `${warNumber ? `War ${warNumber}` : "Unknown war"}${warId === currentWarId ? " (current)" : ""}`);
+            option.value = warId;
+            select.append(option);
+          });
+        const allWars = element("option", "", "All wars");
+        allWars.value = "all";
+        select.append(allWars);
+        scoreScope = currentWarId && wars.has(currentWarId) ? currentWarId : "all";
+        select.value = scoreScope;
       }
 
       function wireTeam(value) {
@@ -1419,6 +1451,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           dashboard = await response.json();
           const currentRounds = (dashboard.rounds || []).filter(isCompleteCurrentRound);
           protocolRounds = currentRounds;
+          populateScoreWarSelect();
           visibleSeries = new Set(currentRounds.map((round) => round.series_id));
           const currentModels = (dashboard.models || []).filter((model) => visibleSeries.has(model.series_id));
           document.querySelector("#war-number").textContent = dashboard.war ? `World Conquest ${dashboard.war.warNumber}` : "Waiting for data";
@@ -1443,11 +1476,12 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         }
       }
 
-      document.querySelectorAll("[data-score-scope]").forEach((button) => button.addEventListener("click", () => {
-        scoreScope = button.dataset.scoreScope;
-        document.querySelectorAll("[data-score-scope]").forEach((item) => item.classList.toggle("active", item === button));
+      document.querySelector("#score-war-select")?.addEventListener("change", (event) => {
+        const select = event.currentTarget;
+        if (!(select instanceof HTMLSelectElement)) return;
+        scoreScope = select.value;
         if (dashboard) renderScoreboard();
-      }));
+      });
 
       boot();
     </script>
