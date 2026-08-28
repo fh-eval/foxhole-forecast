@@ -173,7 +173,12 @@ class ModelProvider:
                 last_error = RuntimeError(f"Provider returned HTTP {error.code}: {detail[:1000]}")
                 if error.code not in {408, 429, 500, 502, 503, 504}:
                     raise last_error
-            except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as error:
+            except (
+                urllib.error.URLError,
+                ConnectionError,
+                TimeoutError,
+                json.JSONDecodeError,
+            ) as error:
                 last_error = error
         assert last_error is not None
         raise last_error

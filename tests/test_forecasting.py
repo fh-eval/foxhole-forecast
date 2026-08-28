@@ -18,6 +18,7 @@ from foxhole_forecast.forecasting import (
     _messages,
     _drop_invalid_predictions,
     _previous_model_summary,
+    recover_invalid_runs,
     retry_invalid_run,
     run_forecast_cohort,
 )
@@ -27,6 +28,106 @@ from foxhole_forecast.validation import ValidationError
 
 
 class ForecastBudgetTests(unittest.TestCase):
+    def test_automatic_recovery_retries_one_free_transient_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            run_id = "cohort-1:model-1"
+            original = {
+                "run_id": run_id,
+                "cohort_id": "cohort-1",
+                "series_id": "model-1",
+                "status": "invalid",
+                "created_at": "2026-01-02T00:05:00Z",
+                "error": "ConnectionResetError: reset by peer",
+                "calls": [],
+            }
+            write_jsonl(data / "model_runs.jsonl", [original])
+            write_jsonl(
+                data / "cohorts.jsonl",
+                [
+                    {
+                        "cohort_id": "cohort-1",
+                        "models": [{"run_id": run_id, "status": "invalid"}],
+                    }
+                ],
+            )
+            scout = {
+                "cutoff": "2026-01-02T00:00:00Z",
+                "war": {"warId": "war-1"},
+            }
+            write_json(
+                data
+                / "raw"
+                / "cohorts"
+                / "cohort-1"
+                / "model-1-scout-packet.json",
+                scout,
+            )
+            snapshot = data / "frozen-latest.json"
+            write_json(
+                snapshot,
+                {"observed_at": scout["cutoff"], "war": {"warId": "war-1"}},
+            )
+            replacement = {
+                **original,
+                "status": "valid",
+                "forecast": {"predictions": [{"base_id": "base-1"}]},
+            }
+            replacement.pop("error")
+
+            with patch("foxhole_forecast.forecasting.DATA_DIR", data), patch(
+                "foxhole_forecast.forecasting.load_models",
+                return_value=[{"series_id": "model-1", "paid": False}],
+            ), patch(
+                "foxhole_forecast.forecasting._run_model", return_value=replacement
+            ) as run_model:
+                result = recover_invalid_runs(Settings.load(), "cohort-1", snapshot)
+
+            self.assertEqual(result["status"], "recovered")
+            self.assertEqual(result["actions"][0]["action"], "retried")
+            self.assertEqual(run_model.call_count, 1)
+            self.assertEqual(read_jsonl(data / "model_runs.jsonl")[0]["status"], "valid")
+
+    def test_automatic_recovery_does_not_retry_paid_model(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            run_id = "cohort-1:model-1"
+            write_jsonl(
+                data / "model_runs.jsonl",
+                [
+                    {
+                        "run_id": run_id,
+                        "cohort_id": "cohort-1",
+                        "series_id": "model-1",
+                        "status": "invalid",
+                        "error": "ConnectionResetError: reset by peer",
+                        "calls": [],
+                    }
+                ],
+            )
+            write_jsonl(
+                data / "cohorts.jsonl",
+                [
+                    {
+                        "cohort_id": "cohort-1",
+                        "models": [{"run_id": run_id, "status": "invalid"}],
+                    }
+                ],
+            )
+            with patch("foxhole_forecast.forecasting.DATA_DIR", data), patch(
+                "foxhole_forecast.forecasting.load_models",
+                return_value=[{"series_id": "model-1", "paid": True}],
+            ), patch("foxhole_forecast.forecasting.retry_invalid_run") as retry:
+                result = recover_invalid_runs(
+                    Settings.load(), "cohort-1", data / "snapshot.json"
+                )
+
+            self.assertEqual(result["status"], "unresolved")
+            self.assertEqual(
+                result["actions"][0]["reason"], "paid_model_retry_requires_review"
+            )
+            retry.assert_not_called()
+
     def test_retry_invalid_run_preserves_failure_and_uses_frozen_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             data = Path(directory)

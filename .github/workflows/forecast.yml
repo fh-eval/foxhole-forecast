@@ -86,6 +86,15 @@ jobs:
             PYTHONPATH=src python -m foxhole_forecast forecast "${series_args[@]}" \
               > .workflow/forecast-result.json
           fi
+          cohort_id="$(python -c 'import json; print(json.load(open(".workflow/forecast-result.json")).get("cohort_id", ""))')"
+          if [[ -n "$cohort_id" && -z "$SERIES_ID" ]]; then
+            PYTHONPATH=src python -m foxhole_forecast recover-model-runs \
+              --cohort-id "$cohort_id" \
+              --snapshot data/raw/latest.json \
+              > .workflow/recovery-result.json
+          else
+            echo '{"status":"not_applicable","actions":[]}' > .workflow/recovery-result.json
+          fi
           PYTHONPATH=src python -m foxhole_forecast score >/dev/null
           PYTHONPATH=src python -m foxhole_forecast build-dashboard >/dev/null
       - name: Pass generated data to the persistence job
@@ -95,9 +104,11 @@ jobs:
           path: |
             data/cohorts.jsonl
             data/model_runs.jsonl
+            data/raw/latest.json
             data/raw/cohorts
             data/state.json
             .workflow/forecast-result.json
+            .workflow/recovery-result.json
           if-no-files-found: error
           retention-days: 7
 
@@ -220,6 +231,7 @@ jobs:
                 '@fh-eval — an enabled model is missing from a prediction round and needs attention.',
                 '',
                 'An enabled model is absent from this prediction round. This alert is not caused by individual dropped bets.',
+                'Automatic stored-response salvage and the permitted free-model retry were exhausted before this alert was opened.',
                 '',
                 `- War: ${incident.war_number ?? 'unknown'}`,
                 `- Round slot: \`${incident.slot}\``,

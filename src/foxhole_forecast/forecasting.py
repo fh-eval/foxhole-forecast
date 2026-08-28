@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -265,6 +266,125 @@ def retry_invalid_run(
         "predictions": len(retried.get("forecast", {}).get("predictions", [])),
         "retried_from_frozen_cutoff": scout_packet["cutoff"],
         **({"error": retried["error"]} if retried.get("error") else {}),
+    }
+
+
+_TRANSIENT_ERROR_TYPES = (
+    "ConnectionError",
+    "ConnectionAbortedError",
+    "ConnectionRefusedError",
+    "ConnectionResetError",
+    "BrokenPipeError",
+    "RemoteDisconnected",
+    "TimeoutError",
+    "URLError",
+)
+
+
+def _transient_provider_failure(run: dict[str, Any]) -> bool:
+    """Return whether a failed run is safe to retry from frozen public data."""
+    error = str(run.get("error") or "")
+    if error.startswith(tuple(f"{name}:" for name in _TRANSIENT_ERROR_TYPES)):
+        return True
+    return bool(
+        re.search(r"Provider returned HTTP (?:408|429|500|502|503|504)\b", error)
+    )
+
+
+def _has_stored_forecast_response(run: dict[str, Any]) -> bool:
+    return any(
+        attempt.get("stage") == "forecast" and attempt.get("raw_response")
+        for attempt in run.get("calls", [])
+        if isinstance(attempt, dict)
+    )
+
+
+def recover_invalid_runs(
+    settings: Settings, cohort_id: str, snapshot_path: Path
+) -> dict[str, Any]:
+    """Attempt deterministic salvage and one free-model retry for one cohort."""
+    models = {model["series_id"]: model for model in load_models()}
+    cohorts = read_jsonl(DATA_DIR / "cohorts.jsonl")
+    cohort = next((row for row in cohorts if row.get("cohort_id") == cohort_id), None)
+    if cohort is None:
+        raise ValueError(f"Unknown cohort: {cohort_id}")
+
+    actions: list[dict[str, Any]] = []
+    for entry in cohort.get("models", []):
+        if entry.get("status") == "valid":
+            continue
+        run_id = entry.get("run_id")
+        runs = read_jsonl(DATA_DIR / "model_runs.jsonl")
+        run = next((row for row in runs if row.get("run_id") == run_id), None)
+        if run is None:
+            actions.append(
+                {"run_id": run_id, "action": "unresolved", "reason": "missing_run"}
+            )
+            continue
+        if run.get("status") != "invalid":
+            actions.append(
+                {
+                    "run_id": run_id,
+                    "action": "unresolved",
+                    "reason": f"status_{run.get('status', 'missing')}",
+                }
+            )
+            continue
+
+        if _has_stored_forecast_response(run):
+            try:
+                result = salvage_invalid_run(settings, run_id)
+                actions.append({"run_id": run_id, "action": "salvaged", **result})
+                continue
+            except Exception as error:
+                salvage_error = f"{type(error).__name__}: {error}"
+        else:
+            salvage_error = "No stored forecast response is available"
+
+        model = models.get(run.get("series_id"))
+        if model is None:
+            reason = "missing_model_config"
+        elif model.get("paid", False):
+            reason = "paid_model_retry_requires_review"
+        elif run.get("retry_history"):
+            reason = "automatic_retry_already_attempted"
+        elif not _transient_provider_failure(run):
+            reason = "non_transient_failure"
+        else:
+            result = retry_invalid_run(settings, run_id, snapshot_path)
+            actions.append(
+                {
+                    "run_id": run_id,
+                    "action": "retried" if result["status"] == "valid" else "retry_failed",
+                    "salvage_error": salvage_error,
+                    **result,
+                }
+            )
+            continue
+        actions.append(
+            {
+                "run_id": run_id,
+                "action": "unresolved",
+                "reason": reason,
+                "salvage_error": salvage_error,
+            }
+        )
+
+    unresolved = [
+        action
+        for action in actions
+        if action["action"] in {"unresolved", "retry_failed"}
+    ]
+    if unresolved:
+        status = "unresolved"
+    elif actions:
+        status = "recovered"
+    else:
+        status = "healthy"
+    return {
+        "cohort_id": cohort_id,
+        "status": status,
+        "actions": actions,
     }
 
 

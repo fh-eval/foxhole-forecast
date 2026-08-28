@@ -43,6 +43,26 @@ class _MalformedPaidResponse:
 
 
 class ProviderTests(unittest.TestCase):
+    def test_connection_reset_is_retried(self) -> None:
+        config = {
+            "gateway": "nvidia_nim",
+            "model": "test/model",
+            "api_key_env": "TEST_NVIDIA_KEY",
+            "retry_delays_seconds": [0, 0],
+        }
+        with patch.dict("os.environ", {"TEST_NVIDIA_KEY": "secret"}), patch(
+            "urllib.request.urlopen",
+            side_effect=[ConnectionResetError("reset"), _Response()],
+        ) as urlopen:
+            response = ModelProvider(config, Settings.load()).complete_json(
+                [{"role": "user", "content": "Return JSON"}],
+                "test",
+                {"type": "object"},
+            )
+
+        self.assertEqual(response.parsed, {"ok": True})
+        self.assertEqual(urlopen.call_count, 2)
+
     def test_json_parser_salvages_markdown_fences_and_surrounding_text(self) -> None:
         self.assertEqual(
             _parse_json_content(

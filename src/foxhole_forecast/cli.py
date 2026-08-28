@@ -8,7 +8,12 @@ from pathlib import Path
 from .collector import collect_once
 from .config import Settings
 from .dashboard import build_dashboard_data
-from .forecasting import retry_invalid_run, run_forecast_cohort, salvage_invalid_run
+from .forecasting import (
+    recover_invalid_runs,
+    retry_invalid_run,
+    run_forecast_cohort,
+    salvage_invalid_run,
+)
 from .foxholestats import SOURCE_URL, import_foxholestats_html
 from .health import audit_model_runs
 from .storage import parse_time
@@ -31,6 +36,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     retry.add_argument("--run-id", required=True)
     retry.add_argument("--snapshot", type=Path, required=True)
+    recover = subcommands.add_parser(
+        "recover-model-runs",
+        help="Attempt safe salvage and one free-model retry for a cohort",
+    )
+    recover.add_argument("--cohort-id", required=True)
+    recover.add_argument("--snapshot", type=Path, required=True)
     subcommands.add_parser("score", help="Settle matured forecasts and rebuild scores")
     subcommands.add_parser("build-dashboard", help="Generate the static dashboard JSON")
     audit = subcommands.add_parser(
@@ -74,6 +85,8 @@ def main(argv: list[str] | None = None) -> int:
             result = salvage_invalid_run(settings, args.run_id)
         elif args.command == "retry-run":
             result = retry_invalid_run(settings, args.run_id, args.snapshot)
+        elif args.command == "recover-model-runs":
+            result = recover_invalid_runs(settings, args.cohort_id, args.snapshot)
         elif args.command == "score":
             result = settle_and_score(settings)
         elif args.command == "build-dashboard":
