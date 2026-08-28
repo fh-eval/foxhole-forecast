@@ -65,7 +65,7 @@ In theory, an LLM should be able to take a guess at what tanks are deployed wher
   <figcaption>Three Warden Outlaw tanks crossing a dam. <a href="https://store.steampowered.com/app/505460/Foxhole/">Steam store image.</a></figcaption>
 </figure>
 
-Despite being a video game, Foxhole has both the chaos and data required to simulate real-world scenarios. Unlike Sid Meier's Civilization, the LLM doesn't get estimated damage when targeting a warrior unit with a chariot archer. The narrative is opaque where the rubber meets the road and has to be reconstructed. API access is a gamified, transparent method compared to Perun hiring satellites to take pictures of Russian tank fields, but the style of thinking we're trying to assess is the same.
+Despite being a video game, Foxhole has both the chaos and data required to simulate real-world scenarios. Unlike Sid Meier's Civilization, the LLM doesn't get estimated damage when targeting a warrior unit with a chariot archer. The narrative is opaque where the rubber meets the road and has to be reconstructed. API access is a gamified, transparent method compared to hiring commercial satellites to take pictures of Russian tank fields, but the style of thinking we're trying to assess is the same. Can the models figure out what's important to look at and why?
 
 ## So what's the actual eval?
 

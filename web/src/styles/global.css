@@ -123,12 +123,15 @@ code {
 /* ---------- Human note ---------- */
 
 .human-note { border-bottom: 3px solid var(--inkline); background: var(--wash); }
-.human-note__inner { padding-block: 28px; display: grid; grid-template-columns: minmax(190px, .45fr) minmax(0, 1.55fr); gap: 42px; align-items: start; }
+.human-note__inner { padding-block: 48px 36px; display: grid; grid-template-columns: minmax(190px, .45fr) minmax(0, 1.55fr); gap: 42px; align-items: start; }
 .human-note__label .kicker { margin-bottom: 10px; }
 .human-note__label h2 { margin: 0; font: 650 30px/1.05 var(--serif); }
 .human-note__copy { max-width: 790px; color: var(--ink); font-family: var(--serif); font-size: 18px; line-height: 1.6; }
 .human-note__copy > :last-child { margin-bottom: 0; }
 .human-note__copy p { margin-bottom: 10px; }
+.human-note__copy a { color: var(--accent-ink); text-decoration-color: var(--accent); text-underline-offset: 3px; }
+.human-note__copy a:hover { color: var(--ink); }
+.human-note__copy a:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
 .human-note__pitch { margin: 18px 0 !important; }
 .human-note__pitch a {
   display: inline-block;
@@ -1052,7 +1055,7 @@ footer strong { color: var(--accent-ink); letter-spacing: .12em; }
 /* ---------- Responsive ---------- */
 
 @media (max-width: 900px) {
-  .human-note__inner { grid-template-columns: 1fr; gap: 14px; }
+  .human-note__inner { padding-block: 28px; grid-template-columns: 1fr; gap: 14px; }
   .masthead__body { min-height: 300px; align-items: flex-start; flex-direction: column; justify-content: center; }
   .war-stamp { width: 100%; transform: rotate(0deg); }
   .investigation-intro { grid-template-columns: 1fr; gap: 8px; }
