@@ -60,6 +60,8 @@ PYTHONPATH=src python -m foxhole_forecast compact-model-runs
 # Reproducible copy-only archive for an ended war, plus an offline integrity check:
 PYTHONPATH=src python -m foxhole_forecast archive-war --war-number 139
 PYTHONPATH=src python -m foxhole_forecast verify-war-archive --war-number 139
+# Preview pruning an archived war; mutation requires the explicit --apply flag:
+PYTHONPATH=src python -m foxhole_forecast prune-archived-war --war-number 139
 # For an invalid run that has a verified frozen bundle:
 PYTHONPATH=src python -m foxhole_forecast replay-run --run-id RUN_ID
 
@@ -71,6 +73,8 @@ npm run build
 War archives under `data/archives/` contain only records associated with the selected ended war, including frozen packets and referenced provider-response objects. Artifacts use deterministic gzip and record their byte-level SHA-256 hashes, sizes, counts, and source-file hashes in the manifest. An existing archive is verified instead of overwritten; creating one does not prune or rewrite canonical operational data.
 
 Dashboard builds and all-time score aggregation merge verified archive records with live data, deduplicating them while preferring live copies. Forecast generation, recovery, and model-health checks remain live-data-only, so archived history cannot enter a new model prompt or trigger an operational incident.
+
+`prune-archived-war` is a dry run unless `--apply` is supplied. It verifies the archive first, refuses to remove unarchived cohort files, and deletes provider-response objects only when no remaining live run references them. The war registry and generated all-time scores stay in live storage.
 
 ### Optional FoxholeStats import
 

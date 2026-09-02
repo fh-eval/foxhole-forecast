@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from .artifacts import compact_model_runs
-from .archives import create_war_archive, verify_war_archive
+from .archives import create_war_archive, prune_archived_war, verify_war_archive
 from .collector import collect_once
 from .config import DATA_DIR, Settings
 from .dashboard import build_dashboard_data
@@ -72,6 +72,14 @@ def main(argv: list[str] | None = None) -> int:
         "verify-war-archive", help="Verify every artifact in a war archive"
     )
     verify_archive.add_argument("--war-number", type=int, required=True)
+    prune_archive = subcommands.add_parser(
+        "prune-archived-war",
+        help="Remove an archived ended war from live storage (dry-run by default)",
+    )
+    prune_archive.add_argument("--war-number", type=int, required=True)
+    prune_archive.add_argument(
+        "--apply", action="store_true", help="Apply the verified pruning plan"
+    )
     subcommands.add_parser("score", help="Settle matured forecasts and rebuild scores")
     subcommands.add_parser("build-dashboard", help="Generate the static dashboard shards")
     audit = subcommands.add_parser(
@@ -130,6 +138,8 @@ def main(argv: list[str] | None = None) -> int:
             result = create_war_archive(DATA_DIR, args.war_number)
         elif args.command == "verify-war-archive":
             result = verify_war_archive(DATA_DIR, args.war_number)
+        elif args.command == "prune-archived-war":
+            result = prune_archived_war(DATA_DIR, args.war_number, apply=args.apply)
         elif args.command == "score":
             result = settle_and_score(settings)
         elif args.command == "build-dashboard":

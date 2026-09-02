@@ -11,12 +11,13 @@ from foxhole_forecast.archives import (
     read_mapping_with_archives,
     read_rows_with_archives,
     read_wars_with_archives,
+    prune_archived_war,
     verify_war_archive,
 )
 from foxhole_forecast.artifacts import externalize_run_responses
 from foxhole_forecast.config import Settings
 from foxhole_forecast.scoring import settle_and_score
-from foxhole_forecast.storage import read_json, write_json, write_jsonl
+from foxhole_forecast.storage import read_json, read_jsonl, write_json, write_jsonl
 
 
 class WarArchiveTests(unittest.TestCase):
@@ -55,7 +56,10 @@ class WarArchiveTests(unittest.TestCase):
             },
             data_dir,
         )
-        write_jsonl(data_dir / "model_runs.jsonl", [run, {"war_id": "active-war"}])
+        write_jsonl(
+            data_dir / "model_runs.jsonl",
+            [run, {"run_id": "run-140", "war_id": "active-war", "status": "invalid"}],
+        )
         write_json(data_dir / "settlements.json", {"run-139": {"score": 1}, "other": {}})
         write_json(data_dir / "raw/cohorts/cohort-139/scout-packet.json", {"war_id": war_id})
         write_json(
@@ -192,6 +196,37 @@ class WarArchiveTests(unittest.TestCase):
                 {run["run_id"] for run in aggregate_runs}, {"run-139", "run-140"}
             )
             self.assertEqual(set(aggregate_settlements), {"run-139", "run-140"})
+
+    def test_prune_is_dry_by_default_and_archive_loaders_restore_history(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            data_dir = Path(temporary)
+            self._fixture(data_dir)
+            create_war_archive(data_dir, 139)
+            live_before = (data_dir / "model_runs.jsonl").read_bytes()
+
+            dry_run = prune_archived_war(data_dir, 139)
+            self.assertEqual(dry_run["mode"], "dry_run")
+            self.assertEqual(live_before, (data_dir / "model_runs.jsonl").read_bytes())
+
+            applied = prune_archived_war(data_dir, 139, apply=True)
+            self.assertEqual(applied["mode"], "applied")
+            self.assertGreater(applied["bytes_reclaimed"], 0)
+            self.assertFalse(data_dir.joinpath("raw/cohorts/cohort-139").exists())
+            self.assertFalse(data_dir.joinpath("imports/foxholestats-war-139.json").exists())
+            self.assertNotIn(
+                "ended-war",
+                {run["war_id"] for run in read_jsonl(data_dir / "model_runs.jsonl")},
+            )
+            restored = read_rows_with_archives(
+                data_dir,
+                "model_runs.jsonl",
+                "model-runs.json.gz",
+                identity_fields=("run_id",),
+            )
+            self.assertEqual(
+                {run["run_id"] for run in restored}, {"run-139", "run-140"}
+            )
+            self.assertTrue(verify_war_archive(data_dir, 139)["verified"])
 
     def test_active_war_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

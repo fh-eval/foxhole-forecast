@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .artifacts import read_json_object
-from .storage import canonical_json_sha256, read_json, read_jsonl, write_json
+from .storage import canonical_json_sha256, read_json, read_jsonl, write_json, write_jsonl
 
 
 ARCHIVE_SCHEMA_VERSION = 1
@@ -238,6 +238,125 @@ def read_wars_with_archives(data_dir: Path) -> dict[str, dict[str, Any]]:
         raise ValueError("Live war registry is not a mapping")
     wars.update(live)
     return wars
+
+
+def prune_archived_war(
+    data_dir: Path, war_number: int, *, apply: bool = False
+) -> dict[str, Any]:
+    """Remove one verified archive's records from live operational storage."""
+    verify_war_archive(data_dir, war_number)
+    archive_dir = data_dir / "archives" / f"war-{war_number}"
+    war = _read_verified_artifact(archive_dir, "war.json.gz")
+    war_id = war["war_id"]
+
+    rewrites: list[tuple[Path, list[dict[str, Any]]]] = []
+    removed_rows: dict[str, int] = {}
+    live_row_files = [
+        data_dir / "collector_runs.jsonl",
+        data_dir / "observations.jsonl",
+        data_dir / "events.jsonl",
+        data_dir / "historical_events.jsonl",
+        data_dir / "cohorts.jsonl",
+        data_dir / "model_runs.jsonl",
+        *sorted((data_dir / "observations").glob("*.jsonl")),
+    ]
+    remaining_runs: list[dict[str, Any]] = []
+    for path in live_row_files:
+        rows = read_jsonl(path)
+        kept = [row for row in rows if row.get("war_id") != war_id]
+        removed = len(rows) - len(kept)
+        if removed:
+            rewrites.append((path, kept))
+            removed_rows[str(path.relative_to(data_dir))] = removed
+        if path == data_dir / "model_runs.jsonl":
+            remaining_runs = kept
+
+    archived_runs = _read_verified_artifact(archive_dir, "model-runs.json.gz")
+    archived_run_ids = {run["run_id"] for run in archived_runs}
+    settlements_path = data_dir / "settlements.json"
+    settlements = read_json(settlements_path, default={})
+    kept_settlements = {
+        run_id: settlement
+        for run_id, settlement in settlements.items()
+        if run_id not in archived_run_ids
+    }
+    removed_settlements = len(settlements) - len(kept_settlements)
+
+    archived_cohorts = _read_verified_artifact(archive_dir, "cohorts.json.gz")
+    cohort_ids = {cohort["cohort_id"] for cohort in archived_cohorts}
+    frozen_packets = _read_verified_artifact(archive_dir, "frozen-packets.json.gz")
+    archived_packet_paths = set(frozen_packets)
+    packet_deletes: list[Path] = []
+    for cohort_id in sorted(cohort_ids):
+        cohort_dir = data_dir / "raw" / "cohorts" / cohort_id
+        for path in sorted(cohort_dir.rglob("*")):
+            if not path.is_file():
+                continue
+            relative = str(path.relative_to(data_dir))
+            if relative not in archived_packet_paths:
+                raise ValueError(f"Refusing to prune unarchived cohort file: {relative}")
+            packet_deletes.append(path)
+
+    archived_objects = _read_verified_artifact(
+        archive_dir, "provider-response-objects.json.gz"
+    )
+    remaining_object_keys = _response_object_keys(remaining_runs)
+    object_deletes = [
+        data_dir / "objects" / object_key
+        for object_key in archived_objects
+        if object_key not in remaining_object_keys
+        and (data_dir / "objects" / object_key).is_file()
+    ]
+    import_path = data_dir / "imports" / f"foxholestats-war-{war_number}.json"
+    import_delete = (
+        import_path
+        if import_path.is_file()
+        and _read_verified_artifact(archive_dir, "foxholestats-import.json.gz") is not None
+        else None
+    )
+
+    touched_paths = {path for path, _rows in rewrites}
+    if removed_settlements:
+        touched_paths.add(settlements_path)
+    deleted_files = [*packet_deletes, *object_deletes]
+    if import_delete:
+        deleted_files.append(import_delete)
+    bytes_before = sum(path.stat().st_size for path in touched_paths | set(deleted_files))
+
+    if apply:
+        for path, rows in rewrites:
+            write_jsonl(path, rows)
+        if removed_settlements:
+            write_json(settlements_path, kept_settlements)
+        for path in deleted_files:
+            path.unlink()
+        for cohort_id in sorted(cohort_ids):
+            cohort_dir = data_dir / "raw" / "cohorts" / cohort_id
+            for directory in sorted(
+                (path for path in cohort_dir.rglob("*") if path.is_dir()), reverse=True
+            ):
+                directory.rmdir()
+            if cohort_dir.is_dir():
+                cohort_dir.rmdir()
+
+    bytes_after = (
+        sum(path.stat().st_size for path in touched_paths if path.exists())
+        if apply
+        else None
+    )
+    return {
+        "schema_version": 1,
+        "war_id": war_id,
+        "war_number": war_number,
+        "mode": "applied" if apply else "dry_run",
+        "removed_rows": removed_rows,
+        "removed_settlements": removed_settlements,
+        "removed_frozen_packets": len(packet_deletes),
+        "removed_provider_objects": len(object_deletes),
+        "removed_import_manifest": bool(import_delete),
+        "bytes_reclaimed": bytes_before - bytes_after if bytes_after is not None else None,
+        "archive_verified": True,
+    }
 
 
 def _response_object_keys(runs: Iterable[dict[str, Any]]) -> set[str]:
