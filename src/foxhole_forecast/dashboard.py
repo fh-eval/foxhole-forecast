@@ -12,7 +12,7 @@ from .archives import (
     read_rows_with_archives,
     read_wars_with_archives,
 )
-from .config import DATA_DIR, ROOT, Settings
+from .config import DATA_DIR, ROOT, Settings, load_models, load_series_aliases
 from .domain import strategic_base_type
 from .packets import build_scout_packet
 from .score_metrics import summarize_crps, summarize_selection
@@ -272,6 +272,8 @@ def _provider_label(run: dict[str, Any]) -> str:
 
 def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
     current_settings = settings or Settings.load()
+    series_aliases = load_series_aliases()
+    configured_models = {model["series_id"]: model for model in load_models()}
     latest = read_json(DATA_DIR / "raw" / "latest.json", default={})
     pipeline_state = read_json(DATA_DIR / "state.json", default={})
     scores = read_json(DATA_DIR / "scores.json", default={"models": []})
@@ -316,10 +318,13 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
         for identifier, base in map_state.get("bases", {}).items()
     }
     by_series: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    identity_by_series: dict[str, dict[str, Any]] = {}
     latest_valid_runs: dict[str, dict[str, Any]] = {}
     rounds_by_participant: dict[tuple[str, str, str], dict[str, Any]] = {}
     for run in runs:
-        series = run["series_id"]
+        series = series_aliases.get(run["series_id"], run["series_id"])
+        identity_by_series[series] = {**run, **configured_models.get(series, {})}
+        model_label = identity_by_series[series].get("label", series)
         metric_lookup = _metric_lookup(run, archived_packets)
         cutoff_bases = _base_lookup(run, archived_packets)
         if run.get("status") == "valid" and run.get("war_id") == current_war_id and (
@@ -412,7 +417,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
             presented = {
                 "run_id": run["run_id"],
                 "series_id": series,
-                "model_label": run.get("label", series),
+                "model_label": model_label,
                 "cutoff": run["cutoff"],
                 "base_id": bet["base_id"],
                 "base_name": bet.get("base_name") or base.get("name", bet["base_id"]),
@@ -499,7 +504,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                 "war_number": cohort.get("war_number") or run.get("war_number"),
                 "run_id": run["run_id"],
                 "series_id": series,
-                "model_label": run.get("label", series),
+                "model_label": model_label,
                 "cutoff": run["cutoff"],
                 "headline": _summary_headline(run, cohort.get("war_number") or run.get("war_number")),
                 "war_summary": run.get("war_summary"),
@@ -535,13 +540,24 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                 rounds_by_participant[participant_key] = round_record
 
     models: list[dict[str, Any]] = []
-    score_lookup = {row["series_id"]: row for row in scores.get("models", [])}
+    score_lookup: dict[str, dict[str, Any]] = {}
+    for score in scores.get("models", []):
+        raw_series = score["series_id"]
+        series = series_aliases.get(raw_series, raw_series)
+        normalized = {
+            **score,
+            "series_id": series,
+            "label": configured_models.get(series, score).get("label", series),
+        }
+        # Prefer an already-canonical score over a stale score for an alias.
+        if raw_series == series or series not in score_lookup:
+            score_lookup[series] = normalized
     for series, history in by_series.items():
         history.sort(key=lambda row: row["cutoff"], reverse=True)
         current_war_history = [
             row for row in history if row.get("war_id") == current_war_id
         ]
-        identity = next(run for run in reversed(runs) if run["series_id"] == series)
+        identity = identity_by_series[series]
         models.append(
             {
                 **score_lookup.get(series, {}),
@@ -556,7 +572,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                 "history": history[:100],
             }
         )
-    for score in scores.get("models", []):
+    for score in score_lookup.values():
         if score["series_id"] not in by_series:
             models.append(score)
     models.sort(
@@ -584,8 +600,10 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                         evidence[item["metric_id"]] = presented
             base_forecasts.append(
                 {
-                    "series_id": run["series_id"],
-                    "model_label": run.get("label", run["series_id"]),
+                    "series_id": series_aliases.get(run["series_id"], run["series_id"]),
+                    "model_label": configured_models.get(
+                        series_aliases.get(run["series_id"], run["series_id"]), run
+                    ).get("label", run["series_id"]),
                     "cutoff": run["cutoff"],
                     "base_id": forecast["base_id"],
                     "base_name": base.get("name", forecast["base_id"]),

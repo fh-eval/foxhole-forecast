@@ -1,5 +1,9 @@
 {
   "schema_version": 1,
+  "series_aliases": {
+    "openrouter-stealth-ox-alpha": "openrouter-z-ai-glm-5.3-flash-event-v4",
+    "openrouter-stealth-ox-alpha-event-v4": "openrouter-z-ai-glm-5.3-flash-event-v4"
+  },
   "models": [
     {
       "series_id": "openrouter-openai-gpt-5.6-luna-event-v4",
@@ -24,6 +28,25 @@
       "label": "Gemini 3.7 Flash",
       "gateway": "openrouter",
       "model": "google/gemini-3.7-flash",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "paid": true,
+      "provider_only": ["google-vertex"],
+      "max_tokens": 16384,
+      "request_timeout_seconds": 240,
+      "reasoning": {
+        "effort": "medium",
+        "exclude": false
+      },
+      "structured_outputs": false,
+      "omit_temperature": true,
+      "allow_fallbacks": false,
+      "enabled": true
+    },
+    {
+      "series_id": "openrouter-google-gemini-3.8-flash-json-event-v4",
+      "label": "Gemini 3.8 Flash",
+      "gateway": "openrouter",
+      "model": "google/gemini-3.8-flash",
       "api_key_env": "OPENROUTER_API_KEY",
       "paid": true,
       "provider_only": ["google-vertex"],

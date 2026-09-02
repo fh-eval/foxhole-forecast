@@ -11,12 +11,42 @@ from foxhole_forecast.scoring import (
     _recovered_transition,
     _settlement_sources,
     _timing_credit,
+    aggregate_scores,
     settle_run,
 )
 from foxhole_forecast.storage import isoformat
 
 
 class ScoringTests(unittest.TestCase):
+    def test_ox_alpha_scores_fold_into_glm_without_rewriting_runs(self) -> None:
+        ox = {
+            "run_id": "ox-run",
+            "series_id": "openrouter-stealth-ox-alpha-event-v4",
+            "label": "Ox Alpha",
+            "status": "valid",
+        }
+        glm = {
+            "run_id": "glm-run",
+            "series_id": "openrouter-z-ai-glm-5.3-flash-event-v4",
+            "label": "GLM 5.3 Flash",
+            "status": "valid",
+        }
+        settlements = {
+            run_id: {"status": "complete", "horizons": {}, "timed_predictions": []}
+            for run_id in ("ox-run", "glm-run")
+        }
+
+        scores = aggregate_scores([ox, glm], settlements, datetime(2026, 9, 2, tzinfo=UTC))
+
+        self.assertEqual(len(scores["models"]), 1)
+        self.assertEqual(
+            scores["models"][0]["series_id"],
+            "openrouter-z-ai-glm-5.3-flash-event-v4",
+        )
+        self.assertEqual(scores["models"][0]["label"], "GLM 5.3 Flash")
+        self.assertEqual(scores["models"][0]["valid_runs"], 2)
+        self.assertEqual(ox["series_id"], "openrouter-stealth-ox-alpha-event-v4")
+
     def test_gap_recovery_event_becomes_a_scoreable_physical_transition(self) -> None:
         recovered = _recovered_transition(
             {

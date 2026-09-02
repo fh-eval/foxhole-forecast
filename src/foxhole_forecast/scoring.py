@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from .archives import read_mapping_with_archives, read_rows_with_archives
-from .config import DATA_DIR, Settings
+from .config import DATA_DIR, Settings, load_models, load_series_aliases
 from .score_metrics import summarize_crps, summarize_selection
 from .storage import isoformat, parse_time, read_json, read_jsonl, write_json
 
@@ -895,19 +895,21 @@ def _interval_distance_minutes(value: datetime, start: datetime, end: datetime) 
 def aggregate_scores(
     runs: list[dict[str, Any]], settlements: dict[str, dict[str, Any]], now: datetime
 ) -> dict[str, Any]:
+    aliases = load_series_aliases()
+    configured_models = {model["series_id"]: model for model in load_models()}
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     statuses: dict[str, list[str]] = defaultdict(list)
     submission_modes: dict[str, list[str]] = defaultdict(list)
     replay_run_ids: set[str] = set()
     labels: dict[str, dict[str, Any]] = {}
     for run in runs:
-        series = run["series_id"]
+        series = aliases.get(run["series_id"], run["series_id"])
         statuses[series].append(run.get("status", "unknown"))
         mode = run.get("submission_mode", "live")
         submission_modes[series].append(mode)
         if mode == "delayed_replay":
             replay_run_ids.add(run["run_id"])
-        labels[series] = run
+        labels[series] = {**run, **configured_models.get(series, {})}
         settlement = settlements.get(run["run_id"])
         if settlement:
             groups[series].append(settlement)

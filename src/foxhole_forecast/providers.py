@@ -248,7 +248,8 @@ def _cost(model: str, usage: dict[str, Any]) -> float:
         return round(input_cost + completion * 0.28 / 1_000_000, 8)
     prices = {
         "openai/gpt-5.6-luna": (0.20, 1.20),
-        "google/gemini-3.7-flash": (0.375, 1.875),
+        "google/gemini-3.7-flash": (0.75, 3.75),
+        "google/gemini-3.8-flash": (0.75, 3.75),
         # Conservative list-price fallback. OpenRouter normally reports exact
         # cost, including Z.AI's time-limited 50% launch discount.
         "z-ai/glm-5.3-flash": (0.15, 0.50),

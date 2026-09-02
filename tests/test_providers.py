@@ -102,7 +102,14 @@ class ProviderTests(unittest.TestCase):
             "google/gemini-3.7-flash",
             {"prompt_tokens": 1_000_000, "completion_tokens": 1_000_000},
         )
-        self.assertEqual(cost, 2.25)
+        self.assertEqual(cost, 4.5)
+
+    def test_gemini_38_fallback_cost_uses_current_openrouter_rate(self) -> None:
+        cost = _cost(
+            "google/gemini-3.8-flash",
+            {"prompt_tokens": 1_000_000, "completion_tokens": 1_000_000},
+        )
+        self.assertEqual(cost, 4.5)
 
     def test_glm_flash_fallback_cost_uses_conservative_list_rate(self) -> None:
         cost = _cost(
@@ -166,6 +173,19 @@ class ProviderTests(unittest.TestCase):
         self.assertFalse(glm["allow_fallbacks"])
         self.assertEqual(glm["reasoning"], {"effort": "max", "exclude": False})
         self.assertEqual(glm["max_paid_usd_per_day"], 0.25)
+
+    def test_gemini_38_config_pins_google_vertex_with_medium_reasoning(self) -> None:
+        gemini = next(
+            model
+            for model in load_models()
+            if model["series_id"]
+            == "openrouter-google-gemini-3.8-flash-json-event-v4"
+        )
+
+        self.assertEqual(gemini["model"], "google/gemini-3.8-flash")
+        self.assertEqual(gemini["provider_only"], ["google-vertex"])
+        self.assertFalse(gemini["allow_fallbacks"])
+        self.assertEqual(gemini["reasoning"], {"effort": "medium", "exclude": False})
 
     def test_openrouter_uses_per_model_reasoning_and_token_budget(self) -> None:
         captured = {}

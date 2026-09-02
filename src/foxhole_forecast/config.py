@@ -47,3 +47,6 @@ class Settings:
 def load_models(path: Path | None = None) -> list[dict[str, Any]]:
     return read_json(path or CONFIG_DIR / "models.json")["models"]
 
+
+def load_series_aliases(path: Path | None = None) -> dict[str, str]:
+    return read_json(path or CONFIG_DIR / "models.json").get("series_aliases", {})
