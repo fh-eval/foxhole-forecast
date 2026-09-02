@@ -1,0 +1,63 @@
+name: Maintain war archives
+
+on:
+  schedule:
+    - cron: "43 4 * * *"
+  workflow_dispatch:
+    inputs:
+      apply_prune:
+        description: Prune live copies after verified semantic parity
+        required: false
+        default: false
+        type: boolean
+
+permissions: {}
+
+concurrency:
+  group: foxhole-data-pipeline
+  cancel-in-progress: false
+
+jobs:
+  maintain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: main
+          fetch-depth: 1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: Archive quiet ended wars
+        env:
+          APPLY_PRUNE: ${{ inputs.apply_prune }}
+        run: |
+          args=()
+          if [[ "$APPLY_PRUNE" == "true" ]]; then
+            args+=(--apply-prune)
+          fi
+          PYTHONPATH=src python3 -m foxhole_forecast maintain-archives \
+            --quiet-hours 24 "${args[@]}" | tee /tmp/archive-maintenance.json
+      - name: Commit archive maintenance changes
+        run: |
+          git config user.name "foxhole-forecast[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then
+            echo "No archive maintenance changes"
+          else
+            git commit -m "data: maintain ended-war archives"
+            git fetch origin main
+            git rebase origin/main
+            git push
+          fi
+      - name: Upload maintenance report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: archive-maintenance-report
+          path: /tmp/archive-maintenance.json
+          if-no-files-found: error
+          retention-days: 30

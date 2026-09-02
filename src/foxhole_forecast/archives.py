@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import hashlib
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterable
 
 from .artifacts import read_json_object
-from .storage import canonical_json_sha256, read_json, read_jsonl, write_json, write_jsonl
+from .storage import (
+    canonical_json_sha256,
+    parse_time,
+    read_json,
+    read_jsonl,
+    write_json,
+    write_jsonl,
+)
 
 
 ARCHIVE_SCHEMA_VERSION = 1
@@ -370,6 +378,189 @@ def prune_archived_war(
     }
 
 
+def verify_war_archive_parity(data_dir: Path, war_number: int) -> dict[str, Any]:
+    """Confirm that an archive is a semantic copy of any remaining live data."""
+    verification = verify_war_archive(data_dir, war_number)
+    archive_dir = data_dir / "archives" / f"war-{war_number}"
+    archived_war = _read_verified_artifact(archive_dir, "war.json.gz")
+    war_id = archived_war["war_id"]
+    row_specs = {
+        "collector-runs.json.gz": data_dir / "collector_runs.jsonl",
+        "observations-legacy.json.gz": data_dir / "observations.jsonl",
+        "events.json.gz": data_dir / "events.jsonl",
+        "historical-events.json.gz": data_dir / "historical_events.jsonl",
+        "cohorts.json.gz": data_dir / "cohorts.jsonl",
+        "model-runs.json.gz": data_dir / "model_runs.jsonl",
+    }
+    live_payloads = {
+        artifact: [row for row in read_jsonl(path) if row.get("war_id") == war_id]
+        for artifact, path in row_specs.items()
+    }
+    detailed: list[dict[str, Any]] = []
+    for path in sorted((data_dir / "observations").glob("*.jsonl")):
+        detailed.extend(
+            row for row in read_jsonl(path) if row.get("war_id") == war_id
+        )
+    live_payloads["observations-detailed.json.gz"] = detailed
+
+    archived_runs = _read_verified_artifact(archive_dir, "model-runs.json.gz")
+    run_ids = {run["run_id"] for run in archived_runs}
+    live_settlements = {
+        run_id: settlement
+        for run_id, settlement in read_json(
+            data_dir / "settlements.json", default={}
+        ).items()
+        if run_id in run_ids
+    }
+    archived_cohorts = _read_verified_artifact(archive_dir, "cohorts.json.gz")
+    cohort_ids = {cohort["cohort_id"] for cohort in archived_cohorts}
+    live_packets: dict[str, Any] = {}
+    for cohort_id in sorted(cohort_ids):
+        for path in sorted((data_dir / "raw" / "cohorts" / cohort_id).rglob("*")):
+            if path.is_file():
+                live_packets[str(path.relative_to(data_dir))] = read_json(path)
+
+    live_objects: dict[str, Any] = {}
+    for object_key in sorted(_response_object_keys(live_payloads["model-runs.json.gz"])):
+        reference = {
+            "algorithm": "sha256",
+            "sha256": Path(object_key).name.removesuffix(".json.gz"),
+            "object_key": object_key,
+        }
+        live_objects[object_key] = read_json_object(data_dir, reference)
+    import_path = data_dir / "imports" / f"foxholestats-war-{war_number}.json"
+    live_import = read_json(import_path) if import_path.is_file() else None
+
+    has_live_data = any(live_payloads.values()) or any(
+        (live_settlements, live_packets, live_objects, live_import)
+    )
+    if not has_live_data:
+        return {
+            **verification,
+            "parity": "already_pruned",
+            "compared_artifacts": 0,
+        }
+
+    comparisons: dict[str, tuple[Any, Any]] = {
+        "war.json.gz": (
+            archived_war,
+            read_json(data_dir / "wars.json", default={})
+            .get("wars", {})
+            .get(war_id),
+        ),
+        **{
+            artifact: (_read_verified_artifact(archive_dir, artifact), live_payload)
+            for artifact, live_payload in live_payloads.items()
+        },
+        "settlements.json.gz": (
+            _stable_settlements(
+                _read_verified_artifact(archive_dir, "settlements.json.gz")
+            ),
+            _stable_settlements(live_settlements),
+        ),
+        "frozen-packets.json.gz": (
+            _read_verified_artifact(archive_dir, "frozen-packets.json.gz"),
+            live_packets,
+        ),
+        "provider-response-objects.json.gz": (
+            _read_verified_artifact(
+                archive_dir, "provider-response-objects.json.gz"
+            ),
+            live_objects,
+        ),
+        "foxholestats-import.json.gz": (
+            _read_verified_artifact(archive_dir, "foxholestats-import.json.gz"),
+            live_import,
+        ),
+    }
+    mismatches = [
+        name
+        for name, (archived, live) in comparisons.items()
+        if canonical_json_sha256(archived) != canonical_json_sha256(live)
+    ]
+    if mismatches:
+        raise ValueError(
+            "War archive differs from live data: " + ", ".join(sorted(mismatches))
+        )
+    return {
+        **verification,
+        "parity": "live_match",
+        "compared_artifacts": len(comparisons),
+    }
+
+
+def maintain_archives(
+    data_dir: Path,
+    *,
+    now: datetime | None = None,
+    quiet_hours: int = 24,
+    apply_prune: bool = False,
+) -> dict[str, Any]:
+    """Archive quiet ended wars and optionally prune verified live copies."""
+    if quiet_hours < 1:
+        raise ValueError("Archive quiet period must be at least one hour")
+    current = (now or datetime.now(UTC)).astimezone(UTC)
+    registry = read_json(data_dir / "wars.json", default={})
+    wars = registry.get("wars", {}) if isinstance(registry, dict) else {}
+    ended = sorted(
+        (war for war in wars.values() if war.get("status") == "ended"),
+        key=lambda war: war.get("war_number", -1),
+    )
+    results: list[dict[str, Any]] = []
+    for war in ended:
+        war_number = war.get("war_number")
+        timestamps = [
+            parse_time(value)
+            for value in (war.get("ended_at"), war.get("last_observed_at"))
+            if isinstance(value, str) and value
+        ]
+        if not isinstance(war_number, int) or not timestamps:
+            results.append(
+                {
+                    "war_number": war_number,
+                    "status": "waiting_for_stable_timestamp",
+                }
+            )
+            continue
+        eligible_at = max(timestamps) + timedelta(hours=quiet_hours)
+        if current < eligible_at:
+            results.append(
+                {
+                    "war_id": war.get("war_id"),
+                    "war_number": war_number,
+                    "status": "waiting_for_quiet_period",
+                    "eligible_at": eligible_at.isoformat().replace("+00:00", "Z"),
+                }
+            )
+            continue
+
+        archive_path = data_dir / "archives" / f"war-{war_number}" / "manifest.json"
+        created = not archive_path.exists()
+        create_war_archive(data_dir, war_number)
+        parity = verify_war_archive_parity(data_dir, war_number)
+        if apply_prune and parity["parity"] == "live_match":
+            prune = prune_archived_war(data_dir, war_number, apply=True)
+            status = "archived_and_pruned" if created else "pruned"
+        else:
+            prune = None
+            status = "archived" if created else parity["parity"]
+        results.append(
+            {
+                "war_id": war.get("war_id"),
+                "war_number": war_number,
+                "status": status,
+                "parity": parity["parity"],
+                "prune": prune,
+            }
+        )
+    return {
+        "schema_version": 1,
+        "quiet_hours": quiet_hours,
+        "apply_prune": apply_prune,
+        "wars": results,
+    }
+
+
 def _response_object_keys(runs: Iterable[dict[str, Any]]) -> set[str]:
     keys: set[str] = set()
     for run in runs:
@@ -385,6 +576,19 @@ def _response_object_keys(runs: Iterable[dict[str, Any]]) -> set[str]:
                 if isinstance(reference, dict) and isinstance(reference.get("object_key"), str):
                     keys.add(reference["object_key"])
     return keys
+
+
+def _stable_settlements(settlements: dict[str, Any]) -> dict[str, Any]:
+    return {
+        run_id: {
+            key: value
+            for key, value in settlement.items()
+            if key != "updated_at"
+        }
+        if isinstance(settlement, dict)
+        else settlement
+        for run_id, settlement in settlements.items()
+    }
 
 
 def _archive_directories(data_dir: Path) -> list[Path]:

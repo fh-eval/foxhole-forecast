@@ -6,7 +6,12 @@ import sys
 from pathlib import Path
 
 from .artifacts import compact_model_runs
-from .archives import create_war_archive, prune_archived_war, verify_war_archive
+from .archives import (
+    create_war_archive,
+    maintain_archives,
+    prune_archived_war,
+    verify_war_archive,
+)
 from .collector import collect_once
 from .config import DATA_DIR, Settings
 from .dashboard import build_dashboard_data
@@ -80,6 +85,16 @@ def main(argv: list[str] | None = None) -> int:
     prune_archive.add_argument(
         "--apply", action="store_true", help="Apply the verified pruning plan"
     )
+    maintain = subcommands.add_parser(
+        "maintain-archives",
+        help="Archive quiet ended wars and optionally prune verified live copies",
+    )
+    maintain.add_argument("--quiet-hours", type=int, default=24)
+    maintain.add_argument(
+        "--apply-prune",
+        action="store_true",
+        help="Prune live copies only after archive parity succeeds",
+    )
     subcommands.add_parser("score", help="Settle matured forecasts and rebuild scores")
     subcommands.add_parser("build-dashboard", help="Generate the static dashboard shards")
     audit = subcommands.add_parser(
@@ -140,6 +155,12 @@ def main(argv: list[str] | None = None) -> int:
             result = verify_war_archive(DATA_DIR, args.war_number)
         elif args.command == "prune-archived-war":
             result = prune_archived_war(DATA_DIR, args.war_number, apply=args.apply)
+        elif args.command == "maintain-archives":
+            result = maintain_archives(
+                DATA_DIR,
+                quiet_hours=args.quiet_hours,
+                apply_prune=args.apply_prune,
+            )
         elif args.command == "score":
             result = settle_and_score(settings)
         elif args.command == "build-dashboard":

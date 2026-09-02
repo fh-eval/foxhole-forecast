@@ -62,6 +62,8 @@ PYTHONPATH=src python -m foxhole_forecast archive-war --war-number 139
 PYTHONPATH=src python -m foxhole_forecast verify-war-archive --war-number 139
 # Preview pruning an archived war; mutation requires the explicit --apply flag:
 PYTHONPATH=src python -m foxhole_forecast prune-archived-war --war-number 139
+# Archive every ended war quiet for 24 hours; pruning remains opt-in:
+PYTHONPATH=src python -m foxhole_forecast maintain-archives --quiet-hours 24
 # For an invalid run that has a verified frozen bundle:
 PYTHONPATH=src python -m foxhole_forecast replay-run --run-id RUN_ID
 
@@ -75,6 +77,8 @@ War archives under `data/archives/` contain only records associated with the sel
 Dashboard builds and all-time score aggregation merge verified archive records with live data, deduplicating them while preferring live copies. Forecast generation, recovery, and model-health checks remain live-data-only, so archived history cannot enter a new model prompt or trigger an operational incident.
 
 `prune-archived-war` is a dry run unless `--apply` is supplied. It verifies the archive first, refuses to remove unarchived cohort files, and deletes provider-response objects only when no remaining live run references them. The war registry and generated all-time scores stay in live storage.
+
+The daily archive-maintenance workflow serializes with collection and forecasting. It automatically creates and verifies archives only after the later of an ended war's end time and last observation has been quiet for 24 hours. Pruning is never scheduled: it requires a manual workflow dispatch with `apply_prune` enabled, and proceeds only when every live record family, frozen packet, response object, and import matches the archive. Each run retains a machine-readable maintenance report for 30 days.
 
 ### Optional FoxholeStats import
 

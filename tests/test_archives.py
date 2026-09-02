@@ -8,12 +8,14 @@ from unittest.mock import patch
 
 from foxhole_forecast.archives import (
     create_war_archive,
+    maintain_archives,
     read_archived_mapping,
     read_mapping_with_archives,
     read_rows_with_archives,
     read_wars_with_archives,
     prune_archived_war,
     verify_war_archive,
+    verify_war_archive_parity,
 )
 from foxhole_forecast.artifacts import externalize_run_responses
 from foxhole_forecast.config import Settings
@@ -240,3 +242,61 @@ class WarArchiveTests(unittest.TestCase):
             self._fixture(data_dir)
             with self.assertRaisesRegex(ValueError, "is not ended"):
                 create_war_archive(data_dir, 140)
+
+    def test_maintenance_waits_then_archives_without_automatic_pruning(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            data_dir = Path(temporary)
+            self._fixture(data_dir)
+
+            waiting = maintain_archives(
+                data_dir,
+                now=datetime(2026, 1, 2, 23, tzinfo=UTC),
+                quiet_hours=24,
+            )
+            self.assertEqual(waiting["wars"][0]["status"], "waiting_for_quiet_period")
+            self.assertFalse(data_dir.joinpath("archives/war-139").exists())
+
+            archived = maintain_archives(
+                data_dir,
+                now=datetime(2026, 1, 3, 1, tzinfo=UTC),
+                quiet_hours=24,
+            )
+            self.assertEqual(archived["wars"][0]["status"], "archived")
+            self.assertEqual(archived["wars"][0]["parity"], "live_match")
+            self.assertTrue(data_dir.joinpath("raw/cohorts/cohort-139").exists())
+
+            verified = maintain_archives(
+                data_dir,
+                now=datetime(2026, 1, 3, 2, tzinfo=UTC),
+                quiet_hours=24,
+            )
+            self.assertEqual(verified["wars"][0]["status"], "live_match")
+
+    def test_maintenance_prunes_only_after_semantic_parity(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            data_dir = Path(temporary)
+            self._fixture(data_dir)
+            create_war_archive(data_dir, 139)
+            events = read_jsonl(data_dir / "events.jsonl")
+            write_jsonl(data_dir / "events.jsonl", [*events, {"war_id": "ended-war"}])
+
+            with self.assertRaisesRegex(ValueError, "events.json.gz"):
+                maintain_archives(
+                    data_dir,
+                    now=datetime(2026, 1, 4, tzinfo=UTC),
+                    apply_prune=True,
+                )
+            self.assertTrue(data_dir.joinpath("raw/cohorts/cohort-139").exists())
+
+            write_jsonl(data_dir / "events.jsonl", events)
+            result = maintain_archives(
+                data_dir,
+                now=datetime(2026, 1, 4, tzinfo=UTC),
+                apply_prune=True,
+            )
+            self.assertEqual(result["wars"][0]["status"], "pruned")
+            self.assertFalse(data_dir.joinpath("raw/cohorts/cohort-139").exists())
+            self.assertEqual(
+                verify_war_archive_parity(data_dir, 139)["parity"],
+                "already_pruned",
+            )
