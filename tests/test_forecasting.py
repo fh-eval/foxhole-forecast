@@ -20,6 +20,7 @@ from foxhole_forecast.forecasting import (
     _dropped_prediction_error,
     _drop_invalid_strategic_advice,
     _filter_forecast_output,
+    _identifier,
     _messages,
     _drop_invalid_predictions,
     _previous_model_summary,
@@ -432,6 +433,42 @@ class ForecastBudgetTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "warming_up")
         self.assertEqual(result["minimum_history_hours"], 2)
+
+    def test_identifier_format_and_determinism(self) -> None:
+        cohort_id = _identifier("war-1", "2026-08-22T03:10:00Z")
+        self.assertTrue(cohort_id.startswith("2026-08-22-"))
+        self.assertEqual(len(cohort_id), 10 + 1 + 12)
+        self.assertEqual(cohort_id, _identifier("war-1", "2026-08-22T03:10:00Z"))
+
+    def test_active_war_calls_identifier_and_creates_cohort(self) -> None:
+        with patch(
+            "foxhole_forecast.forecasting.read_json", return_value={}
+        ), patch(
+            "foxhole_forecast.forecasting.forecast_due",
+            return_value=(True, "2026-08-22T03:00:00Z"),
+        ), patch(
+            "foxhole_forecast.forecasting.load_models", return_value=[]
+        ), patch(
+            "foxhole_forecast.forecasting.build_scout_packet",
+            return_value={
+                "cutoff": "2026-08-22T03:10:00Z",
+                "war": {"warId": "war-123", "warNumber": 140, "winner": "NONE"},
+                "history_hours_available": 5.0,
+            },
+        ), patch(
+            "foxhole_forecast.forecasting.build_detail_source", return_value={}
+        ), patch(
+            "foxhole_forecast.forecasting.current_strategic_base_ids", return_value=[]
+        ), patch(
+            "foxhole_forecast.forecasting.write_json"
+        ), patch(
+            "foxhole_forecast.forecasting.append_jsonl"
+        ):
+            result = run_forecast_cohort(Settings.load())
+
+        self.assertEqual(result["schema_version"], 1)
+        self.assertTrue(result["cohort_id"].startswith("2026-08-22-"))
+        self.assertEqual(result["war_id"], "war-123")
 
     def test_unknown_series_filter_is_rejected(self) -> None:
         with patch("foxhole_forecast.forecasting.forecast_due", return_value=(True, "slot")), patch(
