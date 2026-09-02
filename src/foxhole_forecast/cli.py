@@ -42,6 +42,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Append a delayed replay using only an invalid run's frozen bundle",
     )
     replay.add_argument("--run-id", required=True)
+    replay.add_argument(
+        "--allow-paid",
+        action="store_true",
+        help="Permit a paid replay after external authorization",
+    )
+    replay.add_argument(
+        "--max-tokens",
+        type=int,
+        help="Raise only the frozen run's output ceiling and record the override",
+    )
     recover = subcommands.add_parser(
         "recover-model-runs",
         help="Attempt safe salvage and one free-model retry for a cohort",
@@ -92,7 +102,12 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "retry-run":
             result = retry_invalid_run(settings, args.run_id, args.snapshot)
         elif args.command == "replay-run":
-            result = replay_invalid_run(settings, args.run_id)
+            result = replay_invalid_run(
+                settings,
+                args.run_id,
+                allow_paid=args.allow_paid,
+                max_tokens_override=args.max_tokens,
+            )
         elif args.command == "recover-model-runs":
             result = recover_invalid_runs(settings, args.cohort_id, args.snapshot)
         elif args.command == "score":

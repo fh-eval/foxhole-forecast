@@ -112,7 +112,14 @@ class ForecastBudgetTests(unittest.TestCase):
                         "gateway": "nvidia_nim",
                         "model": "provider/model-1",
                         "api_key_env": "TEST_KEY",
-                        "paid": False,
+                        "paid": True,
+                        "request_extra": {
+                            "thinking": {"type": "enabled"},
+                            "reasoning_effort": "high",
+                        },
+                        "budget_group": "test-paid",
+                        "max_paid_usd_per_day": 0.5,
+                        "budget_reserve_usd": 0.04,
                     },
                     "settings": _settings_payload(Settings.load()),
                     "prompts": {
@@ -142,6 +149,10 @@ class ForecastBudgetTests(unittest.TestCase):
             )
             response = SimpleNamespace(returned_model="provider/model-1", upstream_provider="NVIDIA")
             forecast = {"predictions": [{"base_id": "base-1"}]}
+            with patch("foxhole_forecast.forecasting.DATA_DIR", data):
+                with self.assertRaisesRegex(ValueError, "explicit authorization"):
+                    replay_invalid_run(Settings.load(), run_id)
+
             with patch("foxhole_forecast.forecasting.DATA_DIR", data), patch(
                 "foxhole_forecast.forecasting.ModelProvider", return_value=provider
             ), patch(
@@ -151,7 +162,12 @@ class ForecastBudgetTests(unittest.TestCase):
                 "foxhole_forecast.forecasting._freeze_evidence",
                 return_value=forecast,
             ):
-                result = replay_invalid_run(Settings.load(), run_id)
+                result = replay_invalid_run(
+                    Settings.load(),
+                    run_id,
+                    allow_paid=True,
+                    max_tokens_override=65536,
+                )
 
             rows = read_jsonl(data / "model_runs.jsonl")
             self.assertEqual(result["status"], "valid")
@@ -159,6 +175,16 @@ class ForecastBudgetTests(unittest.TestCase):
             self.assertEqual(rows[0], original)
             self.assertEqual(rows[1]["replay_of"], run_id)
             self.assertEqual(rows[1]["submission_mode"], "delayed_replay")
+            self.assertTrue(rows[1]["reasoning"]["enabled"])
+            self.assertEqual(rows[1]["reasoning"]["effort"], "high")
+            self.assertEqual(
+                rows[1]["replay_config_overrides"]["max_tokens"],
+                {
+                    "frozen": 5000,
+                    "replay": 65536,
+                    "reason": "prevent_provider_length_truncation",
+                },
+            )
             entry = read_jsonl(data / "cohorts.jsonl")[0]["models"][0]
             self.assertEqual(entry["accepted_replay_run_id"], rows[1]["run_id"])
 

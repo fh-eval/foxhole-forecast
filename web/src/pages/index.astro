@@ -1420,7 +1420,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             participantBody.append(element(
               "p",
               `dispatch-audit${round?.reasoning?.enabled === false ? " dispatch-audit--limited" : ""}`,
-              `${reasoningLabel(round)} · Data cutoff ${formatDate(round.cutoff)}${round.retried_at ? ` · Recovered later from frozen cutoff data (${formatDate(round.retried_at)})` : ""}`,
+              `${reasoningLabel(round)} · Data cutoff ${formatDate(round.cutoff)}${round.retried_at ? ` · Recovered later from frozen cutoff data (${formatDate(round.retried_at)})` : ""}${round.replay_config_overrides?.max_tokens ? ` · Audited output ceiling ${round.replay_config_overrides.max_tokens.frozen}→${round.replay_config_overrides.max_tokens.replay} tokens` : ""}`,
             ));
             participant.append(participantSummary, participantBody);
             participant.addEventListener("toggle", () => {

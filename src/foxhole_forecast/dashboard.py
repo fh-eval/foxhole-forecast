@@ -317,6 +317,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
             "replay_delay_minutes": run.get("replay_delay_minutes"),
             "replay_source_commit": run.get("replay_source_commit"),
             "replay_bundle_sha256": run.get("replay_bundle_sha256"),
+            "replay_config_overrides": run.get("replay_config_overrides", {}),
             "cost_usd": run.get("cost_usd", 0),
         }
         by_series[series].append(history)
@@ -440,6 +441,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                 "replay_delay_minutes": run.get("replay_delay_minutes"),
                 "replay_source_commit": run.get("replay_source_commit"),
                 "replay_bundle_sha256": run.get("replay_bundle_sha256"),
+                "replay_config_overrides": run.get("replay_config_overrides", {}),
                 "dropped_predictions": presented_drops,
                 "dropped_strategic_advice": presented_advice_drops,
                 "protocol": settlement.get("protocol"),

@@ -396,7 +396,13 @@ def retry_invalid_run(
     }
 
 
-def replay_invalid_run(settings: Settings, run_id: str) -> dict[str, Any]:
+def replay_invalid_run(
+    settings: Settings,
+    run_id: str,
+    *,
+    allow_paid: bool = False,
+    max_tokens_override: int | None = None,
+) -> dict[str, Any]:
     """Append a delayed replay that can observe only its frozen cutoff bundle."""
     runs_path = DATA_DIR / "model_runs.jsonl"
     runs = read_jsonl(runs_path)
@@ -431,8 +437,24 @@ def replay_invalid_run(settings: Settings, run_id: str) -> dict[str, Any]:
 
     replay_settings = _settings_from_payload(bundle["settings"])
     model_config = copy.deepcopy(bundle["model_config"])
-    if model_config.get("paid", False):
-        raise ValueError("Delayed replay is currently restricted to unpaid models")
+    paid = bool(model_config.get("paid", False))
+    if paid and not allow_paid:
+        raise ValueError("A paid delayed replay requires explicit authorization")
+    replay_config_overrides: dict[str, Any] = {}
+    if max_tokens_override is not None:
+        original_limit = int(
+            model_config.get("max_tokens", replay_settings.output_token_limit)
+        )
+        if not original_limit <= max_tokens_override <= 384_000:
+            raise ValueError(
+                "A replay max-token override must be between the frozen limit and 384000"
+            )
+        model_config["max_tokens"] = max_tokens_override
+        replay_config_overrides["max_tokens"] = {
+            "frozen": original_limit,
+            "replay": max_tokens_override,
+            "reason": "prevent_provider_length_truncation",
+        }
     inputs = bundle["inputs"]
     model_scout_packet = read_json(cohort_dir / inputs["scout_packet"])
     detail_source = read_json(cohort_dir / inputs["detail_source"])
@@ -449,6 +471,17 @@ def replay_invalid_run(settings: Settings, run_id: str) -> dict[str, Any]:
     replay_number = len(prior_replays) + 1
     replay_id = f"{run_id}:replay-{replay_number}"
     generated_at = datetime.now(UTC)
+    state_path = DATA_DIR / "state.json"
+    state = read_json(state_path, default={})
+    replay_ledger: dict[str, Any] | None = None
+    replay_ledger_key = ""
+    replay_spent = 0.0
+    if paid:
+        replay_ledger, replay_ledger_key, replay_spent, daily_limit, reserve = _budget(
+            replay_settings, model_config, state, generated_at.date().isoformat()
+        )
+        if replay_spent + reserve > daily_limit:
+            raise ValueError("The paid replay would exceed its daily budget guard")
     base = {
         "schema_version": 1,
         "run_id": replay_id,
@@ -471,6 +504,7 @@ def replay_invalid_run(settings: Settings, run_id: str) -> dict[str, Any]:
         "replay_source_commit": bundle.get("source_commit"),
         "replay_bundle_sha256": _canonical_hash(bundle),
         "replay_input_hashes": copy.deepcopy(inputs),
+        "replay_config_overrides": replay_config_overrides,
         "original_failure": {
             "status": original.get("status"),
             "error": original.get("error"),
@@ -562,6 +596,11 @@ def replay_invalid_run(settings: Settings, run_id: str) -> dict[str, Any]:
             "calls": provider.attempts,
             "cost_usd": round(provider.accumulated_cost, 8),
         }
+    if replay_ledger is not None:
+        replay_ledger[replay_ledger_key] = round(
+            replay_spent + provider.accumulated_cost, 8
+        )
+        write_json(state_path, state)
     append_jsonl(runs_path, replay)
 
     cohorts_path = DATA_DIR / "cohorts.jsonl"
@@ -688,6 +727,16 @@ def recover_invalid_runs(
                 DATA_DIR / "raw" / "cohorts" / run["cohort_id"],
                 run["series_id"],
             )
+            if bundle_path.exists() and model.get("paid", False):
+                actions.append(
+                    {
+                        "run_id": run_id,
+                        "action": "unresolved",
+                        "reason": "paid_replay_requires_incident_authorization",
+                        "salvage_error": salvage_error,
+                    }
+                )
+                continue
             result = (
                 replay_invalid_run(settings, run_id)
                 if bundle_path.exists()

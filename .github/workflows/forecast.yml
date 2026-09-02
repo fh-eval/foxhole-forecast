@@ -26,6 +26,10 @@ on:
         description: Model-failure issue to update after an automated replay
         required: false
         type: string
+      replay_max_tokens:
+        description: Optional audited output-ceiling increase for a truncated replay
+        required: false
+        type: string
 
 permissions: {}
 
@@ -40,6 +44,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      issues: read
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -57,6 +62,30 @@ jobs:
           path: /tmp/foxhole-retry-source
           github-token: ${{ github.token }}
           run-id: ${{ inputs.retry_source_workflow_run }}
+      - name: Authorize the requested replay against its incident
+        if: ${{ inputs.retry_run_id != '' }}
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          ISSUE_NUMBER: ${{ inputs.recovery_issue_number }}
+          RETRY_RUN_ID: ${{ inputs.retry_run_id }}
+        with:
+          script: |
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            const runId = process.env.RETRY_RUN_ID;
+            if (!Number.isInteger(issueNumber) || !runId) {
+              throw new Error('A replay requires a model-failure issue and run ID.');
+            }
+            const issue = (await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+            })).data;
+            const labels = issue.labels.map((label) =>
+              typeof label === 'string' ? label : label.name
+            );
+            if (!labels.includes('model-failure') || !issue.body.includes('`' + runId + '`')) {
+              throw new Error('The model-failure issue does not authorize this run ID.');
+            }
       - name: Run the due three-hour forecast cohort
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
@@ -65,6 +94,7 @@ jobs:
           SERIES_ID: ${{ inputs.series_id }}
           RETRY_RUN_ID: ${{ inputs.retry_run_id }}
           RETRY_SOURCE_WORKFLOW_RUN: ${{ inputs.retry_source_workflow_run }}
+          REPLAY_MAX_TOKENS: ${{ inputs.replay_max_tokens }}
         run: |
           mkdir -p .workflow
           if [[ -n "$RETRY_RUN_ID" ]]; then
@@ -76,8 +106,16 @@ jobs:
             series_id="${RETRY_RUN_ID#*:}"
             bundle="data/raw/cohorts/${cohort_id}/${series_id}-replay-bundle.json"
             if [[ -f "$bundle" ]]; then
+              replay_args=(--run-id "$RETRY_RUN_ID" --allow-paid)
+              if [[ -n "$REPLAY_MAX_TOKENS" ]]; then
+                if [[ ! "$REPLAY_MAX_TOKENS" =~ ^[0-9]+$ ]]; then
+                  echo "replay_max_tokens must contain digits only" >&2
+                  exit 2
+                fi
+                replay_args+=(--max-tokens "$REPLAY_MAX_TOKENS")
+              fi
               PYTHONPATH=src python -m foxhole_forecast replay-run \
-                --run-id "$RETRY_RUN_ID" >/dev/null
+                "${replay_args[@]}" >/dev/null
             else
               PYTHONPATH=src python -m foxhole_forecast retry-run \
                 --run-id "$RETRY_RUN_ID" \
@@ -365,6 +403,10 @@ jobs:
             const run = replays[0];
             const predictionCount = (run.forecast?.predictions || []).length;
             const succeeded = run.status === 'valid' && predictionCount > 0;
+            const maxTokens = run.replay_config_overrides?.max_tokens;
+            const overrideNote = maxTokens
+              ? `Replay configuration override: output ceiling ${maxTokens.frozen} → ${maxTokens.replay} tokens; frozen high-reasoning settings unchanged.`
+              : 'Replay configuration override: none.';
             const label = succeeded ? 'agent-recovered' : 'agent-recovery-failed';
             const color = succeeded ? '0e8a16' : 'b60205';
             try {
@@ -392,6 +434,7 @@ jobs:
                   '',
                   `The trusted forecast workflow replayed \`${runId}\` from its verified frozen input bundle.`,
                   `Append-only replay: \`${run.run_id}\``,
+                  overrideNote,
                   `The delayed replay contains ${predictionCount} valid prediction(s).`,
                   `Source workflow: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
                 ].join('\n')
@@ -400,6 +443,7 @@ jobs:
                   '',
                   `The one permitted frozen-input replay for \`${runId}\` remains invalid.`,
                   `Append-only replay: \`${run.run_id}\``,
+                  overrideNote,
                   `Stored error: ${run.error || 'none recorded'}`,
                   'ChatGPT/Codex or human review is required; no further automatic retry will be attempted.',
                 ].join('\n');

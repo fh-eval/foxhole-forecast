@@ -293,6 +293,16 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(captured["body"]["thinking"], {"type": "enabled"})
         self.assertEqual(captured["body"]["reasoning_effort"], "high")
 
+    def test_deepseek_forecast_series_keeps_high_reasoning_with_room_to_finish(self) -> None:
+        model = next(
+            candidate
+            for candidate in load_models()
+            if candidate["series_id"] == "deepseek-v4-flash-direct-json-event-v5"
+        )
+        self.assertEqual(model["request_extra"]["reasoning_effort"], "high")
+        self.assertEqual(model["request_extra"]["thinking"], {"type": "enabled"})
+        self.assertEqual(model["max_tokens"], 65536)
+
     def test_malformed_paid_response_still_counts_toward_budget(self) -> None:
         config = {
             "gateway": "deepseek",
