@@ -13,7 +13,7 @@ Each model run has two calls:
 
 Every model sees data with the same UTC cutoff. Local validation rejects malformed output, unknown bases or evidence IDs, invalid outcomes, and ETAs outside the 24-hour window. Invalid individual bets can be dropped without discarding the rest of a forecast round.
 
-Before a provider call, the evaluator stores a hashed replay bundle containing the exact model configuration, prompts, schemas, scout packet, and the complete cutoff-safe detail source. If a free provider has a transient outage, the trusted workflow may later submit that bundle without exposing any newer war data. The failed live run remains immutable; a successful result is appended and visibly labeled as a delayed replay, with its generation time, delay, source commit, and input hashes. Live and replay run counts are reported separately.
+Before a provider call, the evaluator stores a hashed replay bundle containing the exact model configuration, prompts, schemas, scout packet, and the complete cutoff-safe detail source. The shared detail source is deterministically gzip-compressed, while its SHA-256 digest covers the canonical uncompressed JSON. If a free provider has a transient outage, the trusted workflow may later submit that bundle without exposing any newer war data. The failed live run remains immutable; a successful result is appended and visibly labeled as a delayed replay, with its generation time, delay, source commit, and input hashes. Live and replay run counts are reported separately.
 
 CRPS evaluates the full event-time probability distribution. It incorporates the probability that the named outcome occurs, the exact ETA, and the model's conditional timing uncertainty. Lower CRPS is better and 0 minutes is perfect.
 

@@ -51,10 +51,13 @@ CORRECTION_USER = _load_prompt("correction.md")
 
 
 def _canonical_hash(value: Any) -> str:
-    encoded = json.dumps(
-        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
+    digest = hashlib.sha256()
+    encoder = json.JSONEncoder(
+        sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
+    for chunk in encoder.iterencode(value):
+        digest.update(chunk.encode("utf-8"))
+    return digest.hexdigest()
 
 
 def _settings_payload(settings: Settings) -> dict[str, Any]:
@@ -79,6 +82,12 @@ def _replay_bundle_path(cohort_dir: Path, series_id: str) -> Path:
     return cohort_dir / f"{series_id}-replay-bundle.json"
 
 
+def _replay_detail_source_path(cohort_dir: Path) -> Path:
+    compressed = cohort_dir / "replay-detail-source.json.gz"
+    legacy = cohort_dir / "replay-detail-source.json"
+    return compressed if compressed.exists() or not legacy.exists() else legacy
+
+
 def _write_replay_bundle(
     cohort_dir: Path,
     config: dict[str, Any],
@@ -87,7 +96,8 @@ def _write_replay_bundle(
     model_scout_packet: dict[str, Any],
     scout_contract: dict[str, Any],
 ) -> dict[str, Any]:
-    detail_source = read_json(cohort_dir / "replay-detail-source.json")
+    detail_source_path = _replay_detail_source_path(cohort_dir)
+    detail_source = read_json(detail_source_path)
     bundle = {
         "schema_version": 1,
         "bundle_type": "forecast_replay",
@@ -106,7 +116,7 @@ def _write_replay_bundle(
         "inputs": {
             "scout_packet": f"{config['series_id']}-scout-packet.json",
             "scout_packet_sha256": _canonical_hash(model_scout_packet),
-            "detail_source": "replay-detail-source.json",
+            "detail_source": detail_source_path.name,
             "detail_source_sha256": _canonical_hash(detail_source),
         },
         "stage": "scout",
@@ -162,7 +172,7 @@ def run_forecast_cohort(
     cohort_dir = DATA_DIR / "raw" / "cohorts" / cohort_id
     write_json(cohort_dir / "scout-packet.json", scout_packet)
     write_json(
-        cohort_dir / "replay-detail-source.json",
+        cohort_dir / "replay-detail-source.json.gz",
         build_detail_source(settings),
     )
     model_results: list[dict[str, Any]] = []
@@ -769,7 +779,7 @@ def _run_model(
     dropped_predictions: list[dict[str, Any]] = []
     dropped_strategic_advice: list[dict[str, Any]] = []
     try:
-        detail_source_path = cohort_dir / "replay-detail-source.json"
+        detail_source_path = _replay_detail_source_path(cohort_dir)
         if not detail_source_path.exists():
             write_json(
                 detail_source_path,
@@ -818,7 +828,7 @@ def _run_model(
         replay_bundle["stage"] = "forecast"
         replay_bundle["overview"] = copy.deepcopy(overview)
         frozen_detail_source = read_json(
-            cohort_dir / "replay-detail-source.json", default=None
+            _replay_detail_source_path(cohort_dir), default=None
         )
         detail_packet = build_detail_packet(
             settings,
