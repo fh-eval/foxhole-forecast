@@ -17,6 +17,7 @@ jobs:
         with:
           version: "0.16.5"
           args: "check --select F src tests"
+      - run: bash -n .githooks/pre-push
   python:
     runs-on: ubuntu-latest
     steps:

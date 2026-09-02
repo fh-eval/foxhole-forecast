@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+zero_sha="0000000000000000000000000000000000000000"
+
+while read -r _local_ref local_sha remote_ref remote_sha; do
+  if [[ "$remote_ref" != "refs/heads/main" || "$local_sha" == "$zero_sha" ]]; then
+    continue
+  fi
+  if [[ "$remote_sha" == "$zero_sha" ]]; then
+    echo "Refusing to create main directly; publish source work through a pull request." >&2
+    exit 1
+  fi
+
+  disallowed="$(git diff --name-only "$remote_sha" "$local_sha" | sed '/^data\//d; /^$/d')"
+  if [[ -n "$disallowed" ]]; then
+    echo "Refusing a direct source/config/workflow push to main." >&2
+    echo "Push a feature branch and merge it only after Validate passes." >&2
+    echo "$disallowed" >&2
+    exit 1
+  fi
+done

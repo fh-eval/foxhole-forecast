@@ -41,6 +41,7 @@ The primary agent owns integration, resolves cross-cutting decisions, and keeps 
 ## Interruption-safe integration
 
 - Never develop source, configuration, workflow, prompt, or website changes directly on `main`. Start from an up-to-date `main` and create a descriptively named `work/*`, `fix/*`, or `ops/*` branch before editing.
+- Keep the repository's versioned push guard enabled with `git config core.hooksPath .githooks`; it permits direct `main` pushes only when every changed path is under `data/`.
 - An unfinished change may remain uncommitted locally, or be checkpointed and pushed only to its feature branch. Never push partial or unverified implementation commits to `main`, even when usage or session time is nearly exhausted.
 - A pause of any duration must leave remote `main`, scheduled data collection, forecasting, and the deployed site on their last known-good code. Record remaining work in the branch commit or handoff notes, not in a partially deployed change.
 - Before integration, rebase the feature branch onto current `origin/main`, run the full Python tests, Ruff undefined-name/import checks, the watchdog tests, and the Astro production build. Open a pull request and wait for every `Validate` job to pass before merging.

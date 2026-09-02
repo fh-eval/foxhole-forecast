@@ -2,6 +2,14 @@
 
 Production work should be safe to leave unfinished for hours or days. Scheduled collection and forecasting run from `main`, so human and agent source changes are isolated on feature branches until validation is complete.
 
+Enable the repository's local push guard once per checkout:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+It rejects direct pushes of source, configuration, workflow, prompt, documentation, or website changes to `main`. Direct generated-data pushes remain available for trusted operational work.
+
 ## Start work
 
 ```bash
