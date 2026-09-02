@@ -3,13 +3,20 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
 import re
-from datetime import UTC, datetime
+from dataclasses import asdict
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
 from .config import DATA_DIR, ROOT, Settings, load_models
-from .packets import build_detail_packet, build_scout_packet, current_strategic_base_ids
+from .packets import (
+    build_detail_packet,
+    build_detail_source,
+    build_scout_packet,
+    current_strategic_base_ids,
+)
 from .providers import MissingApiKey, ModelProvider, ProviderResponse, _parse_json_content
 from .schemas import forecast_schema, scout_schema
 from .storage import (
@@ -41,6 +48,71 @@ def _load_prompt(name: str) -> str:
 SCOUT_SYSTEM = _load_prompt("scout.md")
 FORECAST_SYSTEM = _load_prompt("forecast.md")
 CORRECTION_USER = _load_prompt("correction.md")
+
+
+def _canonical_hash(value: Any) -> str:
+    encoded = json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _settings_payload(settings: Settings) -> dict[str, Any]:
+    value = asdict(settings)
+    value["forecast_horizons_hours"] = list(settings.forecast_horizons_hours)
+    value["strategic_icon_types"] = sorted(settings.strategic_icon_types)
+    return value
+
+
+def _settings_from_payload(value: dict[str, Any]) -> Settings:
+    normalized = copy.deepcopy(value)
+    normalized["forecast_horizons_hours"] = tuple(
+        normalized["forecast_horizons_hours"]
+    )
+    normalized["strategic_icon_types"] = frozenset(
+        normalized["strategic_icon_types"]
+    )
+    return Settings(**normalized)
+
+
+def _replay_bundle_path(cohort_dir: Path, series_id: str) -> Path:
+    return cohort_dir / f"{series_id}-replay-bundle.json"
+
+
+def _write_replay_bundle(
+    cohort_dir: Path,
+    config: dict[str, Any],
+    settings: Settings,
+    scout_packet: dict[str, Any],
+    model_scout_packet: dict[str, Any],
+    scout_contract: dict[str, Any],
+) -> dict[str, Any]:
+    detail_source = read_json(cohort_dir / "replay-detail-source.json")
+    bundle = {
+        "schema_version": 1,
+        "bundle_type": "forecast_replay",
+        "source_commit": os.environ.get("GITHUB_SHA"),
+        "series_id": config["series_id"],
+        "cutoff": scout_packet["cutoff"],
+        "war_id": scout_packet["war"]["warId"],
+        "model_config": copy.deepcopy(config),
+        "settings": _settings_payload(settings),
+        "prompts": {
+            "scout": SCOUT_SYSTEM,
+            "forecast": FORECAST_SYSTEM,
+            "correction": CORRECTION_USER,
+        },
+        "schemas": {"scout": scout_contract},
+        "inputs": {
+            "scout_packet": f"{config['series_id']}-scout-packet.json",
+            "scout_packet_sha256": _canonical_hash(model_scout_packet),
+            "detail_source": "replay-detail-source.json",
+            "detail_source_sha256": _canonical_hash(detail_source),
+        },
+        "stage": "scout",
+    }
+    write_json(_replay_bundle_path(cohort_dir, config["series_id"]), bundle)
+    return bundle
 
 
 def forecast_due(state: dict[str, Any], settings: Settings, now: datetime | None = None) -> tuple[bool, str]:
@@ -89,6 +161,10 @@ def run_forecast_cohort(
     cohort_id = _identifier(scout_packet["war"]["warId"], cutoff)
     cohort_dir = DATA_DIR / "raw" / "cohorts" / cohort_id
     write_json(cohort_dir / "scout-packet.json", scout_packet)
+    write_json(
+        cohort_dir / "replay-detail-source.json",
+        build_detail_source(settings),
+    )
     model_results: list[dict[str, Any]] = []
     for model_config in models:
         if series_id and model_config["series_id"] != series_id:
@@ -310,6 +386,197 @@ def retry_invalid_run(
     }
 
 
+def replay_invalid_run(settings: Settings, run_id: str) -> dict[str, Any]:
+    """Append a delayed replay that can observe only its frozen cutoff bundle."""
+    runs_path = DATA_DIR / "model_runs.jsonl"
+    runs = read_jsonl(runs_path)
+    original = next((row for row in runs if row.get("run_id") == run_id), None)
+    if original is None:
+        raise ValueError(f"Unknown run: {run_id}")
+    if original.get("status") != "invalid":
+        raise ValueError(f"Run {run_id} is not invalid")
+    prior_replays = [row for row in runs if row.get("replay_of") == run_id]
+    if prior_replays:
+        replay = prior_replays[-1]
+        return {
+            "run_id": replay["run_id"],
+            "replay_of": run_id,
+            "status": replay["status"],
+            "predictions": len((replay.get("forecast") or {}).get("predictions", [])),
+            "already_existed": True,
+        }
+
+    cohort_dir = DATA_DIR / "raw" / "cohorts" / original["cohort_id"]
+    bundle_path = _replay_bundle_path(cohort_dir, original["series_id"])
+    bundle = read_json(bundle_path, default=None)
+    if not isinstance(bundle, dict):
+        raise ValueError(f"Frozen replay bundle is missing for {run_id}")
+    if (
+        bundle.get("bundle_type") != "forecast_replay"
+        or bundle.get("series_id") != original["series_id"]
+        or bundle.get("cutoff") != original["cutoff"]
+        or bundle.get("war_id") != original["war_id"]
+    ):
+        raise ValueError("Frozen replay bundle identity does not match the failed run")
+
+    replay_settings = _settings_from_payload(bundle["settings"])
+    model_config = copy.deepcopy(bundle["model_config"])
+    if model_config.get("paid", False):
+        raise ValueError("Delayed replay is currently restricted to unpaid models")
+    inputs = bundle["inputs"]
+    model_scout_packet = read_json(cohort_dir / inputs["scout_packet"])
+    detail_source = read_json(cohort_dir / inputs["detail_source"])
+    if _canonical_hash(model_scout_packet) != inputs["scout_packet_sha256"]:
+        raise ValueError("Frozen scout packet hash does not match the replay manifest")
+    if _canonical_hash(detail_source) != inputs["detail_source_sha256"]:
+        raise ValueError("Frozen detail source hash does not match the replay manifest")
+    if (
+        model_scout_packet.get("cutoff") != original["cutoff"]
+        or detail_source.get("cutoff") != original["cutoff"]
+    ):
+        raise ValueError("A frozen replay input has a different cutoff")
+
+    replay_number = len(prior_replays) + 1
+    replay_id = f"{run_id}:replay-{replay_number}"
+    generated_at = datetime.now(UTC)
+    base = {
+        "schema_version": 1,
+        "run_id": replay_id,
+        "cohort_id": original["cohort_id"],
+        "series_id": original["series_id"],
+        "label": original.get("label", model_config.get("label")),
+        "gateway": model_config["gateway"],
+        "requested_model": model_config["model"],
+        "reasoning": _reasoning_metadata(model_config, replay_settings),
+        "cutoff": original["cutoff"],
+        "war_id": original["war_id"],
+        "created_at": isoformat(generated_at),
+        "submission_mode": "delayed_replay",
+        "replay_of": run_id,
+        "replay_generated_at": isoformat(generated_at),
+        "replay_delay_minutes": round(
+            (generated_at - parse_time(original["cutoff"])).total_seconds() / 60,
+            2,
+        ),
+        "replay_source_commit": bundle.get("source_commit"),
+        "replay_bundle_sha256": _canonical_hash(bundle),
+        "replay_input_hashes": copy.deepcopy(inputs),
+        "original_failure": {
+            "status": original.get("status"),
+            "error": original.get("error"),
+            "created_at": original.get("created_at"),
+        },
+    }
+    provider = ModelProvider(model_config, replay_settings)
+    prompts = bundle["prompts"]
+    schemas = bundle["schemas"]
+    overview = copy.deepcopy(bundle.get("overview") or {})
+    selected = list(overview.get("selected_regions") or [])
+    dropped_predictions: list[dict[str, Any]] = []
+    dropped_strategic_advice: list[dict[str, Any]] = []
+    replay_stage = "forecast" if inputs.get("detail_packet") else "scout"
+    try:
+        if replay_stage == "scout":
+            _scout_response, overview = _call_validated(
+                provider,
+                _messages(prompts["scout"], model_scout_packet, schemas["scout"]),
+                "foxhole_war_overview",
+                schemas["scout"],
+                lambda value: validate_scout(value, model_scout_packet, replay_settings),
+                correction_template=prompts["correction"],
+            )
+            selected = overview["selected_regions"]
+            detail_packet = build_detail_packet(
+                replay_settings, selected, frozen_source=detail_source
+            )
+            forecast_contract = forecast_schema(replay_settings)
+        else:
+            detail_packet = read_json(cohort_dir / inputs["detail_packet"])
+            if _canonical_hash(detail_packet) != inputs["detail_packet_sha256"]:
+                raise ValueError(
+                    "Frozen detail packet hash does not match the replay manifest"
+                )
+            forecast_contract = schemas["forecast"]
+
+        def validate_strict(value: dict[str, Any]) -> dict[str, Any]:
+            filtered, dropped = _drop_invalid_predictions(
+                value, detail_packet, replay_settings
+            )
+            if dropped:
+                raise ValidationError(_dropped_prediction_error(dropped))
+            validate_forecast(filtered, detail_packet, replay_settings)
+            return filtered
+
+        def validate_drops(value: dict[str, Any]) -> dict[str, Any]:
+            filtered, dropped, advice_drops = _filter_forecast_output(
+                value, detail_packet, replay_settings
+            )
+            dropped_predictions[:] = dropped
+            dropped_strategic_advice[:] = advice_drops
+            return filtered
+
+        forecast_response, filtered = _call_validated(
+            provider,
+            _messages(prompts["forecast"], detail_packet, forecast_contract),
+            "foxhole_forecast",
+            forecast_contract,
+            validate_strict,
+            fallback_validator=validate_drops,
+            correction_template=prompts["correction"],
+        )
+        replay = {
+            **base,
+            "status": "valid",
+            "returned_model": forecast_response.returned_model,
+            "upstream_provider": forecast_response.upstream_provider,
+            "headline": overview["headline"],
+            "war_summary": overview["war_summary"],
+            "selected_regions": selected,
+            "forecast": _freeze_evidence(filtered, detail_packet),
+            "dropped_predictions": dropped_predictions,
+            "dropped_strategic_advice": dropped_strategic_advice,
+            "calls": provider.attempts,
+            "cost_usd": round(provider.accumulated_cost, 8),
+            "settlement": {"status": "open", "horizons": {}},
+        }
+    except Exception as error:
+        replay = {
+            **base,
+            "status": "invalid",
+            "error": f"{type(error).__name__}: {error}",
+            "headline": overview.get("headline"),
+            "war_summary": overview.get("war_summary"),
+            "selected_regions": selected,
+            "dropped_predictions": dropped_predictions,
+            "dropped_strategic_advice": dropped_strategic_advice,
+            "calls": provider.attempts,
+            "cost_usd": round(provider.accumulated_cost, 8),
+        }
+    append_jsonl(runs_path, replay)
+
+    cohorts_path = DATA_DIR / "cohorts.jsonl"
+    cohorts = read_jsonl(cohorts_path)
+    for cohort in cohorts:
+        if cohort.get("cohort_id") != original["cohort_id"]:
+            continue
+        for entry in cohort.get("models", []):
+            if entry.get("run_id") != run_id:
+                continue
+            attempts = entry.setdefault("replay_attempts", [])
+            attempts.append({"run_id": replay_id, "status": replay["status"]})
+            if replay["status"] == "valid":
+                entry["status"] = "valid"
+                entry["accepted_replay_run_id"] = replay_id
+    write_jsonl(cohorts_path, cohorts)
+    return {
+        "run_id": replay_id,
+        "replay_of": run_id,
+        "status": replay["status"],
+        "predictions": len((replay.get("forecast") or {}).get("predictions", [])),
+        **({"error": replay["error"]} if replay.get("error") else {}),
+    }
+
+
 _TRANSIENT_ERROR_TYPES = (
     "ConnectionError",
     "ConnectionAbortedError",
@@ -322,14 +589,31 @@ _TRANSIENT_ERROR_TYPES = (
 )
 
 
-def _transient_provider_failure(run: dict[str, Any]) -> bool:
+def _transient_provider_failure(
+    run: dict[str, Any], runs: list[dict[str, Any]] | None = None
+) -> bool:
     """Return whether a failed run is safe to retry from frozen public data."""
     error = str(run.get("error") or "")
     if error.startswith(tuple(f"{name}:" for name in _TRANSIENT_ERROR_TYPES)):
         return True
-    return bool(
-        re.search(r"Provider returned HTTP (?:408|429|500|502|503|504)\b", error)
-    )
+    if re.search(r"Provider returned HTTP (?:408|429|500|502|503|504)\b", error):
+        return True
+    if (
+        "Provider returned HTTP 404" in error
+        and run.get("gateway") == "nvidia_nim"
+        and runs is not None
+    ):
+        cutoff = parse_time(run["cutoff"])
+        return any(
+            candidate.get("status") == "valid"
+            and candidate.get("series_id") == run.get("series_id")
+            and cutoff - timedelta(hours=24)
+            <= parse_time(candidate["cutoff"])
+            < cutoff
+            for candidate in runs
+            if candidate.get("cutoff")
+        )
+    return False
 
 
 def _has_stored_forecast_response(run: dict[str, Any]) -> bool:
@@ -387,14 +671,30 @@ def recover_invalid_runs(
             reason = "missing_model_config"
         elif run.get("retry_history"):
             reason = "automatic_retry_already_attempted"
-        elif not _transient_provider_failure(run):
+        elif not _transient_provider_failure(run, runs):
             reason = "non_transient_failure"
         else:
-            result = retry_invalid_run(settings, run_id, snapshot_path)
+            bundle_path = _replay_bundle_path(
+                DATA_DIR / "raw" / "cohorts" / run["cohort_id"],
+                run["series_id"],
+            )
+            result = (
+                replay_invalid_run(settings, run_id)
+                if bundle_path.exists()
+                else retry_invalid_run(settings, run_id, snapshot_path)
+            )
             actions.append(
                 {
                     "run_id": run_id,
-                    "action": "retried" if result["status"] == "valid" else "retry_failed",
+                    "action": (
+                        (
+                            "replayed"
+                            if result.get("replay_of")
+                            else "retried"
+                        )
+                        if result["status"] == "valid"
+                        else "retry_failed"
+                    ),
                     "paid_retry": bool(model.get("paid", False)),
                     "salvage_error": salvage_error,
                     **result,
@@ -469,6 +769,12 @@ def _run_model(
     dropped_predictions: list[dict[str, Any]] = []
     dropped_strategic_advice: list[dict[str, Any]] = []
     try:
+        detail_source_path = cohort_dir / "replay-detail-source.json"
+        if not detail_source_path.exists():
+            write_json(
+                detail_source_path,
+                build_detail_source(settings, latest_snapshot=detail_snapshot),
+            )
         scout_contract = scout_schema(settings)
         model_scout_packet = copy.deepcopy(scout_packet)
         previous_summary = _previous_model_summary(
@@ -479,6 +785,14 @@ def _run_model(
         write_json(
             cohort_dir / f"{config['series_id']}-scout-packet.json",
             model_scout_packet,
+        )
+        replay_bundle = _write_replay_bundle(
+            cohort_dir,
+            config,
+            settings,
+            scout_packet,
+            model_scout_packet,
+            scout_contract,
         )
         scout_messages = _messages(SCOUT_SYSTEM, model_scout_packet, scout_contract)
         scout_response, overview = _call_validated(
@@ -501,11 +815,27 @@ def _run_model(
                 "selected_regions": selected,
             },
         )
+        replay_bundle["stage"] = "forecast"
+        replay_bundle["overview"] = copy.deepcopy(overview)
+        frozen_detail_source = read_json(
+            cohort_dir / "replay-detail-source.json", default=None
+        )
         detail_packet = build_detail_packet(
-            settings, selected, latest_snapshot=detail_snapshot
+            settings,
+            selected,
+            latest_snapshot=detail_snapshot,
+            frozen_source=frozen_detail_source,
         )
         write_json(cohort_dir / f"{config['series_id']}-detail-packet.json", detail_packet)
         forecast_contract = forecast_schema(settings)
+        replay_bundle["schemas"]["forecast"] = forecast_contract
+        replay_bundle["inputs"]["detail_packet"] = (
+            f"{config['series_id']}-detail-packet.json"
+        )
+        replay_bundle["inputs"]["detail_packet_sha256"] = _canonical_hash(
+            detail_packet
+        )
+        write_json(_replay_bundle_path(cohort_dir, config["series_id"]), replay_bundle)
         forecast_messages = _messages(FORECAST_SYSTEM, detail_packet, forecast_contract)
         def validate_strict_forecast(value: dict[str, Any]) -> dict[str, Any]:
             filtered, dropped = _drop_invalid_predictions(value, detail_packet)
@@ -825,6 +1155,7 @@ def _call_validated(
     schema: dict[str, Any],
     validator: Callable[[dict[str, Any]], Any],
     fallback_validator: Callable[[dict[str, Any]], Any] | None = None,
+    correction_template: str = CORRECTION_USER,
 ) -> tuple[ProviderResponse, Any]:
     last_error: Exception | None = None
     active_messages = list(messages)
@@ -856,7 +1187,7 @@ def _call_validated(
                     *messages,
                     {
                         "role": "user",
-                        "content": CORRECTION_USER.format(error=last_error),
+                        "content": correction_template.format(error=last_error),
                     },
                 ]
     assert last_error is not None

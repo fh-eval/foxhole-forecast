@@ -10,6 +10,7 @@ from .config import Settings
 from .dashboard import build_dashboard_data
 from .forecasting import (
     recover_invalid_runs,
+    replay_invalid_run,
     retry_invalid_run,
     run_forecast_cohort,
     salvage_invalid_run,
@@ -36,6 +37,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     retry.add_argument("--run-id", required=True)
     retry.add_argument("--snapshot", type=Path, required=True)
+    replay = subcommands.add_parser(
+        "replay-run",
+        help="Append a delayed replay using only an invalid run's frozen bundle",
+    )
+    replay.add_argument("--run-id", required=True)
     recover = subcommands.add_parser(
         "recover-model-runs",
         help="Attempt safe salvage and one free-model retry for a cohort",
@@ -85,6 +91,8 @@ def main(argv: list[str] | None = None) -> int:
             result = salvage_invalid_run(settings, args.run_id)
         elif args.command == "retry-run":
             result = retry_invalid_run(settings, args.run_id, args.snapshot)
+        elif args.command == "replay-run":
+            result = replay_invalid_run(settings, args.run_id)
         elif args.command == "recover-model-runs":
             result = recover_invalid_runs(settings, args.cohort_id, args.snapshot)
         elif args.command == "score":

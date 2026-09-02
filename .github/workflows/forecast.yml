@@ -15,7 +15,7 @@ on:
         required: false
         type: string
       retry_run_id:
-        description: Retry this invalid model run from a retained workflow artifact
+        description: Replay this invalid model run from its frozen input bundle
         required: false
         type: string
       retry_source_workflow_run:
@@ -23,7 +23,7 @@ on:
         required: false
         type: string
       recovery_issue_number:
-        description: Model-failure issue to update after an automated retry
+        description: Model-failure issue to update after an automated replay
         required: false
         type: string
 
@@ -72,9 +72,17 @@ jobs:
               echo "retry_source_workflow_run is required for a retry" >&2
               exit 2
             fi
-            PYTHONPATH=src python -m foxhole_forecast retry-run \
-              --run-id "$RETRY_RUN_ID" \
-              --snapshot /tmp/foxhole-retry-source/data/raw/latest.json >/dev/null
+            cohort_id="${RETRY_RUN_ID%%:*}"
+            series_id="${RETRY_RUN_ID#*:}"
+            bundle="data/raw/cohorts/${cohort_id}/${series_id}-replay-bundle.json"
+            if [[ -f "$bundle" ]]; then
+              PYTHONPATH=src python -m foxhole_forecast replay-run \
+                --run-id "$RETRY_RUN_ID" >/dev/null
+            else
+              PYTHONPATH=src python -m foxhole_forecast retry-run \
+                --run-id "$RETRY_RUN_ID" \
+                --snapshot /tmp/foxhole-retry-source/data/raw/latest.json >/dev/null
+            fi
             PYTHONPATH=src python -m foxhole_forecast score >/dev/null
             PYTHONPATH=src python -m foxhole_forecast build-dashboard >/dev/null
             exit 0
@@ -114,7 +122,7 @@ jobs:
             .workflow/forecast-result.json
             .workflow/recovery-result.json
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 90
 
   persist:
     needs: evaluate
@@ -346,11 +354,15 @@ jobs:
               .split(/\r?\n/)
               .filter(Boolean)
               .map((line) => JSON.parse(line));
-            const matching = runs.filter((run) => run.run_id === runId);
-            if (matching.length !== 1) {
-              throw new Error(`Expected one recovered run; found ${matching.length}.`);
+            const originals = runs.filter((run) => run.run_id === runId);
+            if (originals.length !== 1) {
+              throw new Error(`Expected one original run; found ${originals.length}.`);
             }
-            const run = matching[0];
+            const replays = runs.filter((run) => run.replay_of === runId);
+            if (replays.length !== 1) {
+              throw new Error(`Expected one append-only replay; found ${replays.length}.`);
+            }
+            const run = replays[0];
             const predictionCount = (run.forecast?.predictions || []).length;
             const succeeded = run.status === 'valid' && predictionCount > 0;
             const label = succeeded ? 'agent-recovered' : 'agent-recovery-failed';
@@ -378,14 +390,16 @@ jobs:
               ? [
                   '## Automated recovery succeeded',
                   '',
-                  `The trusted forecast workflow retried \`${runId}\` against its original frozen cutoff.`,
-                  `The recovered run contains ${predictionCount} valid prediction(s).`,
+                  `The trusted forecast workflow replayed \`${runId}\` from its verified frozen input bundle.`,
+                  `Append-only replay: \`${run.run_id}\``,
+                  `The delayed replay contains ${predictionCount} valid prediction(s).`,
                   `Source workflow: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
                 ].join('\n')
               : [
                   '## Automated recovery did not succeed',
                   '',
-                  `The one permitted frozen-data retry for \`${runId}\` remains invalid.`,
+                  `The one permitted frozen-input replay for \`${runId}\` remains invalid.`,
+                  `Append-only replay: \`${run.run_id}\``,
                   `Stored error: ${run.error || 'none recorded'}`,
                   'ChatGPT/Codex or human review is required; no further automatic retry will be attempted.',
                 ].join('\n');

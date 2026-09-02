@@ -59,6 +59,22 @@ class ModelRunHealthTests(unittest.TestCase):
         self.assertEqual(result["status"], "healthy")
         self.assertEqual(result["incidents"], [])
 
+    def test_verified_replay_satisfies_a_failed_cohort_entry(self) -> None:
+        cohort = self.cohort()
+        cohort["models"][0] = {
+            "series_id": "model-a",
+            "run_id": "cohort-1:model-a",
+            "status": "valid",
+            "accepted_replay_run_id": "cohort-1:model-a:replay-1",
+        }
+        runs = [
+            {"run_id": "cohort-1:model-a", "status": "invalid"},
+            {"run_id": "cohort-1:model-a:replay-1", "status": "valid"},
+            {"run_id": "cohort-1:model-b", "status": "valid"},
+        ]
+        result = self.audit([cohort], runs)
+        self.assertEqual(result["status"], "healthy")
+
     def test_missing_model_entry_is_an_incident(self) -> None:
         cohort = self.cohort()
         cohort["models"] = cohort["models"][:1]

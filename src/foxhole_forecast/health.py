@@ -55,7 +55,10 @@ def audit_model_runs(
         for series_id, model in expected.items():
             entry = entries.get(series_id)
             run_id = entry.get("run_id") if entry else f"{cohort['cohort_id']}:{series_id}"
-            run = runs.get(run_id)
+            accepted_run_id = (
+                entry.get("accepted_replay_run_id") if entry else None
+            )
+            run = runs.get(accepted_run_id or run_id)
             status = (run or entry or {}).get("status")
             if entry is None:
                 reason = "missing_cohort_entry"
@@ -70,6 +73,7 @@ def audit_model_runs(
                     "series_id": series_id,
                     "label": model.get("label", series_id),
                     "run_id": run_id,
+                    "accepted_replay_run_id": accepted_run_id,
                     "reason": reason,
                     "status": status or "missing",
                     "error": _short_error((run or {}).get("error")),

@@ -43,6 +43,42 @@ class PacketTests(unittest.TestCase):
             self.assertEqual(packet["cutoff"], frozen["observed_at"])
             self.assertEqual(packet["strategic_bases"][0]["name"], "Frozen Base")
 
+    def test_detail_source_freezes_every_region_before_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            frozen = {
+                "observed_at": "2026-01-02T00:00:00Z",
+                "war": {"warId": "war-1", "warNumber": 1},
+                "maps": {
+                    name: {
+                        "report": {"colonialCasualties": 10, "wardenCasualties": 20},
+                        "bases": {
+                            f"base-{name}": {
+                                "base_id": f"base-{name}",
+                                "name": f"{name} Base",
+                                "map_name": name,
+                                "team": "WARDENS",
+                                "icon_type": 45,
+                            }
+                        },
+                    }
+                    for name in ("AlphaHex", "BravoHex")
+                },
+            }
+            write_json(data / "raw" / "latest.json", frozen)
+            with patch.object(packets, "DATA_DIR", data):
+                source = packets.build_detail_source(packets.Settings.load())
+                frozen["maps"]["BravoHex"]["bases"]["base-BravoHex"]["name"] = (
+                    "Later Name"
+                )
+                write_json(data / "raw" / "latest.json", frozen)
+                packet = packets.build_detail_packet(
+                    packets.Settings.load(), ["BravoHex"], frozen_source=source
+                )
+
+            self.assertEqual(set(source["regions"]), {"AlphaHex", "BravoHex"})
+            self.assertEqual(packet["strategic_bases"][0]["name"], "BravoHex Base")
+
     def test_future_rows_never_enter_history(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             data = Path(directory)

@@ -887,10 +887,16 @@ def aggregate_scores(
 ) -> dict[str, Any]:
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     statuses: dict[str, list[str]] = defaultdict(list)
+    submission_modes: dict[str, list[str]] = defaultdict(list)
+    replay_run_ids: set[str] = set()
     labels: dict[str, dict[str, Any]] = {}
     for run in runs:
         series = run["series_id"]
         statuses[series].append(run.get("status", "unknown"))
+        mode = run.get("submission_mode", "live")
+        submission_modes[series].append(mode)
+        if mode == "delayed_replay":
+            replay_run_ids.add(run["run_id"])
         labels[series] = run
         settlement = settlements.get(run["run_id"])
         if settlement:
@@ -906,6 +912,7 @@ def aggregate_scores(
         crps_values: list[float] = []
         scored_bets: list[dict[str, Any]] = []
         hits = partials = misses = open_bets = censored_bets = 0
+        replay_scoreable_bets = 0
         for row in complete:
             for horizon in row.get("horizons", {}).values():
                 if horizon["evaluated"] and horizon["brier"] is not None:
@@ -934,6 +941,7 @@ def aggregate_scores(
                 if bet.get("crps_minutes") is not None:
                     crps_values.append(bet["crps_minutes"])
                     scored_bets.append(bet)
+                    replay_scoreable_bets += row.get("run_id") in replay_run_ids
         total_n = sum(value[1] for value in horizon_values)
         ibs = sum(value[0] * value[1] for value in horizon_values) / total_n if total_n else None
         baseline = sum(value[2] * value[3] for value in horizon_values) / total_n if total_n else None
@@ -950,7 +958,20 @@ def aggregate_scores(
                 "returned_model": identity.get("returned_model"),
                 "upstream_provider": identity.get("upstream_provider"),
                 "valid_runs": series_statuses.count("valid"),
+                "valid_live_runs": sum(
+                    status == "valid" and mode == "live"
+                    for status, mode in zip(
+                        series_statuses, submission_modes[series]
+                    )
+                ),
+                "valid_replay_runs": sum(
+                    status == "valid" and mode == "delayed_replay"
+                    for status, mode in zip(
+                        series_statuses, submission_modes[series]
+                    )
+                ),
                 "failed_runs": len(series_statuses) - series_statuses.count("valid"),
+                "replay_scoreable_bets": replay_scoreable_bets,
                 "complete_runs": len(complete),
                 "integrated_brier": round(ibs, 8) if ibs is not None else None,
                 "baseline_integrated_brier": round(baseline, 8) if baseline is not None else None,

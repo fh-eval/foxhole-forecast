@@ -356,62 +356,107 @@ def build_detail_packet(
     settings: Settings,
     selected_regions: list[str],
     latest_snapshot: dict[str, Any] | None = None,
+    frozen_source: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    source = frozen_source or build_detail_source(settings, latest_snapshot)
+    if source.get("packet_type") != "detail_source":
+        raise ValueError("Frozen replay source is not a detail_source packet")
+    allowed = set(source.get("regions", {}))
+    selected = [name for name in selected_regions if name in allowed][
+        : settings.scout_region_limit
+    ]
+    regions = source["regions"]
+    return {
+        "packet_version": source["packet_version"],
+        "packet_type": "detail",
+        "cutoff": source["cutoff"],
+        "war": source["war"],
+        "selected_regions": selected,
+        "data_dictionary": source["data_dictionary"],
+        "strategic_bases": sorted(
+            [base for name in selected for base in regions[name]["strategic_bases"]],
+            key=lambda row: row["base_id"],
+        ),
+        "selected_metrics": [
+            metric for name in selected for metric in regions[name]["selected_metrics"]
+        ],
+        "selected_region_hourly_series": {
+            name: regions[name]["hourly_series"] for name in selected
+        },
+        "recent_events": [
+            {key: value for key, value in event.items() if key != "_replay_order"}
+            for event in sorted(
+                [
+                    event
+                    for name in selected
+                    for event in regions[name]["recent_events"]
+                ],
+                key=lambda row: row["_replay_order"],
+            )
+        ],
+        "limits": source["limits"],
+    }
+
+
+def build_detail_source(
+    settings: Settings,
+    latest_snapshot: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Freeze every possible detail-stage input before a model selects regions."""
     latest = latest_snapshot or read_json(DATA_DIR / "raw" / "latest.json")
     if not latest:
         raise RuntimeError("No current snapshot. Run collect first.")
     cutoff = latest["observed_at"]
     war_id = latest["war"]["warId"]
-    allowed = set(latest["maps"])
-    selected = [name for name in selected_regions if name in allowed][: settings.scout_region_limit]
     history = _history_before(cutoff, war_id, settings.history_hours)
     events = _events_before(cutoff, war_id, settings.recent_event_hours)
-    strategic_bases = sorted(
-        (
-            {
-                "base_id": base["base_id"],
-                "name": base.get("name"),
-                "map_name": base.get("map_name"),
-                "current_owner": base.get("team"),
-                "valid_outcomes": (
-                    ["CAPTURED_BY_WARDENS", "CAPTURED_BY_COLONIALS"]
-                    if base.get("team") == "NONE"
-                    else [
-                        f"CAPTURED_BY_{'COLONIALS' if base.get('team') == 'WARDENS' else 'WARDENS'}",
-                        "DESTROYED",
-                    ]
-                ),
-                "icon_type": base.get("icon_type"),
-                "base_type": strategic_base_type(base.get("icon_type")),
-                "flags": base.get("flags", []),
-                "x": base.get("x"),
-                "y": base.get("y"),
-            }
-            for name in selected
-            for base in latest["maps"][name].get("bases", {}).values()
-        ),
-        key=lambda row: row["base_id"],
-    )
-    selected_metrics = [
-        metric
-        for name in selected
-        for metric in _region_metrics(
-            latest["maps"][name].get("report", {}), history, name, cutoff
+    regions: dict[str, dict[str, Any]] = {}
+    event_order = {id(event): index for index, event in enumerate(events)}
+    for name in sorted(latest["maps"]):
+        strategic_bases = sorted(
+            (
+                {
+                    "base_id": base["base_id"],
+                    "name": base.get("name"),
+                    "map_name": base.get("map_name"),
+                    "current_owner": base.get("team"),
+                    "valid_outcomes": (
+                        ["CAPTURED_BY_WARDENS", "CAPTURED_BY_COLONIALS"]
+                        if base.get("team") == "NONE"
+                        else [
+                            f"CAPTURED_BY_{'COLONIALS' if base.get('team') == 'WARDENS' else 'WARDENS'}",
+                            "DESTROYED",
+                        ]
+                    ),
+                    "icon_type": base.get("icon_type"),
+                    "base_type": strategic_base_type(base.get("icon_type")),
+                    "flags": base.get("flags", []),
+                    "x": base.get("x"),
+                    "y": base.get("y"),
+                }
+                for base in latest["maps"][name].get("bases", {}).values()
+            ),
+            key=lambda row: row["base_id"],
         )
-    ]
+        region_events = [event for event in events if event["map_name"] == name]
+        regions[name] = {
+            "strategic_bases": strategic_bases,
+            "selected_metrics": _region_metrics(
+                latest["maps"][name].get("report", {}), history, name, cutoff
+            ),
+            "hourly_series": _hourly_report_series(history, [name], cutoff)[name],
+            "recent_events": [
+                {**_compact_event(event), "_replay_order": event_order[id(event)]}
+                for event in region_events
+            ],
+        }
     return {
         "packet_version": 2,
-        "packet_type": "detail",
+        "packet_type": "detail_source",
         "cutoff": cutoff,
         "war": latest["war"],
-        "selected_regions": selected,
         "data_dictionary": DATA_DICTIONARY,
-        "strategic_bases": strategic_bases,
-        "selected_metrics": selected_metrics,
-        "selected_region_hourly_series": _hourly_report_series(history, selected, cutoff),
-        "recent_events": [
-            _compact_event(event) for event in events if event["map_name"] in selected
-        ],
+        "regions": regions,
         "limits": {
             "forecast_bases": settings.forecast_base_limit,
             "event_bets": settings.event_bet_limit,

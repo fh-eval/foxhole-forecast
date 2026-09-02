@@ -14,6 +14,7 @@ from foxhole_forecast.forecasting import (
     FORECAST_SYSTEM,
     SCOUT_SYSTEM,
     _budget,
+    _canonical_hash,
     _call_validated,
     _dropped_prediction_error,
     _drop_invalid_strategic_advice,
@@ -21,7 +22,10 @@ from foxhole_forecast.forecasting import (
     _messages,
     _drop_invalid_predictions,
     _previous_model_summary,
+    _settings_payload,
+    _transient_provider_failure,
     recover_invalid_runs,
+    replay_invalid_run,
     retry_invalid_run,
     run_forecast_cohort,
     salvage_invalid_run,
@@ -32,6 +36,146 @@ from foxhole_forecast.validation import ValidationError
 
 
 class ForecastBudgetTests(unittest.TestCase):
+    def test_delayed_replay_is_append_only_and_accepts_verified_bundle(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            run_id = "cohort-1:model-1"
+            cutoff = "2026-01-02T00:00:00Z"
+            original = {
+                "run_id": run_id,
+                "cohort_id": "cohort-1",
+                "series_id": "model-1",
+                "label": "Model 1",
+                "gateway": "nvidia_nim",
+                "requested_model": "provider/model-1",
+                "war_id": "war-1",
+                "cutoff": cutoff,
+                "created_at": cutoff,
+                "status": "invalid",
+                "error": "RuntimeError: Provider returned HTTP 404:",
+            }
+            write_jsonl(data / "model_runs.jsonl", [original])
+            write_jsonl(
+                data / "cohorts.jsonl",
+                [
+                    {
+                        "cohort_id": "cohort-1",
+                        "models": [
+                            {
+                                "run_id": run_id,
+                                "series_id": "model-1",
+                                "status": "invalid",
+                            }
+                        ],
+                    }
+                ],
+            )
+            cohort = data / "raw" / "cohorts" / "cohort-1"
+            scout = {"cutoff": cutoff, "war": {"warId": "war-1"}}
+            source = {
+                "packet_version": 2,
+                "packet_type": "detail_source",
+                "cutoff": cutoff,
+                "war": {"warId": "war-1"},
+                "data_dictionary": {},
+                "regions": {},
+                "limits": {},
+            }
+            detail = {
+                "packet_version": 2,
+                "packet_type": "detail",
+                "cutoff": cutoff,
+                "war": {"warId": "war-1"},
+                "selected_regions": [],
+                "data_dictionary": {},
+                "strategic_bases": [],
+                "selected_metrics": [],
+                "selected_region_hourly_series": {},
+                "recent_events": [],
+                "limits": {},
+            }
+            write_json(cohort / "model-1-scout-packet.json", scout)
+            write_json(cohort / "replay-detail-source.json", source)
+            write_json(cohort / "model-1-detail-packet.json", detail)
+            write_json(
+                cohort / "model-1-replay-bundle.json",
+                {
+                    "schema_version": 1,
+                    "bundle_type": "forecast_replay",
+                    "source_commit": "abc123",
+                    "series_id": "model-1",
+                    "cutoff": cutoff,
+                    "war_id": "war-1",
+                    "model_config": {
+                        "series_id": "model-1",
+                        "label": "Model 1",
+                        "gateway": "nvidia_nim",
+                        "model": "provider/model-1",
+                        "api_key_env": "TEST_KEY",
+                        "paid": False,
+                    },
+                    "settings": _settings_payload(Settings.load()),
+                    "prompts": {
+                        "scout": "scout",
+                        "forecast": "forecast",
+                        "correction": "{error}",
+                    },
+                    "schemas": {"scout": {}, "forecast": {}},
+                    "overview": {
+                        "headline": "Frozen headline",
+                        "war_summary": "Frozen summary",
+                        "selected_regions": [],
+                    },
+                    "inputs": {
+                        "scout_packet": "model-1-scout-packet.json",
+                        "scout_packet_sha256": _canonical_hash(scout),
+                        "detail_source": "replay-detail-source.json",
+                        "detail_source_sha256": _canonical_hash(source),
+                        "detail_packet": "model-1-detail-packet.json",
+                        "detail_packet_sha256": _canonical_hash(detail),
+                    },
+                    "stage": "forecast",
+                },
+            )
+            provider = SimpleNamespace(
+                config={"validation_attempts": 1}, attempts=[], accumulated_cost=0.0
+            )
+            response = SimpleNamespace(returned_model="provider/model-1", upstream_provider="NVIDIA")
+            forecast = {"predictions": [{"base_id": "base-1"}]}
+            with patch("foxhole_forecast.forecasting.DATA_DIR", data), patch(
+                "foxhole_forecast.forecasting.ModelProvider", return_value=provider
+            ), patch(
+                "foxhole_forecast.forecasting._call_validated",
+                return_value=(response, forecast),
+            ), patch(
+                "foxhole_forecast.forecasting._freeze_evidence",
+                return_value=forecast,
+            ):
+                result = replay_invalid_run(Settings.load(), run_id)
+
+            rows = read_jsonl(data / "model_runs.jsonl")
+            self.assertEqual(result["status"], "valid")
+            self.assertEqual(len(rows), 2)
+            self.assertEqual(rows[0], original)
+            self.assertEqual(rows[1]["replay_of"], run_id)
+            self.assertEqual(rows[1]["submission_mode"], "delayed_replay")
+            entry = read_jsonl(data / "cohorts.jsonl")[0]["models"][0]
+            self.assertEqual(entry["accepted_replay_run_id"], rows[1]["run_id"])
+
+    def test_recent_nvidia_success_makes_an_isolated_404_transient(self) -> None:
+        failed = {
+            "series_id": "nemotron",
+            "gateway": "nvidia_nim",
+            "cutoff": "2026-08-31T12:00:00Z",
+            "error": "RuntimeError: Provider returned HTTP 404:",
+        }
+        recent = {
+            "series_id": "nemotron",
+            "status": "valid",
+            "cutoff": "2026-08-31T09:00:00Z",
+        }
+        self.assertTrue(_transient_provider_failure(failed, [recent, failed]))
+
     def test_automatic_recovery_retries_one_free_transient_failure(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             data = Path(directory)
