@@ -49,9 +49,11 @@ jobs:
           if git diff --cached --quiet; then
             echo "No archive maintenance changes"
           else
+            .github/scripts/assert-data-only.sh --staged
             git commit -m "data: maintain ended-war archives"
             git fetch origin main
             git rebase origin/main
+            .github/scripts/assert-data-only.sh origin/main
             git push
           fi
       - name: Upload maintenance report
