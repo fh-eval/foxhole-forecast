@@ -7,6 +7,7 @@ import statistics
 from typing import Any
 
 from .archives import (
+    read_archived_mapping,
     read_mapping_with_archives,
     read_rows_with_archives,
     read_wars_with_archives,
@@ -299,6 +300,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
         DATA_DIR, "events.jsonl", "events.json.gz"
     )
     wars = read_wars_with_archives(DATA_DIR)
+    archived_packets = read_archived_mapping(DATA_DIR, "frozen-packets.json.gz")
     current_war = latest.get("war", {})
     current_war_id = current_war.get("warId")
     scout_packet = build_scout_packet(current_settings) if latest else None
@@ -318,8 +320,8 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
     rounds_by_participant: dict[tuple[str, str, str], dict[str, Any]] = {}
     for run in runs:
         series = run["series_id"]
-        metric_lookup = _metric_lookup(run)
-        cutoff_bases = _base_lookup(run)
+        metric_lookup = _metric_lookup(run, archived_packets)
+        cutoff_bases = _base_lookup(run, archived_packets)
         if run.get("status") == "valid" and run.get("war_id") == current_war_id and (
             series not in latest_valid_runs or run["cutoff"] > latest_valid_runs[series]["cutoff"]
         ):
@@ -859,7 +861,9 @@ def _build_war_api_snapshot(
     }
 
 
-def _metric_lookup(run: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _metric_lookup(
+    run: dict[str, Any], archived_packets: dict[str, Any] | None = None
+) -> dict[str, dict[str, Any]]:
     path = (
         DATA_DIR
         / "raw"
@@ -867,14 +871,18 @@ def _metric_lookup(run: dict[str, Any]) -> dict[str, dict[str, Any]]:
         / run["cohort_id"]
         / f"{run['series_id']}-detail-packet.json"
     )
-    packet = read_json(path, default={})
+    packet = read_json(path, default=None)
+    if packet is None:
+        packet = (archived_packets or {}).get(str(path.relative_to(DATA_DIR)), {})
     return {
         metric["metric_id"]: metric
         for metric in packet.get("selected_metrics", [])
     }
 
 
-def _base_lookup(run: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _base_lookup(
+    run: dict[str, Any], archived_packets: dict[str, Any] | None = None
+) -> dict[str, dict[str, Any]]:
     path = (
         DATA_DIR
         / "raw"
@@ -882,7 +890,9 @@ def _base_lookup(run: dict[str, Any]) -> dict[str, dict[str, Any]]:
         / run["cohort_id"]
         / f"{run['series_id']}-detail-packet.json"
     )
-    packet = read_json(path, default={})
+    packet = read_json(path, default=None)
+    if packet is None:
+        packet = (archived_packets or {}).get(str(path.relative_to(DATA_DIR)), {})
     return {
         base["base_id"]: base
         for base in packet.get("strategic_bases", [])

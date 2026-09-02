@@ -222,6 +222,17 @@ def read_mapping_with_archives(
     return merged
 
 
+def read_archived_mapping(data_dir: Path, artifact_name: str) -> dict[str, Any]:
+    """Read and merge a mapping artifact from every verified war archive."""
+    merged: dict[str, Any] = {}
+    for archive_dir in _archive_directories(data_dir):
+        payload = _read_verified_artifact(archive_dir, artifact_name)
+        if not isinstance(payload, dict):
+            raise ValueError(f"War archive artifact is not a mapping: {artifact_name}")
+        merged.update(payload)
+    return merged
+
+
 def read_wars_with_archives(data_dir: Path) -> dict[str, dict[str, Any]]:
     """Return archived and live war registry entries, preferring the registry."""
     wars: dict[str, dict[str, Any]] = {}

@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from foxhole_forecast.archives import (
     create_war_archive,
+    read_archived_mapping,
     read_mapping_with_archives,
     read_rows_with_archives,
     read_wars_with_archives,
@@ -227,6 +228,11 @@ class WarArchiveTests(unittest.TestCase):
                 {run["run_id"] for run in restored}, {"run-139", "run-140"}
             )
             self.assertTrue(verify_war_archive(data_dir, 139)["verified"])
+            packets = read_archived_mapping(data_dir, "frozen-packets.json.gz")
+            self.assertEqual(
+                packets["raw/cohorts/cohort-139/scout-packet.json"]["war_id"],
+                "ended-war",
+            )
 
     def test_active_war_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
