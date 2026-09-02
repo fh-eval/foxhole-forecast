@@ -6,6 +6,7 @@ from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from .archives import read_mapping_with_archives, read_rows_with_archives
 from .config import DATA_DIR, Settings
 from .score_metrics import summarize_crps, summarize_selection
 from .storage import isoformat, parse_time, read_json, read_jsonl, write_json
@@ -53,7 +54,16 @@ def settle_and_score(settings: Settings, now: datetime | None = None) -> dict[st
             _war_end(wars, run["war_id"]),
         )
     write_json(DATA_DIR / "settlements.json", settlements)
-    scores = aggregate_scores(runs, settlements, current)
+    aggregate_runs = read_rows_with_archives(
+        DATA_DIR,
+        "model_runs.jsonl",
+        "model-runs.json.gz",
+        identity_fields=("run_id",),
+    )
+    aggregate_settlements = read_mapping_with_archives(
+        DATA_DIR, "settlements.json", "settlements.json.gz"
+    )
+    scores = aggregate_scores(aggregate_runs, aggregate_settlements, current)
     write_json(DATA_DIR / "scores.json", scores)
     return scores
 

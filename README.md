@@ -70,6 +70,8 @@ npm run build
 
 War archives under `data/archives/` contain only records associated with the selected ended war, including frozen packets and referenced provider-response objects. Artifacts use deterministic gzip and record their byte-level SHA-256 hashes, sizes, counts, and source-file hashes in the manifest. An existing archive is verified instead of overwritten; creating one does not prune or rewrite canonical operational data.
 
+Dashboard builds and all-time score aggregation merge verified archive records with live data, deduplicating them while preferring live copies. Forecast generation, recovery, and model-health checks remain live-data-only, so archived history cannot enter a new model prompt or trigger an operational incident.
+
 ### Optional FoxholeStats import
 
 Historical context can be imported from a saved FoxholeStats event-log page:

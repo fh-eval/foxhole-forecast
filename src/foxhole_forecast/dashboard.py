@@ -6,11 +6,16 @@ import re
 import statistics
 from typing import Any
 
+from .archives import (
+    read_mapping_with_archives,
+    read_rows_with_archives,
+    read_wars_with_archives,
+)
 from .config import DATA_DIR, ROOT, Settings
 from .domain import strategic_base_type
 from .packets import build_scout_packet
 from .score_metrics import summarize_crps, summarize_selection
-from .storage import isoformat, parse_time, read_json, read_jsonl, write_json
+from .storage import isoformat, parse_time, read_json, write_json
 from .war_lifecycle import war_ended_at, war_is_active
 
 
@@ -269,14 +274,31 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
     latest = read_json(DATA_DIR / "raw" / "latest.json", default={})
     pipeline_state = read_json(DATA_DIR / "state.json", default={})
     scores = read_json(DATA_DIR / "scores.json", default={"models": []})
-    runs = read_jsonl(DATA_DIR / "model_runs.jsonl")
+    runs = read_rows_with_archives(
+        DATA_DIR,
+        "model_runs.jsonl",
+        "model-runs.json.gz",
+        identity_fields=("run_id",),
+    )
     cohorts = {
-        row["cohort_id"]: row for row in read_jsonl(DATA_DIR / "cohorts.jsonl")
+        row["cohort_id"]: row
+        for row in read_rows_with_archives(
+            DATA_DIR,
+            "cohorts.jsonl",
+            "cohorts.json.gz",
+            identity_fields=("cohort_id",),
+        )
     }
-    settlements = read_json(DATA_DIR / "settlements.json", default={})
-    collector_runs = read_jsonl(DATA_DIR / "collector_runs.jsonl")
-    official_events = read_jsonl(DATA_DIR / "events.jsonl")
-    wars = read_json(DATA_DIR / "wars.json", default={}).get("wars", {})
+    settlements = read_mapping_with_archives(
+        DATA_DIR, "settlements.json", "settlements.json.gz"
+    )
+    collector_runs = read_rows_with_archives(
+        DATA_DIR, "collector_runs.jsonl", "collector-runs.json.gz"
+    )
+    official_events = read_rows_with_archives(
+        DATA_DIR, "events.jsonl", "events.json.gz"
+    )
+    wars = read_wars_with_archives(DATA_DIR)
     current_war = latest.get("war", {})
     current_war_id = current_war.get("warId")
     scout_packet = build_scout_packet(current_settings) if latest else None

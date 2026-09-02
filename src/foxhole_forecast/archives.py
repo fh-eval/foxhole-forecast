@@ -130,7 +130,11 @@ def create_war_archive(data_dir: Path, war_number: int) -> dict[str, Any]:
 def verify_war_archive(data_dir: Path, war_number: int) -> dict[str, Any]:
     archive_dir = data_dir / "archives" / f"war-{war_number}"
     manifest = read_json(archive_dir / "manifest.json")
-    if not isinstance(manifest, dict) or manifest.get("schema_version") != ARCHIVE_SCHEMA_VERSION:
+    if (
+        not isinstance(manifest, dict)
+        or manifest.get("schema_version") != ARCHIVE_SCHEMA_VERSION
+        or manifest.get("archive_type") != "copy_only_war_snapshot"
+    ):
         raise ValueError("War archive manifest is missing or unsupported")
     if manifest.get("war_number") != war_number:
         raise ValueError("War archive manifest identifies a different war")
@@ -168,6 +172,74 @@ def verify_war_archive(data_dir: Path, war_number: int) -> dict[str, Any]:
     }
 
 
+def read_rows_with_archives(
+    data_dir: Path,
+    live_name: str,
+    artifact_name: str,
+    *,
+    identity_fields: tuple[str, ...] | None = None,
+) -> list[dict[str, Any]]:
+    """Merge archived historical rows with live rows, preferring live copies."""
+    archived_rows: list[dict[str, Any]] = []
+    for archive_dir in _archive_directories(data_dir):
+        payload = _read_verified_artifact(archive_dir, artifact_name)
+        if not isinstance(payload, list):
+            raise ValueError(f"War archive artifact is not a row list: {artifact_name}")
+        archived_rows.extend(payload)
+    live_rows = read_jsonl(data_dir / live_name)
+
+    def identity(row: dict[str, Any]) -> tuple[Any, ...]:
+        if not identity_fields:
+            return ("content", canonical_json_sha256(row))
+        values = tuple(row.get(field) for field in identity_fields)
+        if any(value is None for value in values):
+            return ("content", canonical_json_sha256(row))
+        return ("fields", *values)
+
+    # Append-only ledgers may legitimately contain repeated identities after a
+    # repair. Preserve the live file byte-for-byte in logical row order; only
+    # suppress archived copies whose identity is represented anywhere live.
+    live_identities = {identity(row) for row in live_rows}
+    return [
+        row for row in archived_rows if identity(row) not in live_identities
+    ] + live_rows
+
+
+def read_mapping_with_archives(
+    data_dir: Path, live_name: str, artifact_name: str
+) -> dict[str, Any]:
+    """Merge archived mappings with a live mapping, preferring live values."""
+    merged: dict[str, Any] = {}
+    for archive_dir in _archive_directories(data_dir):
+        payload = _read_verified_artifact(archive_dir, artifact_name)
+        if not isinstance(payload, dict):
+            raise ValueError(f"War archive artifact is not a mapping: {artifact_name}")
+        merged.update(payload)
+    live = read_json(data_dir / live_name, default={})
+    if not isinstance(live, dict):
+        raise ValueError(f"Live data is not a mapping: {live_name}")
+    merged.update(live)
+    return merged
+
+
+def read_wars_with_archives(data_dir: Path) -> dict[str, dict[str, Any]]:
+    """Return archived and live war registry entries, preferring the registry."""
+    wars: dict[str, dict[str, Any]] = {}
+    for archive_dir in _archive_directories(data_dir):
+        war = _read_verified_artifact(archive_dir, "war.json.gz")
+        if not isinstance(war, dict) or not isinstance(war.get("war_id"), str):
+            raise ValueError(f"War archive has an invalid war record: {archive_dir.name}")
+        wars[war["war_id"]] = war
+    registry = read_json(data_dir / "wars.json", default={})
+    if not isinstance(registry, dict):
+        raise ValueError("Live war registry is not an object")
+    live = registry.get("wars", {})
+    if not isinstance(live, dict):
+        raise ValueError("Live war registry is not a mapping")
+    wars.update(live)
+    return wars
+
+
 def _response_object_keys(runs: Iterable[dict[str, Any]]) -> set[str]:
     keys: set[str] = set()
     for run in runs:
@@ -183,6 +255,35 @@ def _response_object_keys(runs: Iterable[dict[str, Any]]) -> set[str]:
                 if isinstance(reference, dict) and isinstance(reference.get("object_key"), str):
                     keys.add(reference["object_key"])
     return keys
+
+
+def _archive_directories(data_dir: Path) -> list[Path]:
+    return sorted(
+        path.parent
+        for path in (data_dir / "archives").glob("war-*/manifest.json")
+        if path.is_file()
+    )
+
+
+def _read_verified_artifact(archive_dir: Path, artifact_name: str) -> Any:
+    manifest = read_json(archive_dir / "manifest.json", default={})
+    if (
+        not isinstance(manifest, dict)
+        or manifest.get("schema_version") != ARCHIVE_SCHEMA_VERSION
+        or manifest.get("archive_type") != "copy_only_war_snapshot"
+    ):
+        raise ValueError(f"War archive manifest is unsupported: {archive_dir.name}")
+    expected = manifest.get("artifacts", {}).get(artifact_name)
+    if not isinstance(expected, dict):
+        raise ValueError(
+            f"War archive manifest does not list artifact: {archive_dir.name}/{artifact_name}"
+        )
+    path = archive_dir / artifact_name
+    if not path.is_file() or _file_sha256(path) != expected.get("sha256"):
+        raise ValueError(
+            f"War archive artifact failed verification: {archive_dir.name}/{artifact_name}"
+        )
+    return read_json(path)
 
 
 def _record_count(payload: Any) -> int:

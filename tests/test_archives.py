@@ -2,10 +2,20 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import patch
 
-from foxhole_forecast.archives import create_war_archive, verify_war_archive
+from foxhole_forecast.archives import (
+    create_war_archive,
+    read_mapping_with_archives,
+    read_rows_with_archives,
+    read_wars_with_archives,
+    verify_war_archive,
+)
 from foxhole_forecast.artifacts import externalize_run_responses
+from foxhole_forecast.config import Settings
+from foxhole_forecast.scoring import settle_and_score
 from foxhole_forecast.storage import read_json, write_json, write_jsonl
 
 
@@ -32,7 +42,10 @@ class WarArchiveTests(unittest.TestCase):
             },
         )
         cohort = {"cohort_id": "cohort-139", "war_id": war_id, "war_number": 139}
-        write_jsonl(data_dir / "cohorts.jsonl", [cohort, {"war_id": "active-war"}])
+        write_jsonl(
+            data_dir / "cohorts.jsonl",
+            [cohort, {"cohort_id": "cohort-140", "war_id": "active-war"}],
+        )
         run = externalize_run_responses(
             {
                 "run_id": "run-139",
@@ -92,6 +105,93 @@ class WarArchiveTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "failed verification"):
                 verify_war_archive(data_dir, 139)
+
+    def test_archive_loaders_restore_pruned_history_and_prefer_live_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            data_dir = Path(temporary)
+            self._fixture(data_dir)
+            create_war_archive(data_dir, 139)
+
+            write_jsonl(
+                data_dir / "model_runs.jsonl",
+                [
+                    {"run_id": "run-140", "war_id": "active-war"},
+                ],
+            )
+            write_json(
+                data_dir / "settlements.json",
+                {"run-140": {"score": 2}},
+            )
+            write_json(
+                data_dir / "wars.json",
+                {
+                    "schema_version": 1,
+                    "wars": {"active-war": {"war_id": "active-war", "war_number": 140}},
+                },
+            )
+
+            runs = read_rows_with_archives(
+                data_dir,
+                "model_runs.jsonl",
+                "model-runs.json.gz",
+                identity_fields=("run_id",),
+            )
+            by_id = {run["run_id"]: run for run in runs}
+            self.assertEqual(set(by_id), {"run-139", "run-140"})
+            self.assertEqual(by_id["run-139"]["cohort_id"], "cohort-139")
+            self.assertEqual(
+                set(
+                    read_mapping_with_archives(
+                        data_dir, "settlements.json", "settlements.json.gz"
+                    )
+                ),
+                {"run-139", "run-140"},
+            )
+            self.assertEqual(
+                {war["war_number"] for war in read_wars_with_archives(data_dir).values()},
+                {139, 140},
+            )
+
+            write_jsonl(
+                data_dir / "model_runs.jsonl",
+                [
+                    {"run_id": "run-139", "war_id": "ended-war", "live": True},
+                    {"run_id": "run-140", "war_id": "active-war"},
+                    {"run_id": "run-140", "war_id": "active-war", "repair": True},
+                ],
+            )
+            preferred = read_rows_with_archives(
+                data_dir,
+                "model_runs.jsonl",
+                "model-runs.json.gz",
+                identity_fields=("run_id",),
+            )
+            self.assertTrue({run["run_id"]: run for run in preferred}["run-139"]["live"])
+            self.assertEqual(sum(run["run_id"] == "run-140" for run in preferred), 2)
+
+    def test_score_aggregation_keeps_archived_runs_after_live_pruning(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            data_dir = Path(temporary)
+            self._fixture(data_dir)
+            create_war_archive(data_dir, 139)
+            write_jsonl(
+                data_dir / "model_runs.jsonl",
+                [{"run_id": "run-140", "war_id": "active-war", "status": "invalid"}],
+            )
+            write_json(data_dir / "settlements.json", {"run-140": {"score": 2}})
+
+            with (
+                patch("foxhole_forecast.scoring.DATA_DIR", data_dir),
+                patch("foxhole_forecast.scoring.aggregate_scores") as aggregate,
+            ):
+                aggregate.return_value = {"schema_version": 1, "models": []}
+                settle_and_score(Settings.load(), datetime(2026, 1, 3, tzinfo=UTC))
+
+            aggregate_runs, aggregate_settlements, _now = aggregate.call_args.args
+            self.assertEqual(
+                {run["run_id"] for run in aggregate_runs}, {"run-139", "run-140"}
+            )
+            self.assertEqual(set(aggregate_settlements), {"run-139", "run-140"})
 
     def test_active_war_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
