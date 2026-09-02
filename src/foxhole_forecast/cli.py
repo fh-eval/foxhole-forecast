@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from .artifacts import compact_model_runs
+from .archives import create_war_archive, verify_war_archive
 from .collector import collect_once
 from .config import DATA_DIR, Settings
 from .dashboard import build_dashboard_data
@@ -63,6 +64,14 @@ def main(argv: list[str] | None = None) -> int:
         "compact-model-runs",
         help="Move inline provider responses into content-addressed gzip objects",
     )
+    archive = subcommands.add_parser(
+        "archive-war", help="Create a deterministic copy-only archive of an ended war"
+    )
+    archive.add_argument("--war-number", type=int, required=True)
+    verify_archive = subcommands.add_parser(
+        "verify-war-archive", help="Verify every artifact in a war archive"
+    )
+    verify_archive.add_argument("--war-number", type=int, required=True)
     subcommands.add_parser("score", help="Settle matured forecasts and rebuild scores")
     subcommands.add_parser("build-dashboard", help="Generate the static dashboard shards")
     audit = subcommands.add_parser(
@@ -117,6 +126,10 @@ def main(argv: list[str] | None = None) -> int:
             result = recover_invalid_runs(settings, args.cohort_id, args.snapshot)
         elif args.command == "compact-model-runs":
             result = compact_model_runs(DATA_DIR)
+        elif args.command == "archive-war":
+            result = create_war_archive(DATA_DIR, args.war_number)
+        elif args.command == "verify-war-archive":
+            result = verify_war_archive(DATA_DIR, args.war_number)
         elif args.command == "score":
             result = settle_and_score(settings)
         elif args.command == "build-dashboard":
