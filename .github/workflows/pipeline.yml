@@ -91,8 +91,10 @@ jobs:
           if git diff --cached --quiet; then
             echo "No persisted changes"
           else
+            .github/scripts/assert-data-only.sh --staged
             git commit -m "data: update observations and scores"
             git fetch origin main
             git rebase origin/main
+            .github/scripts/assert-data-only.sh origin/main
             git push
           fi
