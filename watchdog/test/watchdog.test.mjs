@@ -5,6 +5,7 @@ import {
   activeRunSince,
   cacheBustedUrl,
   checkAndDispatch,
+  failedRunSince,
   forecastSlot,
   observationIsStale,
   successfulRunSince,
@@ -77,6 +78,51 @@ test("only a recent active run suppresses a replacement dispatch", () => {
   ];
   assert.equal(activeRunSince(runs, Date.parse("2026-08-22T11:46:00Z"))?.id, 42);
   assert.equal(activeRunSince(runs, Date.parse("2026-08-22T11:55:00Z")), undefined);
+});
+
+test("a recent workflow failure backs off instead of dispatching every five minutes", async () => {
+  const requests = [];
+  const result = await checkAndDispatch(
+    {
+      GITHUB_TOKEN: "test-token",
+      GITHUB_OWNER: "owner",
+      GITHUB_REPO: "repo",
+      STATUS_DATA_URL: "https://example.test/watchdog.json",
+      STALE_AFTER_MINUTES: "14",
+      FAILURE_BACKOFF_MINUTES: "30",
+      COLLECT_WORKFLOW: "pipeline.yml",
+      FORECAST_WORKFLOW: "forecast.yml",
+    },
+    async (url, options = {}) => {
+      requests.push({ url, method: options.method || "GET" });
+      if (url.startsWith("https://example.test/")) {
+        return Response.json({
+          observed_at: "2026-08-22T11:00:00Z",
+          last_forecast_slot: "2026-08-22T12:00:00Z",
+        });
+      }
+      return Response.json({
+        workflow_runs: [{
+          id: 42,
+          status: "completed",
+          conclusion: "failure",
+          created_at: "2026-08-22T11:50:00Z",
+        }],
+      });
+    },
+    now,
+  );
+
+  assert.deepEqual(result.actions, [{
+    action: "backing_off_after_failure",
+    workflow: "pipeline.yml",
+    run_id: 42,
+    backoff_minutes: 30,
+  }]);
+  assert.equal(requests.some((request) => request.method === "POST"), false);
+  assert.equal(failedRunSince([
+    { id: 42, status: "completed", conclusion: "failure", created_at: "2026-08-22T11:50:00Z" },
+  ], Date.parse("2026-08-22T11:45:00Z"))?.id, 42);
 });
 
 test("an ended war pauses forecasts without triggering an extra collection", async () => {

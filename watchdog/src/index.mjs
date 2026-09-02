@@ -45,6 +45,15 @@ export function activeRunSince(runs, notBefore) {
   );
 }
 
+export function failedRunSince(runs, notBefore) {
+  if (!Number.isFinite(notBefore)) return undefined;
+  return runs.find((run) =>
+    run.status === "completed"
+    && ["failure", "timed_out", "action_required", "startup_failure"].includes(run.conclusion)
+    && Date.parse(run.created_at) >= notBefore
+  );
+}
+
 async function jsonResponse(response, label) {
   if (!response.ok) {
     const body = await response.text();
@@ -53,7 +62,14 @@ async function jsonResponse(response, label) {
   return response.json();
 }
 
-async function dispatchIfIdle(env, workflow, fetchImpl, notBefore) {
+async function dispatchIfIdle(
+  env,
+  workflow,
+  fetchImpl,
+  notBefore,
+  now,
+  failureScopeNotBefore = -Infinity,
+) {
   const workflowUrl = `https://api.github.com/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/actions/workflows/${workflow}`;
   const runsResponse = await fetchImpl(`${workflowUrl}/runs?per_page=10`, {
     headers: githubHeaders(env.GITHUB_TOKEN),
@@ -66,6 +82,19 @@ async function dispatchIfIdle(env, workflow, fetchImpl, notBefore) {
   const completed = successfulRunSince(runs.workflow_runs || [], notBefore);
   if (completed) {
     return { action: "recently_completed", workflow, run_id: completed.id };
+  }
+  const backoffMinutes = Number(env.FAILURE_BACKOFF_MINUTES || 30);
+  const failed = failedRunSince(
+    runs.workflow_runs || [],
+    Math.max(failureScopeNotBefore, now - backoffMinutes * 60_000),
+  );
+  if (failed) {
+    return {
+      action: "backing_off_after_failure",
+      workflow,
+      run_id: failed.id,
+      backoff_minutes: backoffMinutes,
+    };
   }
 
   const dispatchResponse = await fetchImpl(`${workflowUrl}/dispatches`, {
@@ -112,12 +141,20 @@ export async function checkAndDispatch(env, fetchImpl = fetch, now = Date.now())
       env.COLLECT_WORKFLOW,
       fetchImpl,
       now - staleAfterMinutes * 60_000,
+      now,
     ));
   }
   if (!forecastEligible && forecastDue) {
     actions.push({ action: "forecast_paused", reason: forecastStatus, workflow: env.FORECAST_WORKFLOW });
   } else if (forecastDue && observationInSlot) {
-    actions.push(await dispatchIfIdle(env, env.FORECAST_WORKFLOW, fetchImpl, slot.getTime()));
+    actions.push(await dispatchIfIdle(
+      env,
+      env.FORECAST_WORKFLOW,
+      fetchImpl,
+      slot.getTime(),
+      now,
+      slot.getTime(),
+    ));
   } else if (forecastDue) {
     actions.push({ action: "waiting_for_current_slot_observation", workflow: env.FORECAST_WORKFLOW });
   }
