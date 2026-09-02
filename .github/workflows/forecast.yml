@@ -154,6 +154,7 @@ jobs:
           path: |
             data/cohorts.jsonl
             data/model_runs.jsonl
+            data/objects
             data/raw/latest.json
             data/raw/cohorts
             data/state.json
@@ -186,7 +187,7 @@ jobs:
         run: |
           git config user.name "foxhole-forecast[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data web/public/data/dashboard.json
+          git add data
           if git diff --cached --quiet; then
             echo "No persisted changes"
           else

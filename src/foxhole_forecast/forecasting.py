@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import hashlib
 import json
 import os
 import re
@@ -10,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
+from .artifacts import attempt_raw_response, externalize_run_responses
 from .config import DATA_DIR, ROOT, Settings, load_models
 from .packets import (
     build_detail_packet,
@@ -21,6 +21,7 @@ from .providers import MissingApiKey, ModelProvider, ProviderResponse, _parse_js
 from .schemas import forecast_schema, scout_schema
 from .storage import (
     append_jsonl,
+    canonical_json_sha256,
     isoformat,
     parse_time,
     read_json,
@@ -51,13 +52,7 @@ CORRECTION_USER = _load_prompt("correction.md")
 
 
 def _canonical_hash(value: Any) -> str:
-    digest = hashlib.sha256()
-    encoder = json.JSONEncoder(
-        sort_keys=True, separators=(",", ":"), ensure_ascii=False
-    )
-    for chunk in encoder.iterencode(value):
-        digest.update(chunk.encode("utf-8"))
-    return digest.hexdigest()
+    return canonical_json_sha256(value)
 
 
 def _settings_payload(settings: Settings) -> dict[str, Any]:
@@ -181,6 +176,7 @@ def run_forecast_cohort(
             continue
         if model_config.get("enabled", True):
             result = _run_model(settings, model_config, scout_packet, cohort_id, cohort_dir, state)
+            result = externalize_run_responses(result, DATA_DIR)
             append_jsonl(DATA_DIR / "model_runs.jsonl", result)
             model_results.append(
                 {
@@ -231,7 +227,8 @@ def salvage_invalid_run(settings: Settings, run_id: str) -> dict[str, Any]:
     forecast_attempts = [
         attempt
         for attempt in run.get("calls", [])
-        if attempt.get("stage") == "forecast" and attempt.get("raw_response")
+        if attempt.get("stage") == "forecast"
+        and (attempt.get("raw_response") or attempt.get("raw_response_ref"))
     ]
     if not forecast_attempts:
         raise ValueError(f"No stored forecast response is available for {run_id}")
@@ -246,7 +243,7 @@ def salvage_invalid_run(settings: Settings, run_id: str) -> dict[str, Any]:
     ] = []
     errors: list[Exception] = []
     for attempt_index, attempt in enumerate(forecast_attempts):
-        raw = attempt["raw_response"]
+        raw = attempt_raw_response(attempt, DATA_DIR)
         try:
             content = raw["choices"][0]["message"]["content"]
             if isinstance(content, list):
@@ -375,6 +372,7 @@ def retry_invalid_run(
     retried["retried_at"] = isoformat()
     retried["retried_from_frozen_cutoff"] = scout_packet["cutoff"]
     retried["retry_history"] = retry_history
+    retried = externalize_run_responses(retried, DATA_DIR)
     runs[index] = retried
     write_jsonl(runs_path, runs)
 
@@ -601,6 +599,7 @@ def replay_invalid_run(
             replay_spent + provider.accumulated_cost, 8
         )
         write_json(state_path, state)
+    replay = externalize_run_responses(replay, DATA_DIR)
     append_jsonl(runs_path, replay)
 
     cohorts_path = DATA_DIR / "cohorts.jsonl"
@@ -667,7 +666,8 @@ def _transient_provider_failure(
 
 def _has_stored_forecast_response(run: dict[str, Any]) -> bool:
     return any(
-        attempt.get("stage") == "forecast" and attempt.get("raw_response")
+        attempt.get("stage") == "forecast"
+        and (attempt.get("raw_response") or attempt.get("raw_response_ref"))
         for attempt in run.get("calls", [])
         if isinstance(attempt, dict)
     )

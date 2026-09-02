@@ -5,8 +5,9 @@ import json
 import sys
 from pathlib import Path
 
+from .artifacts import compact_model_runs
 from .collector import collect_once
-from .config import Settings
+from .config import DATA_DIR, Settings
 from .dashboard import build_dashboard_data
 from .forecasting import (
     recover_invalid_runs,
@@ -58,8 +59,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     recover.add_argument("--cohort-id", required=True)
     recover.add_argument("--snapshot", type=Path, required=True)
+    subcommands.add_parser(
+        "compact-model-runs",
+        help="Move inline provider responses into content-addressed gzip objects",
+    )
     subcommands.add_parser("score", help="Settle matured forecasts and rebuild scores")
-    subcommands.add_parser("build-dashboard", help="Generate the static dashboard JSON")
+    subcommands.add_parser("build-dashboard", help="Generate the static dashboard shards")
     audit = subcommands.add_parser(
         "audit-model-runs", help="Find expected models missing from recent full cohorts"
     )
@@ -110,6 +115,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "recover-model-runs":
             result = recover_invalid_runs(settings, args.cohort_id, args.snapshot)
+        elif args.command == "compact-model-runs":
+            result = compact_model_runs(DATA_DIR)
         elif args.command == "score":
             result = settle_and_score(settings)
         elif args.command == "build-dashboard":

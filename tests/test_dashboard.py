@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 from foxhole_forecast.dashboard import (
     _build_war_api_snapshot,
@@ -12,11 +15,56 @@ from foxhole_forecast.dashboard import (
     _present_evidence,
     _present_strategic_advice,
     _round_slot,
+    _write_dashboard_shards,
 )
 from foxhole_forecast.forecasting import _freeze_evidence
+from foxhole_forecast.storage import read_json
 
 
 class DashboardTests(unittest.TestCase):
+    def test_dashboard_shards_replace_the_unused_monolith(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            output = {
+                "schema_version": 12,
+                "generated_at": "2026-01-01T09:00:00Z",
+                "methodology": {"current_protocol": "current"},
+                "models": [
+                    {
+                        "series_id": "model-a",
+                        "label": "Model A",
+                        "latest": {"run_id": "latest"},
+                        "latest_all_time": {"run_id": "all-time"},
+                        "history": [{"run_id": "historical"}],
+                    }
+                ],
+                "rounds": [
+                    {
+                        "war_id": "war-1",
+                        "round_slot": f"2026-01-01T0{hour}:00:00Z",
+                        "protocol": "current",
+                    }
+                    for hour in (9, 6, 3, 0)
+                ],
+                "base_forecasts": [{"base_id": "unused"}],
+            }
+            with patch("foxhole_forecast.dashboard.ROOT", root):
+                _write_dashboard_shards(output)
+
+            data = root / "web" / "public" / "data"
+            main = read_json(data / "dashboard-main.json")
+            rounds = read_json(data / "round-history.json")
+            summaries = read_json(data / "summary-history.json")
+            self.assertFalse((data / "dashboard.json").exists())
+            self.assertNotIn("history", main["models"][0])
+            self.assertNotIn("latest_all_time", main["models"][0])
+            self.assertEqual(len(main["rounds"]), 3)
+            self.assertEqual(main["base_forecasts"], [])
+            self.assertEqual(len(rounds["rounds"]), 4)
+            self.assertEqual(
+                summaries["models"][0]["history"], [{"run_id": "historical"}]
+            )
+
     def test_latest_round_groups_keeps_every_participant_in_three_newest_slots(self) -> None:
         rounds = [
             {

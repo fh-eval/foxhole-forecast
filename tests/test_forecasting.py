@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from foxhole_forecast.artifacts import externalize_run_responses
 from foxhole_forecast.config import Settings
 from foxhole_forecast.forecasting import (
     CORRECTION_USER,
@@ -683,19 +684,18 @@ class ForecastBudgetTests(unittest.TestCase):
                     },
                 }
 
-            write_jsonl(
-                data / "model_runs.jsonl",
-                [
-                    {
-                        "run_id": run_id,
-                        "cohort_id": cohort_id,
-                        "series_id": series_id,
-                        "status": "invalid",
-                        "error": "ValidationError: invalid correction",
-                        "calls": [stored_attempt(first), stored_attempt(second)],
-                    }
-                ],
+            stored_run = externalize_run_responses(
+                {
+                    "run_id": run_id,
+                    "cohort_id": cohort_id,
+                    "series_id": series_id,
+                    "status": "invalid",
+                    "error": "ValidationError: invalid correction",
+                    "calls": [stored_attempt(first), stored_attempt(second)],
+                },
+                data,
             )
+            write_jsonl(data / "model_runs.jsonl", [stored_run])
             write_jsonl(
                 data / "cohorts.jsonl",
                 [
@@ -715,6 +715,7 @@ class ForecastBudgetTests(unittest.TestCase):
 
             saved = read_jsonl(data / "model_runs.jsonl")[0]
             self.assertEqual(result["predictions"], 2)
+            self.assertIn("raw_response_ref", saved["calls"][0])
             self.assertEqual(saved["salvaged_from_forecast_attempt"], 1)
             self.assertEqual(saved["salvage_forecast_attempts_considered"], 2)
             self.assertEqual(len(saved["forecast"]["predictions"]), 2)

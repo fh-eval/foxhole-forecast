@@ -147,6 +147,54 @@ def _latest_round_groups(
     return selected
 
 
+def _write_dashboard_shards(output: dict[str, Any]) -> None:
+    """Write only the three payloads consumed by the static site."""
+    public_data = ROOT / "web" / "public" / "data"
+    main = {
+        key: value
+        for key, value in output.items()
+        if key not in {"models", "rounds", "base_forecasts"}
+    }
+    main["models"] = [
+        {
+            key: value
+            for key, value in model.items()
+            if key not in {"history", "latest_all_time"}
+        }
+        for model in output.get("models", [])
+    ]
+    main["rounds"] = _latest_round_groups(
+        output.get("rounds", []),
+        output.get("methodology", {}).get("current_protocol"),
+    )
+    main["base_forecasts"] = []
+    write_json(public_data / "dashboard-main.json", main)
+    write_json(
+        public_data / "round-history.json",
+        {
+            "schema_version": output.get("schema_version"),
+            "generated_at": output.get("generated_at"),
+            "rounds": output.get("rounds", []),
+        },
+    )
+    write_json(
+        public_data / "summary-history.json",
+        {
+            "schema_version": output.get("schema_version"),
+            "generated_at": output.get("generated_at"),
+            "models": [
+                {
+                    "series_id": model.get("series_id"),
+                    "label": model.get("label"),
+                    "history": model.get("history"),
+                }
+                for model in output.get("models", [])
+                if model.get("history")
+            ],
+        },
+    )
+
+
 def _run_reasoning(run: dict[str, Any]) -> dict[str, Any] | None:
     metadata = dict(run["reasoning"]) if isinstance(run.get("reasoning"), dict) else None
     trace_returned = False
@@ -154,6 +202,7 @@ def _run_reasoning(run: dict[str, Any]) -> dict[str, Any] | None:
     token_count_reported = False
     calls = run.get("calls", [])
     for call in calls:
+        trace_returned = trace_returned or bool(call.get("reasoning_trace_returned"))
         message = (
             (call.get("raw_response", {}).get("choices") or [{}])[0]
             .get("message", {})
@@ -635,7 +684,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
             "forecast_status": forecast_status,
         },
     )
-    write_json(ROOT / "web" / "public" / "data" / "dashboard.json", output)
+    _write_dashboard_shards(output)
     return output
 
 

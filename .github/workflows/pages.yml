@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "web/**"
+      - "src/foxhole_forecast/**"
+      - "config/**"
       - ".github/workflows/pages.yml"
   workflow_run:
     workflows: ["Collect observations", "Forecast cohort"]
@@ -31,6 +33,9 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
       - run: npm ci
         working-directory: web
       - run: npm run build

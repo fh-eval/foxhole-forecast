@@ -41,7 +41,9 @@ web/                       Astro GitHub Pages dashboard
 .github/workflows/         Collection, CI, and Pages automation
 ```
 
-The configured model series are GPT-5.6 Luna through OpenRouter (pinned to OpenAI), Gemini 3.7 Flash through OpenRouter (pinned to Google Vertex), GLM 5.3 Flash through OpenRouter (pinned to Z.AI), DeepSeek V4 Flash through DeepSeek's direct API, and Nemotron 3 Ultra 550B A55B through NVIDIA NIM. Gateway, requested model, returned model, and upstream provider are recorded so silent routing changes cannot masquerade as the same series. Raw provider responses remain in the repository data but are excluded from the public dashboard JSON. Historical Ox Alpha runs retain their original label and series identity.
+The configured model series are GPT-5.6 Luna through OpenRouter (pinned to OpenAI), Gemini 3.7 Flash through OpenRouter (pinned to Google Vertex), GLM 5.3 Flash through OpenRouter (pinned to Z.AI), DeepSeek V4 Flash through DeepSeek's direct API, and Nemotron 3 Ultra 550B A55B through NVIDIA NIM. Gateway, requested model, returned model, upstream provider, and requested reasoning settings are recorded so silent routing or reasoning changes cannot masquerade as the same series. Raw provider responses remain auditable as SHA-256-addressed deterministic gzip objects under `data/objects/`; `model_runs.jsonl` stores verified references and the public dashboard excludes those raw payloads. Historical Ox Alpha runs retain their original label and series identity.
+
+The static site is built from three purpose-specific dashboard shards generated directly from repository data. The former combined dashboard payload is intentionally not versioned, avoiding a large derived-file rewrite after every observation while preserving the same public history.
 
 ## Run locally
 
@@ -53,6 +55,8 @@ PYTHONPATH=src python -m unittest discover -s tests -v
 PYTHONPATH=src python -m foxhole_forecast collect
 PYTHONPATH=src python -m foxhole_forecast score
 PYTHONPATH=src python -m foxhole_forecast build-dashboard
+# One-time/idempotent migration for legacy inline provider responses:
+PYTHONPATH=src python -m foxhole_forecast compact-model-runs
 # For an invalid run that has a verified frozen bundle:
 PYTHONPATH=src python -m foxhole_forecast replay-run --run-id RUN_ID
 
