@@ -19,6 +19,7 @@ jobs:
           args: "check --select F src tests"
       - run: bash -n .githooks/pre-push
       - run: bash -n .github/scripts/assert-data-only.sh
+      - run: bash -n .github/scripts/persist-data.sh
   python:
     runs-on: ubuntu-latest
     steps:
