@@ -22,12 +22,28 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: write
+      contents: read
     steps:
+      - name: Create repository-scoped data writer token
+        id: data-writer-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ vars.DATA_WRITER_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DATA_WRITER_APP_PRIVATE_KEY }}
+          permission-contents: write
+      - name: Resolve data writer commit identity
+        id: data-writer-identity
+        env:
+          GH_TOKEN: ${{ steps.data-writer-token.outputs.token }}
+        run: |
+          app_slug="${{ steps.data-writer-token.outputs.app-slug }}"
+          user_id="$(gh api "/users/${app_slug}[bot]" --jq .id)"
+          echo "user-id=$user_id" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: main
           fetch-depth: 1
+          token: ${{ steps.data-writer-token.outputs.token }}
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.13"
@@ -42,6 +58,9 @@ jobs:
           PYTHONPATH=src python3 -m foxhole_forecast maintain-archives \
             --quiet-hours 24 "${args[@]}" | tee /tmp/archive-maintenance.json
       - name: Commit archive maintenance changes
+        env:
+          PERSIST_GIT_USER_NAME: ${{ steps.data-writer-token.outputs.app-slug }}[bot]
+          PERSIST_GIT_USER_EMAIL: ${{ steps.data-writer-identity.outputs.user-id }}+${{ steps.data-writer-token.outputs.app-slug }}[bot]@users.noreply.github.com
         run: |
           .github/scripts/persist-data.sh "data: maintain ended-war archives"
       - name: Upload maintenance report
