@@ -720,6 +720,9 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           const adviserRow = document.createElement("tr");
           const adviserModel = element("td", "adviser-table__model");
           adviserModel.append(element("strong", "", modelLabel(behavior.model)));
+          if ((behavior.model.dashboard_family_series || []).length > 1) {
+            adviserModel.append(element("small", "", `${behavior.model.dashboard_family_series.length} recorded setup eras combined`));
+          }
           adviserRow.append(
             adviserModel,
             adviserCell(percentage(behavior.actionableExact3hRate), `${behavior.actionableExact3hHits ?? 0}/${behavior.actionableExact3hBets ?? behavior.selectionScoredBets} calls · short ${percentage(behavior.actionableExact3hShortRate)} · long ${percentage(behavior.actionableExact3hLongRate)}`, "adviser-table__primary"),
@@ -1268,8 +1271,12 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const slug = round?.requested_model || "model slug not recorded";
         const reasoning = round?.reasoning;
         if (!reasoning) return `${slug} · reasoning not recorded`;
-        if (!reasoning.enabled) return `${slug} · reasoning disabled`;
-        return `${slug} · ${reasoning.effort ? `${reasoning.effort} reasoning` : "reasoning used"}`;
+        const reasoningLabel = reasoning.enabled
+          ? (reasoning.effort ? `${reasoning.effort} reasoning` : "reasoning used")
+          : "reasoning disabled";
+        const ceiling = Number(reasoning.completion_ceiling_tokens);
+        const ceilingLabel = Number.isFinite(ceiling) && ceiling > 0 ? ` · ${ceiling.toLocaleString()} max output tokens` : "";
+        return `${slug} · ${reasoningLabel}${ceilingLabel}`;
       }
 
       function compactPredictionPreview(bet) {

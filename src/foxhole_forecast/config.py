@@ -52,6 +52,12 @@ def load_series_aliases(path: Path | None = None) -> dict[str, str]:
     return read_json(path or CONFIG_DIR / "models.json").get("series_aliases", {})
 
 
+def load_dashboard_series_aliases(path: Path | None = None) -> dict[str, str]:
+    return read_json(path or CONFIG_DIR / "models.json").get(
+        "dashboard_series_aliases", {}
+    )
+
+
 def load_dashboard_hidden_series(path: Path | None = None) -> set[str]:
     return set(
         read_json(path or CONFIG_DIR / "models.json").get(
