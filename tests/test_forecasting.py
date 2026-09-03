@@ -161,6 +161,7 @@ class ForecastBudgetTests(unittest.TestCase):
                 "foxhole_forecast.forecasting._call_validated",
                 side_effect=[
                     RuntimeError("Provider policy blocked the first replay"),
+                    RuntimeError("Provider policy blocked the second replay"),
                     (response, forecast),
                 ],
             ), patch(
@@ -176,38 +177,50 @@ class ForecastBudgetTests(unittest.TestCase):
                 existing = replay_invalid_run(
                     Settings.load(), run_id, allow_paid=True
                 )
+                second = replay_invalid_run(
+                    Settings.load(),
+                    run_id,
+                    allow_paid=True,
+                    allow_manual_replay=True,
+                    max_tokens_override=65536,
+                )
                 result = replay_invalid_run(
                     Settings.load(),
                     run_id,
                     allow_paid=True,
-                    allow_second_replay=True,
+                    allow_manual_replay=True,
                     max_tokens_override=65536,
                 )
-                capped = replay_invalid_run(
+                existing_success = replay_invalid_run(
                     Settings.load(),
                     run_id,
                     allow_paid=True,
-                    allow_second_replay=True,
+                    allow_manual_replay=True,
                 )
 
             rows = read_jsonl(data / "model_runs.jsonl")
             self.assertEqual(first["status"], "invalid")
             self.assertTrue(existing["already_existed"])
+            self.assertEqual(second["status"], "invalid")
             self.assertEqual(result["status"], "valid")
-            self.assertTrue(capped["already_existed"])
-            self.assertEqual(capped["run_id"], f"{run_id}:replay-2")
-            self.assertEqual(len(rows), 3)
+            self.assertTrue(existing_success["already_existed"])
+            self.assertEqual(existing_success["run_id"], f"{run_id}:replay-3")
+            self.assertEqual(len(rows), 4)
             self.assertEqual(rows[0], original)
             self.assertEqual(rows[1]["replay_of"], run_id)
             self.assertEqual(rows[1]["status"], "invalid")
             self.assertEqual(rows[2]["run_id"], f"{run_id}:replay-2")
-            self.assertEqual(rows[2]["submission_mode"], "delayed_replay")
-            self.assertTrue(rows[2]["repeat_replay_authorized"])
+            self.assertEqual(rows[2]["status"], "invalid")
+            self.assertTrue(rows[2]["manual_replay_authorized"])
             self.assertEqual(rows[2]["prior_replay_count"], 1)
-            self.assertTrue(rows[2]["reasoning"]["enabled"])
-            self.assertEqual(rows[2]["reasoning"]["effort"], "high")
+            self.assertEqual(rows[3]["run_id"], f"{run_id}:replay-3")
+            self.assertEqual(rows[3]["submission_mode"], "delayed_replay")
+            self.assertTrue(rows[3]["manual_replay_authorized"])
+            self.assertEqual(rows[3]["prior_replay_count"], 2)
+            self.assertTrue(rows[3]["reasoning"]["enabled"])
+            self.assertEqual(rows[3]["reasoning"]["effort"], "high")
             self.assertEqual(
-                rows[2]["replay_config_overrides"]["max_tokens"],
+                rows[3]["replay_config_overrides"]["max_tokens"],
                 {
                     "frozen": 5000,
                     "replay": 65536,
@@ -215,8 +228,8 @@ class ForecastBudgetTests(unittest.TestCase):
                 },
             )
             entry = read_jsonl(data / "cohorts.jsonl")[0]["models"][0]
-            self.assertEqual(entry["accepted_replay_run_id"], rows[2]["run_id"])
-            self.assertEqual(len(entry["replay_attempts"]), 2)
+            self.assertEqual(entry["accepted_replay_run_id"], rows[3]["run_id"])
+            self.assertEqual(len(entry["replay_attempts"]), 3)
 
     def test_recent_nvidia_success_makes_an_isolated_404_transient(self) -> None:
         failed = {
