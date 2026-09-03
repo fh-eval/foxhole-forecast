@@ -17,6 +17,7 @@ from .config import (
     ROOT,
     Settings,
     load_dashboard_hidden_series,
+    load_dashboard_series_aliases,
     load_models,
     load_series_aliases,
 )
@@ -118,6 +119,21 @@ def _behavior_summary(
             }
         )
     return sorted(output, key=lambda row: row["model_label"])
+
+
+def _dashboard_family_rounds(
+    rounds: list[dict[str, Any]], aliases: dict[str, str]
+) -> list[dict[str, Any]]:
+    """Fold display summaries without changing stored or archived run identities."""
+    return [
+        {
+            **round_record,
+            "series_id": aliases.get(
+                round_record["series_id"], round_record["series_id"]
+            ),
+        }
+        for round_record in rounds
+    ]
 
 
 def _lead_minutes(bets: list[dict[str, Any]], tranche: str) -> list[float]:
@@ -305,6 +321,7 @@ def _provider_label(run: dict[str, Any]) -> str:
 def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
     current_settings = settings or Settings.load()
     series_aliases = load_series_aliases()
+    dashboard_series_aliases = load_dashboard_series_aliases()
     configured_models = {model["series_id"]: model for model in load_models()}
     latest = read_json(DATA_DIR / "raw" / "latest.json", default={})
     pipeline_state = read_json(DATA_DIR / "state.json", default={})
@@ -658,6 +675,14 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
         key=lambda row: (row["round_slot"], row["cutoff"]),
         reverse=True,
     )
+    behavior_rounds = _dashboard_family_rounds(rounds, dashboard_series_aliases)
+    dashboard_family_sources: dict[str, set[str]] = defaultdict(set)
+    for source, target in dashboard_series_aliases.items():
+        dashboard_family_sources[target].update({source, target})
+    for model in models:
+        family = dashboard_family_sources.get(model["series_id"], set())
+        if len(family) > 1:
+            model["dashboard_family_series"] = sorted(family)
     available_wars = sorted(
         (
             {
@@ -679,14 +704,14 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
     )
     behavior = {
         "current_war": _behavior_summary(
-            rounds, current_war_id, current_settings.event_bet_limit
+            behavior_rounds, current_war_id, current_settings.event_bet_limit
         ),
         "all_time": _behavior_summary(
-            rounds, None, current_settings.event_bet_limit
+            behavior_rounds, None, current_settings.event_bet_limit
         ),
         "by_war": {
             row["war_id"]: _behavior_summary(
-                rounds, row["war_id"], current_settings.event_bet_limit
+                behavior_rounds, row["war_id"], current_settings.event_bet_limit
             )
             for row in available_wars
         },

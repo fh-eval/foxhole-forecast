@@ -8,6 +8,7 @@ from unittest.mock import patch
 from foxhole_forecast.dashboard import (
     _build_war_api_snapshot,
     _behavior_summary,
+    _dashboard_family_rounds,
     _forecast_status,
     _latest_round_groups,
     _metric_label,
@@ -22,6 +23,19 @@ from foxhole_forecast.storage import read_json
 
 
 class DashboardTests(unittest.TestCase):
+    def test_dashboard_family_rounds_preserve_source_records(self) -> None:
+        rounds = [
+            {"series_id": "deepseek-v4", "predictions": [{"rank": 1}]},
+            {"series_id": "deepseek-v5", "predictions": [{"rank": 2}]},
+        ]
+
+        displayed = _dashboard_family_rounds(
+            rounds, {"deepseek-v4": "deepseek-v5"}
+        )
+
+        self.assertEqual([row["series_id"] for row in displayed], ["deepseek-v5"] * 2)
+        self.assertEqual(rounds[0]["series_id"], "deepseek-v4")
+
     def test_dashboard_shards_replace_the_unused_monolith(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
