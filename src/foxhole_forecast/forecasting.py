@@ -400,6 +400,7 @@ def replay_invalid_run(
     run_id: str,
     *,
     allow_paid: bool = False,
+    allow_second_replay: bool = False,
     max_tokens_override: int | None = None,
 ) -> dict[str, Any]:
     """Append a delayed replay that can observe only its frozen cutoff bundle."""
@@ -412,14 +413,21 @@ def replay_invalid_run(
         raise ValueError(f"Run {run_id} is not invalid")
     prior_replays = [row for row in runs if row.get("replay_of") == run_id]
     if prior_replays:
-        replay = prior_replays[-1]
-        return {
-            "run_id": replay["run_id"],
-            "replay_of": run_id,
-            "status": replay["status"],
-            "predictions": len((replay.get("forecast") or {}).get("predictions", [])),
-            "already_existed": True,
-        }
+        successful = next(
+            (row for row in reversed(prior_replays) if row.get("status") == "valid"),
+            None,
+        )
+        if successful or not allow_second_replay or len(prior_replays) >= 2:
+            replay = successful or prior_replays[-1]
+            return {
+                "run_id": replay["run_id"],
+                "replay_of": run_id,
+                "status": replay["status"],
+                "predictions": len(
+                    (replay.get("forecast") or {}).get("predictions", [])
+                ),
+                "already_existed": True,
+            }
 
     cohort_dir = DATA_DIR / "raw" / "cohorts" / original["cohort_id"]
     bundle_path = _replay_bundle_path(cohort_dir, original["series_id"])
@@ -504,6 +512,14 @@ def replay_invalid_run(
         "replay_bundle_sha256": _canonical_hash(bundle),
         "replay_input_hashes": copy.deepcopy(inputs),
         "replay_config_overrides": replay_config_overrides,
+        **(
+            {
+                "repeat_replay_authorized": True,
+                "prior_replay_count": len(prior_replays),
+            }
+            if prior_replays
+            else {}
+        ),
         "original_failure": {
             "status": original.get("status"),
             "error": original.get("error"),
