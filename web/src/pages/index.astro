@@ -93,7 +93,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           </div>
         </div>
         <div class="adviser-guide">
-          <div><strong>Found the action</strong><span>The base it picked changed hands or was destroyed before the call closed. Did it look at the right part of the map?</span></div>
+          <div><strong>Picked active bases</strong><span>Ignore the predicted outcome and exact ETA: did any ownership transition happen at the selected base between publication and that call’s deadline?</span></div>
           <div><strong>Called the time</strong><span>The exact thing it predicted happened within three hours either side of its stated ETA.</span></div>
           <div><strong>Called the outcome</strong><span>Of its picked bases that moved, how often did it correctly say destroyed or captured — and, if captured, by whom?</span></div>
         </div>
@@ -102,11 +102,11 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <div class="table-caption table-caption--equation">
             <p class="kicker">The headline number</p>
             <p><strong>Bullseye rate = exact outcome within ±3 hours of the model’s own ETA, out of every call we could fairly score.</strong></p>
-            <span>False alarms, wrong outcomes, and correct-but-early-or-late calls all count as misses. Calls we can’t fairly judge are excluded — and you can see exactly how many in the evidence column. Small samples: read the counts, not just the percentages.</span>
+            <span>A model can pick only bases that later see action and still score zero bullseyes if it names the wrong result or misses the timing. False alarms, wrong outcomes, and correct-but-early-or-late calls all count as bullseye misses. Calls we can’t fairly judge are excluded — and you can see exactly how many in the evidence column. Small samples: read the counts, not just the percentages.</span>
           </div>
           <div class="table-shell">
             <table class="adviser-table" aria-label="Compact adviser comparison">
-              <thead><tr><th>Model</th><th>Bullseyes<small>exact call, ±3h of ETA</small></th><th>Found the action<small>picked a base that moved</small></th><th>Outcome right<small>destroyed or captor, among moved picks</small></th><th>Base-pick lift<small>vs. random in scouted regions</small></th><th>Evidence<small>how much data</small></th></tr></thead>
+              <thead><tr><th>Model</th><th>Bullseyes<small>exact call, ±3h of ETA</small></th><th>Picked active bases<small>any transition by deadline; outcome and ETA ignored</small></th><th>Outcome right<small>destroyed or captor, among active picks</small></th><th>Capture-pick lift<small>capture frequency vs. eligible scouted bases</small></th><th>Evidence<small>how much data</small></th></tr></thead>
               <tbody id="adviser-rows" aria-live="polite"></tbody>
             </table>
           </div>
@@ -117,7 +117,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <div class="table-caption table-caption--equation">
           <p class="kicker">The comparison with the field</p>
           <p><strong>Total pipeline lift = scout lift × base-pick lift.</strong></p>
-          <span>Scout lift asks whether the model narrowed the map to active regions. Base-pick lift then compares its final calls with random bases inside those same six regions. Total lift compares the whole prompted process with blindly choosing across the map. These are capture-rate ratios, not claims that the model caused anything.</span>
+          <span>Scout lift asks whether the model narrowed the map to active regions. Capture-pick lift compares how often its final selected bases were captured with the eligible bases inside those same six regions and scoring windows. Total lift compares the whole prompted process with blindly choosing across the map. These are capture-frequency ratios, not accuracy percentages or claims that the model caused anything.</span>
         </div>
         <div class="table-shell">
           <table class="score-table selection-table" aria-describedby="selection-guide">
@@ -126,10 +126,10 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
                 <th>Model</th>
                 <th>Near-term captures<small>Selected 0–6h bases</small></th>
                 <th>Next-day captures<small>Selected 6–24h bases</small></th>
-                <th>Any movement<small>Captured or destroyed</small></th>
+                <th>Any movement<small>Ownership transition by deadline</small></th>
                 <th>Exact outcome<small>Named result matched</small></th>
                 <th>Scout lift<small>Chosen regions vs. whole map</small></th>
-                <th>Base-pick lift<small>Calls vs. chosen-region pool</small></th>
+                <th>Capture-pick lift<small>Selected-base capture rate vs. chosen-region pool</small></th>
                 <th>Total pipeline lift<small>Calls vs. whole map</small></th>
                 <th>Strongest picks<small>Ranks #1 and #5</small></th>
               </tr>
@@ -139,10 +139,10 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         </div>
         <dl id="selection-guide" class="score-guide">
           <div><dt>Captured selection</dt><dd>The selected base reached faction ownership by its deadline. This asks whether the model pointed toward a completed change of control.</dd></div>
-          <div><dt>Any movement</dt><dd>The selected base changed ownership or became neutral. This broader measure asks whether the model at least looked in a live part of the map.</dd></div>
+          <div><dt>Any movement</dt><dd>The selected base had any ownership transition after publication and by that prediction’s ETA plus three hours. The predicted outcome and distance from the ETA are ignored, so this measures location selection rather than forecast correctness.</dd></div>
           <div><dt>Exact outcome</dt><dd>The selected base did exactly what the model named. This is stricter than finding a base where anything happened.</dd></div>
           <div><dt>Scout lift</dt><dd>Did the six regions selected during the overview contain more captures than the map as a whole? This includes help from our activity data and scout prompt.</dd></div>
-          <div><dt>Base-pick lift</dt><dd>Inside those same six regions, did the model’s final bases capture more often than a random available base? This is the fairest measure of its drill-down selection.</dd></div>
+          <div><dt>Capture-pick lift</dt><dd>Inside those same six regions and scoring windows, how often were the model’s final bases captured compared with all eligible bases? A 4× lift means four times the baseline capture frequency, not four times the prediction accuracy.</dd></div>
           <div><dt>Total pipeline lift</dt><dd>How the complete scout-and-predict process compared with a random map-wide base. Useful for the system as built, but it includes our prompt structure.</dd></div>
         </dl>
         </details>
@@ -723,9 +723,9 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           adviserRow.append(
             adviserModel,
             adviserCell(percentage(behavior.actionableExact3hRate), `${behavior.actionableExact3hHits ?? 0}/${behavior.actionableExact3hBets ?? behavior.selectionScoredBets} calls · short ${percentage(behavior.actionableExact3hShortRate)} · long ${percentage(behavior.actionableExact3hLongRate)}`, "adviser-table__primary"),
-            adviserCell(percentage(behavior.transitionRate), `${behavior.transitionHits}/${behavior.selectionScoredBets} selected bases moved`),
+            adviserCell(percentage(behavior.transitionRate), `${behavior.transitionHits}/${behavior.selectionScoredBets} had a transition · outcome and ETA ignored`),
             adviserCell(percentage(behavior.transitionExactRate), `${behavior.transitionExactHits ?? 0}/${behavior.transitionExactBets ?? behavior.transitionHits} moved bases named correctly`),
-            adviserCell(ratio(behavior.captureLift), `${percentage(behavior.captureRate)} calls · ${percentage(behavior.captureBaselineRate)} scouted-region baseline`),
+            adviserCell(ratio(behavior.captureLift), `${percentage(behavior.captureRate)} selected-base capture rate · ${percentage(behavior.captureBaselineRate)} eligible-base baseline`),
             adviserCell(`${behavior.scoreableCount} scored`, `${behavior.publishedCount} published · ${behavior.open} open · ${behavior.censored} not scored`),
           );
           adviserRows.append(adviserRow);
@@ -762,10 +762,10 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             selectionModel,
             metricCell(percentage(behavior.shortCaptureRate), `${behavior.shortCaptureHits}/${behavior.shortCaptureBets} selected bases`),
             metricCell(percentage(behavior.longCaptureRate), `${behavior.longCaptureHits}/${behavior.longCaptureBets} selected bases`),
-            metricCell(percentage(behavior.transitionRate), `${behavior.transitionHits}/${behavior.selectionScoredBets} changed`),
+            metricCell(percentage(behavior.transitionRate), `${behavior.transitionHits}/${behavior.selectionScoredBets} had a transition; outcome and ETA ignored`),
             metricCell(percentage(behavior.exactOutcomeRate), `${behavior.exactOutcomeHits}/${behavior.selectionScoredBets} exact calls`),
             metricCell(ratio(behavior.scoutLift), `${percentage(behavior.captureBaselineRate)} chosen regions · ${percentage(behavior.captureMapBaselineRate)} map`),
-            metricCell(ratio(behavior.captureLift), `${percentage(behavior.captureRate)} calls · ${percentage(behavior.captureBaselineRate)} chosen regions`, "score-table__primary"),
+            metricCell(ratio(behavior.captureLift), `${percentage(behavior.captureRate)} selected bases · ${percentage(behavior.captureBaselineRate)} eligible-base baseline`, "score-table__primary"),
             metricCell(ratio(behavior.pipelineCaptureLift), `${percentage(behavior.captureRate)} calls · ${percentage(behavior.captureMapBaselineRate)} map`),
             metricCell(percentage(behavior.topRankCaptureRate), `${behavior.topRankCaptureHits}/${behavior.topRankCaptureBets} ranks #1 and #5`),
           );
