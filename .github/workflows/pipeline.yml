@@ -63,6 +63,14 @@ jobs:
           client-id: ${{ vars.DATA_WRITER_APP_CLIENT_ID }}
           private-key: ${{ secrets.DATA_WRITER_APP_PRIVATE_KEY }}
           permission-contents: write
+      - name: Resolve data writer commit identity
+        id: data-writer-identity
+        env:
+          GH_TOKEN: ${{ steps.data-writer-token.outputs.token }}
+        run: |
+          app_slug="${{ steps.data-writer-token.outputs.app-slug }}"
+          user_id="$(gh api "/users/${app_slug}[bot]" --jq .id)"
+          echo "user-id=$user_id" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: main
@@ -92,5 +100,8 @@ jobs:
           PYTHONPATH=src python3 -m foxhole_forecast score >/dev/null
           PYTHONPATH=src python3 -m foxhole_forecast build-dashboard >/dev/null
       - name: Commit new observations and results
+        env:
+          PERSIST_GIT_USER_NAME: ${{ steps.data-writer-token.outputs.app-slug }}[bot]
+          PERSIST_GIT_USER_EMAIL: ${{ steps.data-writer-identity.outputs.user-id }}+${{ steps.data-writer-token.outputs.app-slug }}[bot]@users.noreply.github.com
         run: |
           .github/scripts/persist-data.sh "data: update observations and scores"
