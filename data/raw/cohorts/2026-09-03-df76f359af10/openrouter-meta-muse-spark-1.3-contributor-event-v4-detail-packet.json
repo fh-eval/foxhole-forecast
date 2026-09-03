@@ -1,0 +1,4529 @@
+{
+  "cutoff": "2026-09-03T18:10:43.309596Z",
+  "data_dictionary": {
+    "none_state": "NONE means the strategic base is destroyed or demolished and has not been rebuilt by either faction; it is effectively no-man's-land.",
+    "rate_trends": "Adjacent equal-window comparison. Array order is [recent_per_hour, previous_per_hour, change_per_hour, direction].",
+    "recent_events": "A direct ownership flip can produce a loss row plus a capture row for the same state transition.",
+    "selected_metrics": "Evidence citation keys whose values and observation times are frozen at prediction time.",
+    "total_enlistments": "Cumulative unique players who have deployed to this region during the war. A player can count in multiple regions. This is not current population or a faction split; its change is only a new-to-that-region activity proxy."
+  },
+  "limits": {
+    "event_bets": 8,
+    "forecast_bases": 8,
+    "horizons_hours": [
+      1,
+      6,
+      24
+    ]
+  },
+  "packet_type": "detail",
+  "packet_version": 2,
+  "recent_events": [
+    {
+      "actor": "COLONIALS",
+      "base_id": "WeatheredExpanseHex:1f7ba4b7bc",
+      "base_name": "Wightwalk",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-02T18:10:43.174740Z",
+      "observed_to": "2026-09-02T18:37:48.669425Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "WeatheredExpanseHex:1f7ba4b7bc",
+      "base_name": "Wightwalk",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-02T18:10:43.174740Z",
+      "observed_to": "2026-09-02T18:37:48.669425Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "StonecradleHex:66dff0219e",
+      "base_name": "The Cord",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "StonecradleHex",
+      "observed_from": "2026-09-02T18:10:43.174740Z",
+      "observed_to": "2026-09-02T18:37:48.669425Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "StonecradleHex:66dff0219e",
+      "base_name": "The Cord",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "COLONIALS",
+      "map_name": "StonecradleHex",
+      "observed_from": "2026-09-02T18:10:43.174740Z",
+      "observed_to": "2026-09-02T18:37:48.669425Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:ec2e127b65",
+      "base_name": "The Pale House",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-02T18:10:43.174740Z",
+      "observed_to": "2026-09-02T18:37:48.669425Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "StlicanShelfHex:b98ed48c9d",
+      "base_name": "Thornhold",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-02T18:10:43.174740Z",
+      "observed_to": "2026-09-02T18:37:48.669425Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:b98ed48c9d",
+      "base_name": "Thornhold",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "COLONIALS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-02T18:10:43.174740Z",
+      "observed_to": "2026-09-02T18:37:48.669425Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:b8824c6799",
+      "base_name": "Shattered Advance",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-02T18:37:48.669425Z",
+      "observed_to": "2026-09-02T18:46:54.899661Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "WeatheredExpanseHex:b8824c6799",
+      "base_name": "Shattered Advance",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-02T18:37:48.669425Z",
+      "observed_to": "2026-09-02T18:46:54.899661Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StonecradleHex:66dff0219e",
+      "base_name": "The Cord",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "StonecradleHex",
+      "observed_from": "2026-09-02T18:37:48.669425Z",
+      "observed_to": "2026-09-02T18:46:54.899661Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:5dd203a06f",
+      "base_name": "Breaker Town",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-02T18:37:48.669425Z",
+      "observed_to": "2026-09-02T18:46:54.899661Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:b8824c6799",
+      "base_name": "Shattered Advance",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-02T19:17:18.291619Z",
+      "observed_to": "2026-09-02T19:28:59.445620Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StonecradleHex:66dff0219e",
+      "base_name": "The Cord",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "StonecradleHex",
+      "observed_from": "2026-09-02T19:28:59.445620Z",
+      "observed_to": "2026-09-02T19:43:10.787076Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "StonecradleHex:66dff0219e",
+      "base_name": "The Cord",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "WARDENS",
+      "map_name": "StonecradleHex",
+      "observed_from": "2026-09-02T19:28:59.445620Z",
+      "observed_to": "2026-09-02T19:43:10.787076Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:1f7ba4b7bc",
+      "base_name": "Wightwalk",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-02T19:43:10.787076Z",
+      "observed_to": "2026-09-02T19:52:58.332341Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "StonecradleHex:66dff0219e",
+      "base_name": "The Cord",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "NONE",
+      "map_name": "StonecradleHex",
+      "observed_from": "2026-09-02T19:43:10.787076Z",
+      "observed_to": "2026-09-02T19:52:58.332341Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "LinnMercyHex:be4d433fb0",
+      "base_name": "Hardline",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "LinnMercyHex",
+      "observed_from": "2026-09-02T19:52:58.332341Z",
+      "observed_to": "2026-09-02T20:10:46.620398Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "LinnMercyHex:be4d433fb0",
+      "base_name": "Hardline",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "WARDENS",
+      "map_name": "LinnMercyHex",
+      "observed_from": "2026-09-02T19:52:58.332341Z",
+      "observed_to": "2026-09-02T20:10:46.620398Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:b8824c6799",
+      "base_name": "Shattered Advance",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-02T19:52:58.332341Z",
+      "observed_to": "2026-09-02T20:10:46.620398Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "WeatheredExpanseHex:b8824c6799",
+      "base_name": "Shattered Advance",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-02T19:52:58.332341Z",
+      "observed_to": "2026-09-02T20:10:46.620398Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "StlicanShelfHex:206261de71",
+      "base_name": "Fort Hoarfrost",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-02T19:52:58.332341Z",
+      "observed_to": "2026-09-02T20:10:46.620398Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:206261de71",
+      "base_name": "Fort Hoarfrost",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "COLONIALS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-02T19:52:58.332341Z",
+      "observed_to": "2026-09-02T20:10:46.620398Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "WeatheredExpanseHex:b8824c6799",
+      "base_name": "Shattered Advance",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "NONE",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-02T20:10:46.620398Z",
+      "observed_to": "2026-09-02T20:19:14.852622Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "WeatheredExpanseHex:b8824c6799",
+      "base_name": "Shattered Advance",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-02T20:53:59.785574Z",
+      "observed_to": "2026-09-02T21:10:45.012284Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "WeatheredExpanseHex:b8824c6799",
+      "base_name": "Shattered Advance",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-02T20:53:59.785574Z",
+      "observed_to": "2026-09-02T21:10:45.012284Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:b8824c6799",
+      "base_name": "Shattered Advance",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-02T21:10:45.012284Z",
+      "observed_to": "2026-09-02T21:17:19.197954Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "WeatheredExpanseHex:fe497c03b5",
+      "base_name": "Spirit Watch",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-02T21:41:56.145843Z",
+      "observed_to": "2026-09-02T21:45:38.898899Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "WeatheredExpanseHex:fe497c03b5",
+      "base_name": "Spirit Watch",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-02T21:41:56.145843Z",
+      "observed_to": "2026-09-02T21:45:38.898899Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "WeatheredExpanseHex:4387b92dfb",
+      "base_name": "Frostmarch",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-02T21:52:48.811236Z",
+      "observed_to": "2026-09-02T22:10:44.459647Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:4387b92dfb",
+      "base_name": "Frostmarch",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-02T21:52:48.811236Z",
+      "observed_to": "2026-09-02T22:10:44.459647Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "WeatheredExpanseHex:9e0c18043e",
+      "base_name": "Crow's Nest",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-02T21:52:48.811236Z",
+      "observed_to": "2026-09-02T22:10:44.459647Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:9e0c18043e",
+      "base_name": "Crow's Nest",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-02T21:52:48.811236Z",
+      "observed_to": "2026-09-02T22:10:44.459647Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "WeatheredExpanseHex:fe497c03b5",
+      "base_name": "Spirit Watch",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "NONE",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-02T21:52:48.811236Z",
+      "observed_to": "2026-09-02T22:10:44.459647Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "StlicanShelfHex:ff5e9a0918",
+      "base_name": "The Old Mourn",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-02T22:32:31.894672Z",
+      "observed_to": "2026-09-02T22:45:13.012957Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "StlicanShelfHex:ff5e9a0918",
+      "base_name": "The Old Mourn",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "COLONIALS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-02T22:32:31.894672Z",
+      "observed_to": "2026-09-02T22:45:13.012957Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:ff5e9a0918",
+      "base_name": "The Old Mourn",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-02T22:45:13.012957Z",
+      "observed_to": "2026-09-02T22:53:23.682148Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "StlicanShelfHex:1e69948301",
+      "base_name": "Vulpine Watch",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-02T23:53:10.566354Z",
+      "observed_to": "2026-09-03T00:10:43.365776Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:1e69948301",
+      "base_name": "Vulpine Watch",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "COLONIALS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-02T23:53:10.566354Z",
+      "observed_to": "2026-09-03T00:10:43.365776Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "WeatheredExpanseHex:fe497c03b5",
+      "base_name": "Spirit Watch",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T01:56:48.181612Z",
+      "observed_to": "2026-09-03T02:15:44.059121Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "WeatheredExpanseHex:fe497c03b5",
+      "base_name": "Spirit Watch",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T01:56:48.181612Z",
+      "observed_to": "2026-09-03T02:15:44.059121Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "LinnMercyHex:7016da2de5",
+      "base_name": "Ulster Falls",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "LinnMercyHex",
+      "observed_from": "2026-09-03T02:30:45.189418Z",
+      "observed_to": "2026-09-03T02:45:46.995172Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "LinnMercyHex:7016da2de5",
+      "base_name": "Ulster Falls",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "WARDENS",
+      "map_name": "LinnMercyHex",
+      "observed_from": "2026-09-03T02:30:45.189418Z",
+      "observed_to": "2026-09-03T02:45:46.995172Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "WeatheredExpanseHex:fe497c03b5",
+      "base_name": "Spirit Watch",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "NONE",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T02:30:45.189418Z",
+      "observed_to": "2026-09-03T02:45:46.995172Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:4387b92dfb",
+      "base_name": "Frostmarch",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T02:45:46.995172Z",
+      "observed_to": "2026-09-03T03:00:53.448189Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "WeatheredExpanseHex:4387b92dfb",
+      "base_name": "Frostmarch",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T02:45:46.995172Z",
+      "observed_to": "2026-09-03T03:00:53.448189Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "LinnMercyHex:a0d5b3524b",
+      "base_name": "The Long Whine",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "LinnMercyHex",
+      "observed_from": "2026-09-03T03:32:09.128663Z",
+      "observed_to": "2026-09-03T03:50:45.606994Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "LinnMercyHex:a0d5b3524b",
+      "base_name": "The Long Whine",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "WARDENS",
+      "map_name": "LinnMercyHex",
+      "observed_from": "2026-09-03T03:32:09.128663Z",
+      "observed_to": "2026-09-03T03:50:45.606994Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "ViperPitHex:6030ebbdbd",
+      "base_name": "Blackthroat",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "ViperPitHex",
+      "observed_from": "2026-09-03T03:32:09.128663Z",
+      "observed_to": "2026-09-03T03:50:45.606994Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "ViperPitHex:6030ebbdbd",
+      "base_name": "Blackthroat",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "WARDENS",
+      "map_name": "ViperPitHex",
+      "observed_from": "2026-09-03T03:32:09.128663Z",
+      "observed_to": "2026-09-03T03:50:45.606994Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:b8824c6799",
+      "base_name": "Shattered Advance",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T03:32:09.128663Z",
+      "observed_to": "2026-09-03T03:50:45.606994Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "WeatheredExpanseHex:b8824c6799",
+      "base_name": "Shattered Advance",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T03:32:09.128663Z",
+      "observed_to": "2026-09-03T03:50:45.606994Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:9e0c18043e",
+      "base_name": "Crow's Nest",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T03:32:09.128663Z",
+      "observed_to": "2026-09-03T03:50:45.606994Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "WeatheredExpanseHex:9e0c18043e",
+      "base_name": "Crow's Nest",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T03:32:09.128663Z",
+      "observed_to": "2026-09-03T03:50:45.606994Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "LinnMercyHex:a0d5b3524b",
+      "base_name": "The Long Whine",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "LinnMercyHex",
+      "observed_from": "2026-09-03T03:50:45.606994Z",
+      "observed_to": "2026-09-03T04:05:52.253479Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "WeatheredExpanseHex:9e0c18043e",
+      "base_name": "Crow's Nest",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "NONE",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T03:50:45.606994Z",
+      "observed_to": "2026-09-03T04:05:52.253479Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "WeatheredExpanseHex:4387b92dfb",
+      "base_name": "Frostmarch",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "NONE",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T03:50:45.606994Z",
+      "observed_to": "2026-09-03T04:05:52.253479Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:1f7ba4b7bc",
+      "base_name": "Wightwalk",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T03:50:45.606994Z",
+      "observed_to": "2026-09-03T04:05:52.253479Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "WeatheredExpanseHex:1f7ba4b7bc",
+      "base_name": "Wightwalk",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T03:50:45.606994Z",
+      "observed_to": "2026-09-03T04:05:52.253479Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "LinnMercyHex:a0d5b3524b",
+      "base_name": "The Long Whine",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "LinnMercyHex",
+      "observed_from": "2026-09-03T04:05:52.253479Z",
+      "observed_to": "2026-09-03T04:13:30.221300Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "LinnMercyHex:a0d5b3524b",
+      "base_name": "The Long Whine",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "WARDENS",
+      "map_name": "LinnMercyHex",
+      "observed_from": "2026-09-03T04:05:52.253479Z",
+      "observed_to": "2026-09-03T04:13:30.221300Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "WeatheredExpanseHex:1f7ba4b7bc",
+      "base_name": "Wightwalk",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "NONE",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T04:05:52.253479Z",
+      "observed_to": "2026-09-03T04:13:30.221300Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "LinnMercyHex:a0d5b3524b",
+      "base_name": "The Long Whine",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "LinnMercyHex",
+      "observed_from": "2026-09-03T04:13:30.221300Z",
+      "observed_to": "2026-09-03T04:30:44.650889Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:b8824c6799",
+      "base_name": "Shattered Advance",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T04:13:30.221300Z",
+      "observed_to": "2026-09-03T04:30:44.650889Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:ec2e127b65",
+      "base_name": "The Pale House",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T04:30:44.650889Z",
+      "observed_to": "2026-09-03T04:45:45.368332Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "StlicanShelfHex:ec2e127b65",
+      "base_name": "The Pale House",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "WARDENS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T04:30:44.650889Z",
+      "observed_to": "2026-09-03T04:45:45.368332Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:b98ed48c9d",
+      "base_name": "Thornhold",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T04:45:45.368332Z",
+      "observed_to": "2026-09-03T05:00:59.749661Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "StlicanShelfHex:b98ed48c9d",
+      "base_name": "Thornhold",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "WARDENS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T04:45:45.368332Z",
+      "observed_to": "2026-09-03T05:00:59.749661Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "ViperPitHex:6030ebbdbd",
+      "base_name": "Blackthroat",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "ViperPitHex",
+      "observed_from": "2026-09-03T05:00:59.749661Z",
+      "observed_to": "2026-09-03T05:14:22.869019Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "ViperPitHex:6030ebbdbd",
+      "base_name": "Blackthroat",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "COLONIALS",
+      "map_name": "ViperPitHex",
+      "observed_from": "2026-09-03T05:00:59.749661Z",
+      "observed_to": "2026-09-03T05:14:22.869019Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:b8824c6799",
+      "base_name": "Shattered Advance",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T05:00:59.749661Z",
+      "observed_to": "2026-09-03T05:14:22.869019Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "WeatheredExpanseHex:b8824c6799",
+      "base_name": "Shattered Advance",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T05:00:59.749661Z",
+      "observed_to": "2026-09-03T05:14:22.869019Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:ff5e9a0918",
+      "base_name": "The Old Mourn",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T05:00:59.749661Z",
+      "observed_to": "2026-09-03T05:14:22.869019Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "StlicanShelfHex:ff5e9a0918",
+      "base_name": "The Old Mourn",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "WARDENS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T05:00:59.749661Z",
+      "observed_to": "2026-09-03T05:14:22.869019Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "LinnMercyHex:a0d5b3524b",
+      "base_name": "The Long Whine",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "LinnMercyHex",
+      "observed_from": "2026-09-03T05:14:22.869019Z",
+      "observed_to": "2026-09-03T05:20:28.531877Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "LinnMercyHex:a0d5b3524b",
+      "base_name": "The Long Whine",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "WARDENS",
+      "map_name": "LinnMercyHex",
+      "observed_from": "2026-09-03T05:14:22.869019Z",
+      "observed_to": "2026-09-03T05:20:28.531877Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "ViperPitHex:6030ebbdbd",
+      "base_name": "Blackthroat",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "ViperPitHex",
+      "observed_from": "2026-09-03T05:14:22.869019Z",
+      "observed_to": "2026-09-03T05:20:28.531877Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:5dd203a06f",
+      "base_name": "Breaker Town",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T05:14:22.869019Z",
+      "observed_to": "2026-09-03T05:20:28.531877Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "StlicanShelfHex:5dd203a06f",
+      "base_name": "Breaker Town",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "WARDENS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T05:14:22.869019Z",
+      "observed_to": "2026-09-03T05:20:28.531877Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "StlicanShelfHex:5dd203a06f",
+      "base_name": "Breaker Town",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "NONE",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T05:22:36.207395Z",
+      "observed_to": "2026-09-03T05:40:42.938274Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:206261de71",
+      "base_name": "Fort Hoarfrost",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T05:41:31.779778Z",
+      "observed_to": "2026-09-03T05:49:46.901845Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "StlicanShelfHex:206261de71",
+      "base_name": "Fort Hoarfrost",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "WARDENS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T05:41:31.779778Z",
+      "observed_to": "2026-09-03T05:49:46.901845Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:1e69948301",
+      "base_name": "Vulpine Watch",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T06:01:13.873034Z",
+      "observed_to": "2026-09-03T06:35:42.334112Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "StlicanShelfHex:1e69948301",
+      "base_name": "Vulpine Watch",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "WARDENS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T06:01:13.873034Z",
+      "observed_to": "2026-09-03T06:35:42.334112Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "StlicanShelfHex:206261de71",
+      "base_name": "Fort Hoarfrost",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T06:01:13.873034Z",
+      "observed_to": "2026-09-03T06:35:42.334112Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "StlicanShelfHex:206261de71",
+      "base_name": "Fort Hoarfrost",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "COLONIALS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T06:01:13.873034Z",
+      "observed_to": "2026-09-03T06:35:42.334112Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:206261de71",
+      "base_name": "Fort Hoarfrost",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T06:59:08.077622Z",
+      "observed_to": "2026-09-03T07:15:43.984132Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "StlicanShelfHex:b98ed48c9d",
+      "base_name": "Thornhold",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T07:22:16.355026Z",
+      "observed_to": "2026-09-03T07:33:10.544412Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "StlicanShelfHex:b98ed48c9d",
+      "base_name": "Thornhold",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "COLONIALS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T07:22:16.355026Z",
+      "observed_to": "2026-09-03T07:33:10.544412Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:b98ed48c9d",
+      "base_name": "Thornhold",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T07:33:10.544412Z",
+      "observed_to": "2026-09-03T07:43:46.017753Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "StlicanShelfHex:ec2e127b65",
+      "base_name": "The Pale House",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T07:33:10.544412Z",
+      "observed_to": "2026-09-03T07:43:46.017753Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:ec2e127b65",
+      "base_name": "The Pale House",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "COLONIALS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T07:33:10.544412Z",
+      "observed_to": "2026-09-03T07:43:46.017753Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "WeatheredExpanseHex:9e0c18043e",
+      "base_name": "Crow's Nest",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T07:43:46.017753Z",
+      "observed_to": "2026-09-03T07:56:38.538802Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "WeatheredExpanseHex:9e0c18043e",
+      "base_name": "Crow's Nest",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T07:43:46.017753Z",
+      "observed_to": "2026-09-03T07:56:38.538802Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "StlicanShelfHex:5dd203a06f",
+      "base_name": "Breaker Town",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T07:43:46.017753Z",
+      "observed_to": "2026-09-03T07:56:38.538802Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "StlicanShelfHex:5dd203a06f",
+      "base_name": "Breaker Town",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "COLONIALS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T07:43:46.017753Z",
+      "observed_to": "2026-09-03T07:56:38.538802Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "WeatheredExpanseHex:b8824c6799",
+      "base_name": "Shattered Advance",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T07:56:38.538802Z",
+      "observed_to": "2026-09-03T08:15:42.180256Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:b8824c6799",
+      "base_name": "Shattered Advance",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T07:56:38.538802Z",
+      "observed_to": "2026-09-03T08:15:42.180256Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:5dd203a06f",
+      "base_name": "Breaker Town",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T07:56:38.538802Z",
+      "observed_to": "2026-09-03T08:15:42.180256Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "StlicanShelfHex:ff5e9a0918",
+      "base_name": "The Old Mourn",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T07:56:38.538802Z",
+      "observed_to": "2026-09-03T08:15:42.180256Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "StlicanShelfHex:ff5e9a0918",
+      "base_name": "The Old Mourn",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "COLONIALS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T07:56:38.538802Z",
+      "observed_to": "2026-09-03T08:15:42.180256Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:9e0c18043e",
+      "base_name": "Crow's Nest",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T08:23:54.599471Z",
+      "observed_to": "2026-09-03T08:35:11.975697Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "WeatheredExpanseHex:4387b92dfb",
+      "base_name": "Frostmarch",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T08:35:11.975697Z",
+      "observed_to": "2026-09-03T08:45:06.015685Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:4387b92dfb",
+      "base_name": "Frostmarch",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T08:35:11.975697Z",
+      "observed_to": "2026-09-03T08:45:06.015685Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "WeatheredExpanseHex:1f7ba4b7bc",
+      "base_name": "Wightwalk",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T08:45:06.015685Z",
+      "observed_to": "2026-09-03T08:58:02.696868Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "WeatheredExpanseHex:1f7ba4b7bc",
+      "base_name": "Wightwalk",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T08:45:06.015685Z",
+      "observed_to": "2026-09-03T08:58:02.696868Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "StlicanShelfHex:ff5e9a0918",
+      "base_name": "The Old Mourn",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "NONE",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T08:45:06.015685Z",
+      "observed_to": "2026-09-03T08:58:02.696868Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:1f7ba4b7bc",
+      "base_name": "Wightwalk",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T09:15:48.016767Z",
+      "observed_to": "2026-09-03T09:47:03.930182Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:4387b92dfb",
+      "base_name": "Frostmarch",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T09:15:48.016767Z",
+      "observed_to": "2026-09-03T09:47:03.930182Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "WeatheredExpanseHex:4387b92dfb",
+      "base_name": "Frostmarch",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T09:15:48.016767Z",
+      "observed_to": "2026-09-03T09:47:03.930182Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "WeatheredExpanseHex:4387b92dfb",
+      "base_name": "Frostmarch",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T09:56:20.084309Z",
+      "observed_to": "2026-09-03T10:10:43.397294Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "WeatheredExpanseHex:4387b92dfb",
+      "base_name": "Frostmarch",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T09:56:20.084309Z",
+      "observed_to": "2026-09-03T10:10:43.397294Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:4387b92dfb",
+      "base_name": "Frostmarch",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T10:10:43.397294Z",
+      "observed_to": "2026-09-03T10:22:41.535403Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "StlicanShelfHex:ff5e9a0918",
+      "base_name": "The Old Mourn",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T10:55:22.729634Z",
+      "observed_to": "2026-09-03T11:10:42.413699Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "StlicanShelfHex:ff5e9a0918",
+      "base_name": "The Old Mourn",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "COLONIALS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T10:55:22.729634Z",
+      "observed_to": "2026-09-03T11:10:42.413699Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:1f7ba4b7bc",
+      "base_name": "Wightwalk",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T11:42:36.675532Z",
+      "observed_to": "2026-09-03T11:55:33.672213Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "WeatheredExpanseHex:1f7ba4b7bc",
+      "base_name": "Wightwalk",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T11:42:36.675532Z",
+      "observed_to": "2026-09-03T11:55:33.672213Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:ec2e127b65",
+      "base_name": "The Pale House",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T11:42:36.675532Z",
+      "observed_to": "2026-09-03T11:55:33.672213Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "StlicanShelfHex:ec2e127b65",
+      "base_name": "The Pale House",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "WARDENS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T11:42:36.675532Z",
+      "observed_to": "2026-09-03T11:55:33.672213Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "WeatheredExpanseHex:1f7ba4b7bc",
+      "base_name": "Wightwalk",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T12:11:18.582978Z",
+      "observed_to": "2026-09-03T12:38:11.761421Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "WeatheredExpanseHex:1f7ba4b7bc",
+      "base_name": "Wightwalk",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "COLONIALS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T12:11:18.582978Z",
+      "observed_to": "2026-09-03T12:38:11.761421Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:ec2e127b65",
+      "base_name": "The Pale House",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T12:11:18.582978Z",
+      "observed_to": "2026-09-03T12:38:11.761421Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "ViperPitHex:6030ebbdbd",
+      "base_name": "Blackthroat",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "ViperPitHex",
+      "observed_from": "2026-09-03T12:47:50.938414Z",
+      "observed_to": "2026-09-03T12:58:33.690467Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "ViperPitHex:6030ebbdbd",
+      "base_name": "Blackthroat",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "WARDENS",
+      "map_name": "ViperPitHex",
+      "observed_from": "2026-09-03T12:47:50.938414Z",
+      "observed_to": "2026-09-03T12:58:33.690467Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:ec2e127b65",
+      "base_name": "The Pale House",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T12:58:33.690467Z",
+      "observed_to": "2026-09-03T13:15:44.888906Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "StlicanShelfHex:ec2e127b65",
+      "base_name": "The Pale House",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "WARDENS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T12:58:33.690467Z",
+      "observed_to": "2026-09-03T13:15:44.888906Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:5dd203a06f",
+      "base_name": "Breaker Town",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T12:58:33.690467Z",
+      "observed_to": "2026-09-03T13:15:44.888906Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "StlicanShelfHex:5dd203a06f",
+      "base_name": "Breaker Town",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "WARDENS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T12:58:33.690467Z",
+      "observed_to": "2026-09-03T13:15:44.888906Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:1f7ba4b7bc",
+      "base_name": "Wightwalk",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T13:15:44.888906Z",
+      "observed_to": "2026-09-03T13:22:54.132860Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:ec2e127b65",
+      "base_name": "The Pale House",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T13:15:44.888906Z",
+      "observed_to": "2026-09-03T13:22:54.132860Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "ViperPitHex:6030ebbdbd",
+      "base_name": "Blackthroat",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "ViperPitHex",
+      "observed_from": "2026-09-03T13:33:28.090174Z",
+      "observed_to": "2026-09-03T13:43:54.665046Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "ViperPitHex:6030ebbdbd",
+      "base_name": "Blackthroat",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "COLONIALS",
+      "map_name": "ViperPitHex",
+      "observed_from": "2026-09-03T13:33:28.090174Z",
+      "observed_to": "2026-09-03T13:43:54.665046Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:1f7ba4b7bc",
+      "base_name": "Wightwalk",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T13:33:28.090174Z",
+      "observed_to": "2026-09-03T13:43:54.665046Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "WeatheredExpanseHex:1f7ba4b7bc",
+      "base_name": "Wightwalk",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T13:33:28.090174Z",
+      "observed_to": "2026-09-03T13:43:54.665046Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "StonecradleHex:9f5923d500",
+      "base_name": "Trammel Pool",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "StonecradleHex",
+      "observed_from": "2026-09-03T13:33:28.090174Z",
+      "observed_to": "2026-09-03T13:43:54.665046Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "StonecradleHex:9f5923d500",
+      "base_name": "Trammel Pool",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "COLONIALS",
+      "map_name": "StonecradleHex",
+      "observed_from": "2026-09-03T13:33:28.090174Z",
+      "observed_to": "2026-09-03T13:43:54.665046Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "ViperPitHex:6030ebbdbd",
+      "base_name": "Blackthroat",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "ViperPitHex",
+      "observed_from": "2026-09-03T13:43:54.665046Z",
+      "observed_to": "2026-09-03T13:56:42.980079Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:5dd203a06f",
+      "base_name": "Breaker Town",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T13:43:54.665046Z",
+      "observed_to": "2026-09-03T13:56:42.980079Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "FarranacCoastHex:82635d7de5",
+      "base_name": "Transient Valley",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "FarranacCoastHex",
+      "observed_from": "2026-09-03T13:56:42.980079Z",
+      "observed_to": "2026-09-03T14:15:46.741273Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "FarranacCoastHex:82635d7de5",
+      "base_name": "Transient Valley",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "WARDENS",
+      "map_name": "FarranacCoastHex",
+      "observed_from": "2026-09-03T13:56:42.980079Z",
+      "observed_to": "2026-09-03T14:15:46.741273Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StonecradleHex:9f5923d500",
+      "base_name": "Trammel Pool",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "StonecradleHex",
+      "observed_from": "2026-09-03T14:15:46.741273Z",
+      "observed_to": "2026-09-03T14:23:32.263787Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "StlicanShelfHex:ff5e9a0918",
+      "base_name": "The Old Mourn",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "NONE",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T14:15:46.741273Z",
+      "observed_to": "2026-09-03T14:23:32.263787Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:1f7ba4b7bc",
+      "base_name": "Wightwalk",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T14:23:32.263787Z",
+      "observed_to": "2026-09-03T14:34:06.411872Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:5dd203a06f",
+      "base_name": "Breaker Town",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T14:23:32.263787Z",
+      "observed_to": "2026-09-03T14:34:06.411872Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "StlicanShelfHex:5dd203a06f",
+      "base_name": "Breaker Town",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "WARDENS",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T14:23:32.263787Z",
+      "observed_to": "2026-09-03T14:34:06.411872Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StlicanShelfHex:5dd203a06f",
+      "base_name": "Breaker Town",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "StlicanShelfHex",
+      "observed_from": "2026-09-03T14:34:06.411872Z",
+      "observed_to": "2026-09-03T14:42:56.696578Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "FarranacCoastHex:82635d7de5",
+      "base_name": "Transient Valley",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "NONE",
+      "map_name": "FarranacCoastHex",
+      "observed_from": "2026-09-03T14:34:06.411872Z",
+      "observed_to": "2026-09-03T14:42:56.696578Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StonecradleHex:9f5923d500",
+      "base_name": "Trammel Pool",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "StonecradleHex",
+      "observed_from": "2026-09-03T15:15:43.832964Z",
+      "observed_to": "2026-09-03T15:52:15.190000Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "StonecradleHex:9f5923d500",
+      "base_name": "Trammel Pool",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "WARDENS",
+      "map_name": "StonecradleHex",
+      "observed_from": "2026-09-03T15:15:43.832964Z",
+      "observed_to": "2026-09-03T15:52:15.190000Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "StonecradleHex:9f5923d500",
+      "base_name": "Trammel Pool",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "NONE",
+      "map_name": "StonecradleHex",
+      "observed_from": "2026-09-03T15:56:13.969306Z",
+      "observed_to": "2026-09-03T16:10:45.768950Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "ViperPitHex:6030ebbdbd",
+      "base_name": "Blackthroat",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "ViperPitHex",
+      "observed_from": "2026-09-03T16:22:55.517751Z",
+      "observed_to": "2026-09-03T16:34:10.942327Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "ViperPitHex:6030ebbdbd",
+      "base_name": "Blackthroat",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "WARDENS",
+      "map_name": "ViperPitHex",
+      "observed_from": "2026-09-03T16:22:55.517751Z",
+      "observed_to": "2026-09-03T16:34:10.942327Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "ViperPitHex:6030ebbdbd",
+      "base_name": "Blackthroat",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "ViperPitHex",
+      "observed_from": "2026-09-03T16:43:36.908644Z",
+      "observed_to": "2026-09-03T16:56:48.039923Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:1f7ba4b7bc",
+      "base_name": "Wightwalk",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T16:43:36.908644Z",
+      "observed_to": "2026-09-03T16:56:48.039923Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "WeatheredExpanseHex:1f7ba4b7bc",
+      "base_name": "Wightwalk",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T16:43:36.908644Z",
+      "observed_to": "2026-09-03T16:56:48.039923Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "LinnMercyHex:7016da2de5",
+      "base_name": "Ulster Falls",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "LinnMercyHex",
+      "observed_from": "2026-09-03T16:56:48.039923Z",
+      "observed_to": "2026-09-03T17:15:49.022819Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "LinnMercyHex:7016da2de5",
+      "base_name": "Ulster Falls",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "COLONIALS",
+      "map_name": "LinnMercyHex",
+      "observed_from": "2026-09-03T16:56:48.039923Z",
+      "observed_to": "2026-09-03T17:15:49.022819Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "WeatheredExpanseHex:1f7ba4b7bc",
+      "base_name": "Wightwalk",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "NONE",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T16:56:48.039923Z",
+      "observed_to": "2026-09-03T17:15:49.022819Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:4387b92dfb",
+      "base_name": "Frostmarch",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T16:56:48.039923Z",
+      "observed_to": "2026-09-03T17:15:49.022819Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "WeatheredExpanseHex:4387b92dfb",
+      "base_name": "Frostmarch",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "WARDENS",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T16:56:48.039923Z",
+      "observed_to": "2026-09-03T17:15:49.022819Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "FarranacCoastHex:82635d7de5",
+      "base_name": "Transient Valley",
+      "event_type": "OWNER_LOSES",
+      "from_team": "COLONIALS",
+      "map_name": "FarranacCoastHex",
+      "observed_from": "2026-09-03T16:56:48.039923Z",
+      "observed_to": "2026-09-03T17:15:49.022819Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "FarranacCoastHex:82635d7de5",
+      "base_name": "Transient Valley",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "COLONIALS",
+      "map_name": "FarranacCoastHex",
+      "observed_from": "2026-09-03T16:56:48.039923Z",
+      "observed_to": "2026-09-03T17:15:49.022819Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "COLONIALS",
+      "base_id": "LinnMercyHex:7016da2de5",
+      "base_name": "Ulster Falls",
+      "event_type": "CAPTURED_BY_COLONIALS",
+      "from_team": "NONE",
+      "map_name": "LinnMercyHex",
+      "observed_from": "2026-09-03T17:15:49.022819Z",
+      "observed_to": "2026-09-03T17:21:07.015060Z",
+      "to_team": "COLONIALS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "WeatheredExpanseHex:4387b92dfb",
+      "base_name": "Frostmarch",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "WeatheredExpanseHex",
+      "observed_from": "2026-09-03T17:15:49.022819Z",
+      "observed_to": "2026-09-03T17:21:07.015060Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "FarranacCoastHex:82635d7de5",
+      "base_name": "Transient Valley",
+      "event_type": "CAPTURED_BY_WARDENS",
+      "from_team": "NONE",
+      "map_name": "FarranacCoastHex",
+      "observed_from": "2026-09-03T17:15:49.022819Z",
+      "observed_to": "2026-09-03T17:21:07.015060Z",
+      "to_team": "WARDENS"
+    },
+    {
+      "actor": "WARDENS",
+      "base_id": "StonecradleHex:21dbf207d3",
+      "base_name": "The Heir's Knife",
+      "event_type": "OWNER_LOSES",
+      "from_team": "WARDENS",
+      "map_name": "StonecradleHex",
+      "observed_from": "2026-09-03T17:43:52.852746Z",
+      "observed_to": "2026-09-03T17:56:21.561132Z",
+      "to_team": "NONE"
+    },
+    {
+      "actor": "NONE",
+      "base_id": "StonecradleHex:21dbf207d3",
+      "base_name": "The Heir's Knife",
+      "event_type": "BECOMES_NEUTRAL",
+      "from_team": "WARDENS",
+      "map_name": "StonecradleHex",
+      "observed_from": "2026-09-03T17:43:52.852746Z",
+      "observed_to": "2026-09-03T17:56:21.561132Z",
+      "to_team": "NONE"
+    }
+  ],
+  "selected_metrics": [
+    {
+      "metric_id": "region.WeatheredExpanseHex.colonialCasualties.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 116275
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.wardenCasualties.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 122735
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.totalEnlistments.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 10270
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.dayOfWar.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 218
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.colonialCasualties.delta_2h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 1446
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.wardenCasualties.delta_2h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 2030
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.totalEnlistments.delta_2h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 103
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.colonialCasualties.delta_6h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 3017
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.wardenCasualties.delta_6h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 3933
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.totalEnlistments.delta_6h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 189
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.colonialCasualties.delta_24h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 9911
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.wardenCasualties.delta_24h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 11771
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.totalEnlistments.delta_24h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 640
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.casualties.ratio_colonial_to_warden",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 0.9474
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.colonialCasualties.rate_1h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 1082.0
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.colonialCasualties.rate_change_1h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 718.0
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.wardenCasualties.rate_1h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 1261.0
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.wardenCasualties.rate_change_1h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 492.0
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.totalEnlistments.rate_1h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 75.0
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.totalEnlistments.rate_change_1h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 47.0
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.colonialCasualties.rate_2h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 723.0
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.colonialCasualties.rate_change_2h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 286.5
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.wardenCasualties.rate_2h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 1015.0
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.wardenCasualties.rate_change_2h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 486.5
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.totalEnlistments.rate_2h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 51.5
+    },
+    {
+      "metric_id": "region.WeatheredExpanseHex.totalEnlistments.rate_change_2h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 29.5
+    },
+    {
+      "metric_id": "region.StonecradleHex.colonialCasualties.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 21690
+    },
+    {
+      "metric_id": "region.StonecradleHex.wardenCasualties.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 21696
+    },
+    {
+      "metric_id": "region.StonecradleHex.totalEnlistments.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 5886
+    },
+    {
+      "metric_id": "region.StonecradleHex.dayOfWar.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 218
+    },
+    {
+      "metric_id": "region.StonecradleHex.colonialCasualties.delta_2h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 572
+    },
+    {
+      "metric_id": "region.StonecradleHex.wardenCasualties.delta_2h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 744
+    },
+    {
+      "metric_id": "region.StonecradleHex.totalEnlistments.delta_2h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 110
+    },
+    {
+      "metric_id": "region.StonecradleHex.colonialCasualties.delta_6h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 1234
+    },
+    {
+      "metric_id": "region.StonecradleHex.wardenCasualties.delta_6h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 1558
+    },
+    {
+      "metric_id": "region.StonecradleHex.totalEnlistments.delta_6h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 258
+    },
+    {
+      "metric_id": "region.StonecradleHex.colonialCasualties.delta_24h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 4305
+    },
+    {
+      "metric_id": "region.StonecradleHex.wardenCasualties.delta_24h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 4657
+    },
+    {
+      "metric_id": "region.StonecradleHex.totalEnlistments.delta_24h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 681
+    },
+    {
+      "metric_id": "region.StonecradleHex.casualties.ratio_colonial_to_warden",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 0.9997
+    },
+    {
+      "metric_id": "region.StonecradleHex.colonialCasualties.rate_1h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 454.0
+    },
+    {
+      "metric_id": "region.StonecradleHex.colonialCasualties.rate_change_1h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 336.0
+    },
+    {
+      "metric_id": "region.StonecradleHex.wardenCasualties.rate_1h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 589.0
+    },
+    {
+      "metric_id": "region.StonecradleHex.wardenCasualties.rate_change_1h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 434.0
+    },
+    {
+      "metric_id": "region.StonecradleHex.totalEnlistments.rate_1h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 77.0
+    },
+    {
+      "metric_id": "region.StonecradleHex.totalEnlistments.rate_change_1h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 44.0
+    },
+    {
+      "metric_id": "region.StonecradleHex.colonialCasualties.rate_2h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 286.0
+    },
+    {
+      "metric_id": "region.StonecradleHex.colonialCasualties.rate_change_2h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 75.0
+    },
+    {
+      "metric_id": "region.StonecradleHex.wardenCasualties.rate_2h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 372.0
+    },
+    {
+      "metric_id": "region.StonecradleHex.wardenCasualties.rate_change_2h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 124.5
+    },
+    {
+      "metric_id": "region.StonecradleHex.totalEnlistments.rate_2h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 55.0
+    },
+    {
+      "metric_id": "region.StonecradleHex.totalEnlistments.rate_change_2h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 14.0
+    },
+    {
+      "metric_id": "region.LinnMercyHex.colonialCasualties.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 39060
+    },
+    {
+      "metric_id": "region.LinnMercyHex.wardenCasualties.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 41927
+    },
+    {
+      "metric_id": "region.LinnMercyHex.totalEnlistments.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 8177
+    },
+    {
+      "metric_id": "region.LinnMercyHex.dayOfWar.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 218
+    },
+    {
+      "metric_id": "region.LinnMercyHex.colonialCasualties.delta_2h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 481
+    },
+    {
+      "metric_id": "region.LinnMercyHex.wardenCasualties.delta_2h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 691
+    },
+    {
+      "metric_id": "region.LinnMercyHex.totalEnlistments.delta_2h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 82
+    },
+    {
+      "metric_id": "region.LinnMercyHex.colonialCasualties.delta_6h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 876
+    },
+    {
+      "metric_id": "region.LinnMercyHex.wardenCasualties.delta_6h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 1422
+    },
+    {
+      "metric_id": "region.LinnMercyHex.totalEnlistments.delta_6h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 207
+    },
+    {
+      "metric_id": "region.LinnMercyHex.colonialCasualties.delta_24h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 5162
+    },
+    {
+      "metric_id": "region.LinnMercyHex.wardenCasualties.delta_24h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 6986
+    },
+    {
+      "metric_id": "region.LinnMercyHex.totalEnlistments.delta_24h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 655
+    },
+    {
+      "metric_id": "region.LinnMercyHex.casualties.ratio_colonial_to_warden",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 0.9316
+    },
+    {
+      "metric_id": "region.LinnMercyHex.colonialCasualties.rate_1h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 363.0
+    },
+    {
+      "metric_id": "region.LinnMercyHex.colonialCasualties.rate_change_1h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 245.0
+    },
+    {
+      "metric_id": "region.LinnMercyHex.wardenCasualties.rate_1h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 514.0
+    },
+    {
+      "metric_id": "region.LinnMercyHex.wardenCasualties.rate_change_1h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 337.0
+    },
+    {
+      "metric_id": "region.LinnMercyHex.totalEnlistments.rate_1h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 63.0
+    },
+    {
+      "metric_id": "region.LinnMercyHex.totalEnlistments.rate_change_1h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 44.0
+    },
+    {
+      "metric_id": "region.LinnMercyHex.colonialCasualties.rate_2h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 240.5
+    },
+    {
+      "metric_id": "region.LinnMercyHex.colonialCasualties.rate_change_2h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 117.0
+    },
+    {
+      "metric_id": "region.LinnMercyHex.wardenCasualties.rate_2h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 345.5
+    },
+    {
+      "metric_id": "region.LinnMercyHex.wardenCasualties.rate_change_2h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 113.0
+    },
+    {
+      "metric_id": "region.LinnMercyHex.totalEnlistments.rate_2h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 41.0
+    },
+    {
+      "metric_id": "region.LinnMercyHex.totalEnlistments.rate_change_2h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 11.5
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.colonialCasualties.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 36055
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.wardenCasualties.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 41404
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.totalEnlistments.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 6589
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.dayOfWar.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 218
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.colonialCasualties.delta_2h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 840
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.wardenCasualties.delta_2h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 1247
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.totalEnlistments.delta_2h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 109
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.colonialCasualties.delta_6h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 1392
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.wardenCasualties.delta_6h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 2112
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.totalEnlistments.delta_6h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 232
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.colonialCasualties.delta_24h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 3642
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.wardenCasualties.delta_24h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 4621
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.totalEnlistments.delta_24h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 544
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.casualties.ratio_colonial_to_warden",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 0.8708
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.colonialCasualties.rate_1h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 555.0
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.colonialCasualties.rate_change_1h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 270.0
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.wardenCasualties.rate_1h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 814.0
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.wardenCasualties.rate_change_1h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 381.0
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.totalEnlistments.rate_1h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 69.0
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.totalEnlistments.rate_change_1h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 29.0
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.colonialCasualties.rate_2h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 420.0
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.colonialCasualties.rate_change_2h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 244.0
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.wardenCasualties.rate_2h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 623.5
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.wardenCasualties.rate_change_2h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 349.5
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.totalEnlistments.rate_2h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 54.5
+    },
+    {
+      "metric_id": "region.FarranacCoastHex.totalEnlistments.rate_change_2h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 25.0
+    },
+    {
+      "metric_id": "region.ViperPitHex.colonialCasualties.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 4749
+    },
+    {
+      "metric_id": "region.ViperPitHex.wardenCasualties.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 4368
+    },
+    {
+      "metric_id": "region.ViperPitHex.totalEnlistments.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 4001
+    },
+    {
+      "metric_id": "region.ViperPitHex.dayOfWar.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 218
+    },
+    {
+      "metric_id": "region.ViperPitHex.colonialCasualties.delta_2h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 5
+    },
+    {
+      "metric_id": "region.ViperPitHex.wardenCasualties.delta_2h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 28
+    },
+    {
+      "metric_id": "region.ViperPitHex.totalEnlistments.delta_2h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 32
+    },
+    {
+      "metric_id": "region.ViperPitHex.colonialCasualties.delta_6h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 16
+    },
+    {
+      "metric_id": "region.ViperPitHex.wardenCasualties.delta_6h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 61
+    },
+    {
+      "metric_id": "region.ViperPitHex.totalEnlistments.delta_6h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 70
+    },
+    {
+      "metric_id": "region.ViperPitHex.colonialCasualties.delta_24h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 675
+    },
+    {
+      "metric_id": "region.ViperPitHex.wardenCasualties.delta_24h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 505
+    },
+    {
+      "metric_id": "region.ViperPitHex.totalEnlistments.delta_24h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 313
+    },
+    {
+      "metric_id": "region.ViperPitHex.casualties.ratio_colonial_to_warden",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 1.0872
+    },
+    {
+      "metric_id": "region.ViperPitHex.colonialCasualties.rate_1h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 5.0
+    },
+    {
+      "metric_id": "region.ViperPitHex.colonialCasualties.rate_change_1h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 5.0
+    },
+    {
+      "metric_id": "region.ViperPitHex.wardenCasualties.rate_1h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 17.0
+    },
+    {
+      "metric_id": "region.ViperPitHex.wardenCasualties.rate_change_1h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 6.0
+    },
+    {
+      "metric_id": "region.ViperPitHex.totalEnlistments.rate_1h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 23.0
+    },
+    {
+      "metric_id": "region.ViperPitHex.totalEnlistments.rate_change_1h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 14.0
+    },
+    {
+      "metric_id": "region.ViperPitHex.colonialCasualties.rate_2h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 2.5
+    },
+    {
+      "metric_id": "region.ViperPitHex.colonialCasualties.rate_change_2h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 0.0
+    },
+    {
+      "metric_id": "region.ViperPitHex.wardenCasualties.rate_2h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 14.0
+    },
+    {
+      "metric_id": "region.ViperPitHex.wardenCasualties.rate_change_2h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 2.0
+    },
+    {
+      "metric_id": "region.ViperPitHex.totalEnlistments.rate_2h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 16.0
+    },
+    {
+      "metric_id": "region.ViperPitHex.totalEnlistments.rate_change_2h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 7.0
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.colonialCasualties.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 38072
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.wardenCasualties.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 39484
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.totalEnlistments.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 7563
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.dayOfWar.raw",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 218
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.colonialCasualties.delta_2h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 77
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.wardenCasualties.delta_2h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 89
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.totalEnlistments.delta_2h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 44
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.colonialCasualties.delta_6h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 177
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.wardenCasualties.delta_6h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 160
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.totalEnlistments.delta_6h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 110
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.colonialCasualties.delta_24h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 2350
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.wardenCasualties.delta_24h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 2334
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.totalEnlistments.delta_24h",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 481
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.casualties.ratio_colonial_to_warden",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 0.9642
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.colonialCasualties.rate_1h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 59.0
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.colonialCasualties.rate_change_1h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 41.0
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.wardenCasualties.rate_1h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 81.0
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.wardenCasualties.rate_change_1h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 73.0
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.totalEnlistments.rate_1h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 38.0
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.totalEnlistments.rate_change_1h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 32.0
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.colonialCasualties.rate_2h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 38.5
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.colonialCasualties.rate_change_2h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": -1.5
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.wardenCasualties.rate_2h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 44.5
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.wardenCasualties.rate_change_2h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 25.5
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.totalEnlistments.rate_2h_per_hour",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 22.0
+    },
+    {
+      "metric_id": "region.StlicanShelfHex.totalEnlistments.rate_change_2h_vs_previous",
+      "observed_at": "2026-09-03T18:10:43.309596Z",
+      "value": 4.0
+    }
+  ],
+  "selected_region_hourly_series": {
+    "FarranacCoastHex": [
+      {
+        "colonial_casualties": 32637,
+        "day_of_war": 195,
+        "observed_at": "2026-09-02T19:15:46.990873Z",
+        "total_enlistments": 6062,
+        "warden_casualties": 37053
+      },
+      {
+        "colonial_casualties": 32974,
+        "day_of_war": 196,
+        "observed_at": "2026-09-02T20:10:46.620398Z",
+        "total_enlistments": 6095,
+        "warden_casualties": 37356
+      },
+      {
+        "colonial_casualties": 33444,
+        "day_of_war": 197,
+        "observed_at": "2026-09-02T21:10:45.012284Z",
+        "total_enlistments": 6115,
+        "warden_casualties": 37802
+      },
+      {
+        "colonial_casualties": 33576,
+        "day_of_war": 198,
+        "observed_at": "2026-09-02T22:10:44.459647Z",
+        "total_enlistments": 6141,
+        "warden_casualties": 37980
+      },
+      {
+        "colonial_casualties": 33792,
+        "day_of_war": 199,
+        "observed_at": "2026-09-02T23:10:44.148306Z",
+        "total_enlistments": 6163,
+        "warden_casualties": 38176
+      },
+      {
+        "colonial_casualties": 33955,
+        "day_of_war": 200,
+        "observed_at": "2026-09-03T00:10:43.365776Z",
+        "total_enlistments": 6176,
+        "warden_casualties": 38367
+      },
+      {
+        "colonial_casualties": 34151,
+        "day_of_war": 201,
+        "observed_at": "2026-09-03T01:03:10.194729Z",
+        "total_enlistments": 6211,
+        "warden_casualties": 38529
+      },
+      {
+        "colonial_casualties": 34276,
+        "day_of_war": 202,
+        "observed_at": "2026-09-03T02:15:44.059121Z",
+        "total_enlistments": 6241,
+        "warden_casualties": 38704
+      },
+      {
+        "colonial_casualties": 34318,
+        "day_of_war": 203,
+        "observed_at": "2026-09-03T03:00:53.448189Z",
+        "total_enlistments": 6253,
+        "warden_casualties": 38771
+      },
+      {
+        "colonial_casualties": 34401,
+        "day_of_war": 204,
+        "observed_at": "2026-09-03T04:05:52.253479Z",
+        "total_enlistments": 6271,
+        "warden_casualties": 38883
+      },
+      {
+        "colonial_casualties": 34437,
+        "day_of_war": 205,
+        "observed_at": "2026-09-03T05:00:59.749661Z",
+        "total_enlistments": 6283,
+        "warden_casualties": 38944
+      },
+      {
+        "colonial_casualties": 34452,
+        "day_of_war": 206,
+        "observed_at": "2026-09-03T06:01:13.873034Z",
+        "total_enlistments": 6289,
+        "warden_casualties": 38983
+      },
+      {
+        "colonial_casualties": 34479,
+        "day_of_war": 207,
+        "observed_at": "2026-09-03T07:15:43.984132Z",
+        "total_enlistments": 6306,
+        "warden_casualties": 39037
+      },
+      {
+        "colonial_casualties": 34501,
+        "day_of_war": 208,
+        "observed_at": "2026-09-03T08:15:42.180256Z",
+        "total_enlistments": 6320,
+        "warden_casualties": 39077
+      },
+      {
+        "colonial_casualties": 34563,
+        "day_of_war": 209,
+        "observed_at": "2026-09-03T09:15:48.016767Z",
+        "total_enlistments": 6331,
+        "warden_casualties": 39133
+      },
+      {
+        "colonial_casualties": 34620,
+        "day_of_war": 210,
+        "observed_at": "2026-09-03T10:10:43.397294Z",
+        "total_enlistments": 6343,
+        "warden_casualties": 39209
+      },
+      {
+        "colonial_casualties": 34663,
+        "day_of_war": 211,
+        "observed_at": "2026-09-03T11:10:42.413699Z",
+        "total_enlistments": 6357,
+        "warden_casualties": 39292
+      },
+      {
+        "colonial_casualties": 34697,
+        "day_of_war": 212,
+        "observed_at": "2026-09-03T12:11:18.582978Z",
+        "total_enlistments": 6368,
+        "warden_casualties": 39340
+      },
+      {
+        "colonial_casualties": 34863,
+        "day_of_war": 213,
+        "observed_at": "2026-09-03T13:15:44.888906Z",
+        "total_enlistments": 6421,
+        "warden_casualties": 39609
+      },
+      {
+        "colonial_casualties": 34965,
+        "day_of_war": 214,
+        "observed_at": "2026-09-03T14:15:46.741273Z",
+        "total_enlistments": 6438,
+        "warden_casualties": 39807
+      },
+      {
+        "colonial_casualties": 35215,
+        "day_of_war": 215,
+        "observed_at": "2026-09-03T15:15:43.832964Z",
+        "total_enlistments": 6480,
+        "warden_casualties": 40157
+      },
+      {
+        "colonial_casualties": 35500,
+        "day_of_war": 216,
+        "observed_at": "2026-09-03T16:10:45.768950Z",
+        "total_enlistments": 6520,
+        "warden_casualties": 40590
+      },
+      {
+        "colonial_casualties": 35857,
+        "day_of_war": 217,
+        "observed_at": "2026-09-03T17:15:49.022819Z",
+        "total_enlistments": 6566,
+        "warden_casualties": 41082
+      },
+      {
+        "colonial_casualties": 36055,
+        "day_of_war": 218,
+        "observed_at": "2026-09-03T18:10:43.309596Z",
+        "total_enlistments": 6589,
+        "warden_casualties": 41404
+      }
+    ],
+    "LinnMercyHex": [
+      {
+        "colonial_casualties": 34666,
+        "day_of_war": 195,
+        "observed_at": "2026-09-02T19:15:46.990873Z",
+        "total_enlistments": 7605,
+        "warden_casualties": 36027
+      },
+      {
+        "colonial_casualties": 35068,
+        "day_of_war": 196,
+        "observed_at": "2026-09-02T20:10:46.620398Z",
+        "total_enlistments": 7629,
+        "warden_casualties": 36802
+      },
+      {
+        "colonial_casualties": 35446,
+        "day_of_war": 197,
+        "observed_at": "2026-09-02T21:10:45.012284Z",
+        "total_enlistments": 7650,
+        "warden_casualties": 37179
+      },
+      {
+        "colonial_casualties": 35874,
+        "day_of_war": 198,
+        "observed_at": "2026-09-02T22:10:44.459647Z",
+        "total_enlistments": 7672,
+        "warden_casualties": 37543
+      },
+      {
+        "colonial_casualties": 36148,
+        "day_of_war": 199,
+        "observed_at": "2026-09-02T23:10:44.148306Z",
+        "total_enlistments": 7692,
+        "warden_casualties": 37837
+      },
+      {
+        "colonial_casualties": 36330,
+        "day_of_war": 200,
+        "observed_at": "2026-09-03T00:10:43.365776Z",
+        "total_enlistments": 7722,
+        "warden_casualties": 38096
+      },
+      {
+        "colonial_casualties": 36550,
+        "day_of_war": 201,
+        "observed_at": "2026-09-03T01:03:10.194729Z",
+        "total_enlistments": 7752,
+        "warden_casualties": 38442
+      },
+      {
+        "colonial_casualties": 36915,
+        "day_of_war": 202,
+        "observed_at": "2026-09-03T02:15:44.059121Z",
+        "total_enlistments": 7779,
+        "warden_casualties": 38946
+      },
+      {
+        "colonial_casualties": 37211,
+        "day_of_war": 203,
+        "observed_at": "2026-09-03T03:00:53.448189Z",
+        "total_enlistments": 7801,
+        "warden_casualties": 39210
+      },
+      {
+        "colonial_casualties": 37477,
+        "day_of_war": 204,
+        "observed_at": "2026-09-03T04:05:52.253479Z",
+        "total_enlistments": 7842,
+        "warden_casualties": 39535
+      },
+      {
+        "colonial_casualties": 37585,
+        "day_of_war": 205,
+        "observed_at": "2026-09-03T05:00:59.749661Z",
+        "total_enlistments": 7853,
+        "warden_casualties": 39706
+      },
+      {
+        "colonial_casualties": 37765,
+        "day_of_war": 206,
+        "observed_at": "2026-09-03T06:01:13.873034Z",
+        "total_enlistments": 7868,
+        "warden_casualties": 39978
+      },
+      {
+        "colonial_casualties": 37906,
+        "day_of_war": 207,
+        "observed_at": "2026-09-03T07:15:43.984132Z",
+        "total_enlistments": 7886,
+        "warden_casualties": 40145
+      },
+      {
+        "colonial_casualties": 38010,
+        "day_of_war": 208,
+        "observed_at": "2026-09-03T08:15:42.180256Z",
+        "total_enlistments": 7915,
+        "warden_casualties": 40263
+      },
+      {
+        "colonial_casualties": 38090,
+        "day_of_war": 209,
+        "observed_at": "2026-09-03T09:15:48.016767Z",
+        "total_enlistments": 7947,
+        "warden_casualties": 40362
+      },
+      {
+        "colonial_casualties": 38136,
+        "day_of_war": 210,
+        "observed_at": "2026-09-03T10:10:43.397294Z",
+        "total_enlistments": 7959,
+        "warden_casualties": 40423
+      },
+      {
+        "colonial_casualties": 38184,
+        "day_of_war": 211,
+        "observed_at": "2026-09-03T11:10:42.413699Z",
+        "total_enlistments": 7970,
+        "warden_casualties": 40505
+      },
+      {
+        "colonial_casualties": 38242,
+        "day_of_war": 212,
+        "observed_at": "2026-09-03T12:11:18.582978Z",
+        "total_enlistments": 7997,
+        "warden_casualties": 40600
+      },
+      {
+        "colonial_casualties": 38332,
+        "day_of_war": 213,
+        "observed_at": "2026-09-03T13:15:44.888906Z",
+        "total_enlistments": 8036,
+        "warden_casualties": 40771
+      },
+      {
+        "colonial_casualties": 38451,
+        "day_of_war": 214,
+        "observed_at": "2026-09-03T14:15:46.741273Z",
+        "total_enlistments": 8072,
+        "warden_casualties": 40988
+      },
+      {
+        "colonial_casualties": 38579,
+        "day_of_war": 215,
+        "observed_at": "2026-09-03T15:15:43.832964Z",
+        "total_enlistments": 8095,
+        "warden_casualties": 41236
+      },
+      {
+        "colonial_casualties": 38697,
+        "day_of_war": 216,
+        "observed_at": "2026-09-03T16:10:45.768950Z",
+        "total_enlistments": 8114,
+        "warden_casualties": 41413
+      },
+      {
+        "colonial_casualties": 38810,
+        "day_of_war": 217,
+        "observed_at": "2026-09-03T17:15:49.022819Z",
+        "total_enlistments": 8142,
+        "warden_casualties": 41611
+      },
+      {
+        "colonial_casualties": 39060,
+        "day_of_war": 218,
+        "observed_at": "2026-09-03T18:10:43.309596Z",
+        "total_enlistments": 8177,
+        "warden_casualties": 41927
+      }
+    ],
+    "StlicanShelfHex": [
+      {
+        "colonial_casualties": 36032,
+        "day_of_war": 195,
+        "observed_at": "2026-09-02T19:15:46.990873Z",
+        "total_enlistments": 7119,
+        "warden_casualties": 37406
+      },
+      {
+        "colonial_casualties": 36263,
+        "day_of_war": 196,
+        "observed_at": "2026-09-02T20:10:46.620398Z",
+        "total_enlistments": 7146,
+        "warden_casualties": 37612
+      },
+      {
+        "colonial_casualties": 36486,
+        "day_of_war": 197,
+        "observed_at": "2026-09-02T21:10:45.012284Z",
+        "total_enlistments": 7184,
+        "warden_casualties": 37807
+      },
+      {
+        "colonial_casualties": 36723,
+        "day_of_war": 198,
+        "observed_at": "2026-09-02T22:10:44.459647Z",
+        "total_enlistments": 7205,
+        "warden_casualties": 38035
+      },
+      {
+        "colonial_casualties": 37000,
+        "day_of_war": 199,
+        "observed_at": "2026-09-02T23:10:44.148306Z",
+        "total_enlistments": 7237,
+        "warden_casualties": 38276
+      },
+      {
+        "colonial_casualties": 37325,
+        "day_of_war": 200,
+        "observed_at": "2026-09-03T00:10:43.365776Z",
+        "total_enlistments": 7292,
+        "warden_casualties": 38617
+      },
+      {
+        "colonial_casualties": 37412,
+        "day_of_war": 201,
+        "observed_at": "2026-09-03T01:03:10.194729Z",
+        "total_enlistments": 7310,
+        "warden_casualties": 38699
+      },
+      {
+        "colonial_casualties": 37529,
+        "day_of_war": 202,
+        "observed_at": "2026-09-03T02:15:44.059121Z",
+        "total_enlistments": 7339,
+        "warden_casualties": 38808
+      },
+      {
+        "colonial_casualties": 37564,
+        "day_of_war": 203,
+        "observed_at": "2026-09-03T03:00:53.448189Z",
+        "total_enlistments": 7351,
+        "warden_casualties": 38854
+      },
+      {
+        "colonial_casualties": 37665,
+        "day_of_war": 204,
+        "observed_at": "2026-09-03T04:05:52.253479Z",
+        "total_enlistments": 7384,
+        "warden_casualties": 38968
+      },
+      {
+        "colonial_casualties": 37740,
+        "day_of_war": 205,
+        "observed_at": "2026-09-03T05:00:59.749661Z",
+        "total_enlistments": 7399,
+        "warden_casualties": 39058
+      },
+      {
+        "colonial_casualties": 37825,
+        "day_of_war": 206,
+        "observed_at": "2026-09-03T06:01:13.873034Z",
+        "total_enlistments": 7419,
+        "warden_casualties": 39242
+      },
+      {
+        "colonial_casualties": 37882,
+        "day_of_war": 207,
+        "observed_at": "2026-09-03T07:15:43.984132Z",
+        "total_enlistments": 7435,
+        "warden_casualties": 39302
+      },
+      {
+        "colonial_casualties": 37890,
+        "day_of_war": 208,
+        "observed_at": "2026-09-03T08:15:42.180256Z",
+        "total_enlistments": 7441,
+        "warden_casualties": 39318
+      },
+      {
+        "colonial_casualties": 37895,
+        "day_of_war": 209,
+        "observed_at": "2026-09-03T09:15:48.016767Z",
+        "total_enlistments": 7445,
+        "warden_casualties": 39321
+      },
+      {
+        "colonial_casualties": 37895,
+        "day_of_war": 210,
+        "observed_at": "2026-09-03T10:10:43.397294Z",
+        "total_enlistments": 7449,
+        "warden_casualties": 39322
+      },
+      {
+        "colonial_casualties": 37895,
+        "day_of_war": 211,
+        "observed_at": "2026-09-03T11:10:42.413699Z",
+        "total_enlistments": 7453,
+        "warden_casualties": 39324
+      },
+      {
+        "colonial_casualties": 37902,
+        "day_of_war": 212,
+        "observed_at": "2026-09-03T12:11:18.582978Z",
+        "total_enlistments": 7463,
+        "warden_casualties": 39335
+      },
+      {
+        "colonial_casualties": 37915,
+        "day_of_war": 213,
+        "observed_at": "2026-09-03T13:15:44.888906Z",
+        "total_enlistments": 7483,
+        "warden_casualties": 39357
+      },
+      {
+        "colonial_casualties": 37945,
+        "day_of_war": 214,
+        "observed_at": "2026-09-03T14:15:46.741273Z",
+        "total_enlistments": 7501,
+        "warden_casualties": 39370
+      },
+      {
+        "colonial_casualties": 37995,
+        "day_of_war": 215,
+        "observed_at": "2026-09-03T15:15:43.832964Z",
+        "total_enlistments": 7519,
+        "warden_casualties": 39395
+      },
+      {
+        "colonial_casualties": 38013,
+        "day_of_war": 216,
+        "observed_at": "2026-09-03T16:10:45.768950Z",
+        "total_enlistments": 7525,
+        "warden_casualties": 39403
+      },
+      {
+        "colonial_casualties": 38035,
+        "day_of_war": 217,
+        "observed_at": "2026-09-03T17:15:49.022819Z",
+        "total_enlistments": 7546,
+        "warden_casualties": 39438
+      },
+      {
+        "colonial_casualties": 38072,
+        "day_of_war": 218,
+        "observed_at": "2026-09-03T18:10:43.309596Z",
+        "total_enlistments": 7563,
+        "warden_casualties": 39484
+      }
+    ],
+    "StonecradleHex": [
+      {
+        "colonial_casualties": 17914,
+        "day_of_war": 195,
+        "observed_at": "2026-09-02T19:15:46.990873Z",
+        "total_enlistments": 5283,
+        "warden_casualties": 17590
+      },
+      {
+        "colonial_casualties": 18330,
+        "day_of_war": 196,
+        "observed_at": "2026-09-02T20:10:46.620398Z",
+        "total_enlistments": 5314,
+        "warden_casualties": 18132
+      },
+      {
+        "colonial_casualties": 18903,
+        "day_of_war": 197,
+        "observed_at": "2026-09-02T21:10:45.012284Z",
+        "total_enlistments": 5357,
+        "warden_casualties": 18577
+      },
+      {
+        "colonial_casualties": 19168,
+        "day_of_war": 198,
+        "observed_at": "2026-09-02T22:10:44.459647Z",
+        "total_enlistments": 5393,
+        "warden_casualties": 18981
+      },
+      {
+        "colonial_casualties": 19366,
+        "day_of_war": 199,
+        "observed_at": "2026-09-02T23:10:44.148306Z",
+        "total_enlistments": 5420,
+        "warden_casualties": 19209
+      },
+      {
+        "colonial_casualties": 19575,
+        "day_of_war": 200,
+        "observed_at": "2026-09-03T00:10:43.365776Z",
+        "total_enlistments": 5451,
+        "warden_casualties": 19347
+      },
+      {
+        "colonial_casualties": 19699,
+        "day_of_war": 201,
+        "observed_at": "2026-09-03T01:03:10.194729Z",
+        "total_enlistments": 5461,
+        "warden_casualties": 19405
+      },
+      {
+        "colonial_casualties": 19774,
+        "day_of_war": 202,
+        "observed_at": "2026-09-03T02:15:44.059121Z",
+        "total_enlistments": 5480,
+        "warden_casualties": 19433
+      },
+      {
+        "colonial_casualties": 19830,
+        "day_of_war": 203,
+        "observed_at": "2026-09-03T03:00:53.448189Z",
+        "total_enlistments": 5497,
+        "warden_casualties": 19463
+      },
+      {
+        "colonial_casualties": 19916,
+        "day_of_war": 204,
+        "observed_at": "2026-09-03T04:05:52.253479Z",
+        "total_enlistments": 5522,
+        "warden_casualties": 19551
+      },
+      {
+        "colonial_casualties": 19956,
+        "day_of_war": 205,
+        "observed_at": "2026-09-03T05:00:59.749661Z",
+        "total_enlistments": 5533,
+        "warden_casualties": 19600
+      },
+      {
+        "colonial_casualties": 20072,
+        "day_of_war": 206,
+        "observed_at": "2026-09-03T06:01:13.873034Z",
+        "total_enlistments": 5551,
+        "warden_casualties": 19712
+      },
+      {
+        "colonial_casualties": 20143,
+        "day_of_war": 207,
+        "observed_at": "2026-09-03T07:15:43.984132Z",
+        "total_enlistments": 5571,
+        "warden_casualties": 19786
+      },
+      {
+        "colonial_casualties": 20191,
+        "day_of_war": 208,
+        "observed_at": "2026-09-03T08:15:42.180256Z",
+        "total_enlistments": 5581,
+        "warden_casualties": 19838
+      },
+      {
+        "colonial_casualties": 20276,
+        "day_of_war": 209,
+        "observed_at": "2026-09-03T09:15:48.016767Z",
+        "total_enlistments": 5604,
+        "warden_casualties": 19936
+      },
+      {
+        "colonial_casualties": 20359,
+        "day_of_war": 210,
+        "observed_at": "2026-09-03T10:10:43.397294Z",
+        "total_enlistments": 5614,
+        "warden_casualties": 20033
+      },
+      {
+        "colonial_casualties": 20456,
+        "day_of_war": 211,
+        "observed_at": "2026-09-03T11:10:42.413699Z",
+        "total_enlistments": 5628,
+        "warden_casualties": 20138
+      },
+      {
+        "colonial_casualties": 20555,
+        "day_of_war": 212,
+        "observed_at": "2026-09-03T12:11:18.582978Z",
+        "total_enlistments": 5656,
+        "warden_casualties": 20252
+      },
+      {
+        "colonial_casualties": 20696,
+        "day_of_war": 213,
+        "observed_at": "2026-09-03T13:15:44.888906Z",
+        "total_enlistments": 5694,
+        "warden_casualties": 20457
+      },
+      {
+        "colonial_casualties": 20951,
+        "day_of_war": 214,
+        "observed_at": "2026-09-03T14:15:46.741273Z",
+        "total_enlistments": 5758,
+        "warden_casualties": 20752
+      },
+      {
+        "colonial_casualties": 21118,
+        "day_of_war": 215,
+        "observed_at": "2026-09-03T15:15:43.832964Z",
+        "total_enlistments": 5776,
+        "warden_casualties": 20952
+      },
+      {
+        "colonial_casualties": 21236,
+        "day_of_war": 216,
+        "observed_at": "2026-09-03T16:10:45.768950Z",
+        "total_enlistments": 5809,
+        "warden_casualties": 21107
+      },
+      {
+        "colonial_casualties": 21442,
+        "day_of_war": 217,
+        "observed_at": "2026-09-03T17:15:49.022819Z",
+        "total_enlistments": 5855,
+        "warden_casualties": 21396
+      },
+      {
+        "colonial_casualties": 21690,
+        "day_of_war": 218,
+        "observed_at": "2026-09-03T18:10:43.309596Z",
+        "total_enlistments": 5886,
+        "warden_casualties": 21696
+      }
+    ],
+    "ViperPitHex": [
+      {
+        "colonial_casualties": 4075,
+        "day_of_war": 195,
+        "observed_at": "2026-09-02T19:15:46.990873Z",
+        "total_enlistments": 3693,
+        "warden_casualties": 3867
+      },
+      {
+        "colonial_casualties": 4075,
+        "day_of_war": 196,
+        "observed_at": "2026-09-02T20:10:46.620398Z",
+        "total_enlistments": 3706,
+        "warden_casualties": 3879
+      },
+      {
+        "colonial_casualties": 4075,
+        "day_of_war": 197,
+        "observed_at": "2026-09-02T21:10:45.012284Z",
+        "total_enlistments": 3713,
+        "warden_casualties": 3880
+      },
+      {
+        "colonial_casualties": 4076,
+        "day_of_war": 198,
+        "observed_at": "2026-09-02T22:10:44.459647Z",
+        "total_enlistments": 3716,
+        "warden_casualties": 3885
+      },
+      {
+        "colonial_casualties": 4078,
+        "day_of_war": 199,
+        "observed_at": "2026-09-02T23:10:44.148306Z",
+        "total_enlistments": 3732,
+        "warden_casualties": 3890
+      },
+      {
+        "colonial_casualties": 4078,
+        "day_of_war": 200,
+        "observed_at": "2026-09-03T00:10:43.365776Z",
+        "total_enlistments": 3736,
+        "warden_casualties": 3896
+      },
+      {
+        "colonial_casualties": 4078,
+        "day_of_war": 201,
+        "observed_at": "2026-09-03T01:03:10.194729Z",
+        "total_enlistments": 3741,
+        "warden_casualties": 3897
+      },
+      {
+        "colonial_casualties": 4084,
+        "day_of_war": 202,
+        "observed_at": "2026-09-03T02:15:44.059121Z",
+        "total_enlistments": 3758,
+        "warden_casualties": 3900
+      },
+      {
+        "colonial_casualties": 4190,
+        "day_of_war": 203,
+        "observed_at": "2026-09-03T03:00:53.448189Z",
+        "total_enlistments": 3785,
+        "warden_casualties": 3941
+      },
+      {
+        "colonial_casualties": 4343,
+        "day_of_war": 204,
+        "observed_at": "2026-09-03T04:05:52.253479Z",
+        "total_enlistments": 3829,
+        "warden_casualties": 4038
+      },
+      {
+        "colonial_casualties": 4598,
+        "day_of_war": 205,
+        "observed_at": "2026-09-03T05:00:59.749661Z",
+        "total_enlistments": 3883,
+        "warden_casualties": 4227
+      },
+      {
+        "colonial_casualties": 4729,
+        "day_of_war": 206,
+        "observed_at": "2026-09-03T06:01:13.873034Z",
+        "total_enlistments": 3904,
+        "warden_casualties": 4282
+      },
+      {
+        "colonial_casualties": 4729,
+        "day_of_war": 207,
+        "observed_at": "2026-09-03T07:15:43.984132Z",
+        "total_enlistments": 3907,
+        "warden_casualties": 4283
+      },
+      {
+        "colonial_casualties": 4729,
+        "day_of_war": 208,
+        "observed_at": "2026-09-03T08:15:42.180256Z",
+        "total_enlistments": 3914,
+        "warden_casualties": 4287
+      },
+      {
+        "colonial_casualties": 4730,
+        "day_of_war": 209,
+        "observed_at": "2026-09-03T09:15:48.016767Z",
+        "total_enlistments": 3924,
+        "warden_casualties": 4304
+      },
+      {
+        "colonial_casualties": 4730,
+        "day_of_war": 210,
+        "observed_at": "2026-09-03T10:10:43.397294Z",
+        "total_enlistments": 3928,
+        "warden_casualties": 4307
+      },
+      {
+        "colonial_casualties": 4733,
+        "day_of_war": 211,
+        "observed_at": "2026-09-03T11:10:42.413699Z",
+        "total_enlistments": 3931,
+        "warden_casualties": 4307
+      },
+      {
+        "colonial_casualties": 4737,
+        "day_of_war": 212,
+        "observed_at": "2026-09-03T12:11:18.582978Z",
+        "total_enlistments": 3941,
+        "warden_casualties": 4309
+      },
+      {
+        "colonial_casualties": 4739,
+        "day_of_war": 213,
+        "observed_at": "2026-09-03T13:15:44.888906Z",
+        "total_enlistments": 3951,
+        "warden_casualties": 4316
+      },
+      {
+        "colonial_casualties": 4744,
+        "day_of_war": 214,
+        "observed_at": "2026-09-03T14:15:46.741273Z",
+        "total_enlistments": 3961,
+        "warden_casualties": 4332
+      },
+      {
+        "colonial_casualties": 4744,
+        "day_of_war": 215,
+        "observed_at": "2026-09-03T15:15:43.832964Z",
+        "total_enlistments": 3969,
+        "warden_casualties": 4340
+      },
+      {
+        "colonial_casualties": 4744,
+        "day_of_war": 216,
+        "observed_at": "2026-09-03T16:10:45.768950Z",
+        "total_enlistments": 3978,
+        "warden_casualties": 4351
+      },
+      {
+        "colonial_casualties": 4749,
+        "day_of_war": 217,
+        "observed_at": "2026-09-03T17:15:49.022819Z",
+        "total_enlistments": 3990,
+        "warden_casualties": 4356
+      },
+      {
+        "colonial_casualties": 4749,
+        "day_of_war": 218,
+        "observed_at": "2026-09-03T18:10:43.309596Z",
+        "total_enlistments": 4001,
+        "warden_casualties": 4368
+      }
+    ],
+    "WeatheredExpanseHex": [
+      {
+        "colonial_casualties": 107283,
+        "day_of_war": 195,
+        "observed_at": "2026-09-02T19:15:46.990873Z",
+        "total_enlistments": 9671,
+        "warden_casualties": 112088
+      },
+      {
+        "colonial_casualties": 107907,
+        "day_of_war": 196,
+        "observed_at": "2026-09-02T20:10:46.620398Z",
+        "total_enlistments": 9697,
+        "warden_casualties": 112972
+      },
+      {
+        "colonial_casualties": 108831,
+        "day_of_war": 197,
+        "observed_at": "2026-09-02T21:10:45.012284Z",
+        "total_enlistments": 9717,
+        "warden_casualties": 113788
+      },
+      {
+        "colonial_casualties": 109687,
+        "day_of_war": 198,
+        "observed_at": "2026-09-02T22:10:44.459647Z",
+        "total_enlistments": 9762,
+        "warden_casualties": 114595
+      },
+      {
+        "colonial_casualties": 110199,
+        "day_of_war": 199,
+        "observed_at": "2026-09-02T23:10:44.148306Z",
+        "total_enlistments": 9797,
+        "warden_casualties": 115208
+      },
+      {
+        "colonial_casualties": 110562,
+        "day_of_war": 200,
+        "observed_at": "2026-09-03T00:10:43.365776Z",
+        "total_enlistments": 9816,
+        "warden_casualties": 115622
+      },
+      {
+        "colonial_casualties": 110793,
+        "day_of_war": 201,
+        "observed_at": "2026-09-03T01:03:10.194729Z",
+        "total_enlistments": 9842,
+        "warden_casualties": 115896
+      },
+      {
+        "colonial_casualties": 111196,
+        "day_of_war": 202,
+        "observed_at": "2026-09-03T02:15:44.059121Z",
+        "total_enlistments": 9888,
+        "warden_casualties": 116317
+      },
+      {
+        "colonial_casualties": 111429,
+        "day_of_war": 203,
+        "observed_at": "2026-09-03T03:00:53.448189Z",
+        "total_enlistments": 9918,
+        "warden_casualties": 116546
+      },
+      {
+        "colonial_casualties": 111778,
+        "day_of_war": 204,
+        "observed_at": "2026-09-03T04:05:52.253479Z",
+        "total_enlistments": 9939,
+        "warden_casualties": 117117
+      },
+      {
+        "colonial_casualties": 111897,
+        "day_of_war": 205,
+        "observed_at": "2026-09-03T05:00:59.749661Z",
+        "total_enlistments": 9944,
+        "warden_casualties": 117295
+      },
+      {
+        "colonial_casualties": 112030,
+        "day_of_war": 206,
+        "observed_at": "2026-09-03T06:01:13.873034Z",
+        "total_enlistments": 9960,
+        "warden_casualties": 117505
+      },
+      {
+        "colonial_casualties": 112251,
+        "day_of_war": 207,
+        "observed_at": "2026-09-03T07:15:43.984132Z",
+        "total_enlistments": 9982,
+        "warden_casualties": 117808
+      },
+      {
+        "colonial_casualties": 112463,
+        "day_of_war": 208,
+        "observed_at": "2026-09-03T08:15:42.180256Z",
+        "total_enlistments": 9995,
+        "warden_casualties": 118000
+      },
+      {
+        "colonial_casualties": 112664,
+        "day_of_war": 209,
+        "observed_at": "2026-09-03T09:15:48.016767Z",
+        "total_enlistments": 10032,
+        "warden_casualties": 118199
+      },
+      {
+        "colonial_casualties": 112920,
+        "day_of_war": 210,
+        "observed_at": "2026-09-03T10:10:43.397294Z",
+        "total_enlistments": 10055,
+        "warden_casualties": 118453
+      },
+      {
+        "colonial_casualties": 113258,
+        "day_of_war": 211,
+        "observed_at": "2026-09-03T11:10:42.413699Z",
+        "total_enlistments": 10081,
+        "warden_casualties": 118802
+      },
+      {
+        "colonial_casualties": 113525,
+        "day_of_war": 212,
+        "observed_at": "2026-09-03T12:11:18.582978Z",
+        "total_enlistments": 10105,
+        "warden_casualties": 119138
+      },
+      {
+        "colonial_casualties": 113956,
+        "day_of_war": 213,
+        "observed_at": "2026-09-03T13:15:44.888906Z",
+        "total_enlistments": 10123,
+        "warden_casualties": 119648
+      },
+      {
+        "colonial_casualties": 114340,
+        "day_of_war": 214,
+        "observed_at": "2026-09-03T14:15:46.741273Z",
+        "total_enlistments": 10140,
+        "warden_casualties": 120071
+      },
+      {
+        "colonial_casualties": 114829,
+        "day_of_war": 215,
+        "observed_at": "2026-09-03T15:15:43.832964Z",
+        "total_enlistments": 10167,
+        "warden_casualties": 120705
+      },
+      {
+        "colonial_casualties": 115193,
+        "day_of_war": 216,
+        "observed_at": "2026-09-03T16:10:45.768950Z",
+        "total_enlistments": 10195,
+        "warden_casualties": 121474
+      },
+      {
+        "colonial_casualties": 115854,
+        "day_of_war": 217,
+        "observed_at": "2026-09-03T17:15:49.022819Z",
+        "total_enlistments": 10248,
+        "warden_casualties": 122295
+      },
+      {
+        "colonial_casualties": 116275,
+        "day_of_war": 218,
+        "observed_at": "2026-09-03T18:10:43.309596Z",
+        "total_enlistments": 10270,
+        "warden_casualties": 122735
+      }
+    ]
+  },
+  "selected_regions": [
+    "WeatheredExpanseHex",
+    "StonecradleHex",
+    "LinnMercyHex",
+    "FarranacCoastHex",
+    "ViperPitHex",
+    "StlicanShelfHex"
+  ],
+  "strategic_bases": [
+    {
+      "base_id": "FarranacCoastHex:24dc4148f1",
+      "base_type": "Town Base II",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 57,
+      "map_name": "FarranacCoastHex",
+      "name": "Mara",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.854732,
+      "y": 0.487394
+    },
+    {
+      "base_id": "FarranacCoastHex:3253437a62",
+      "base_type": "Relic Base",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "FarranacCoastHex",
+      "name": "Terra",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.6123,
+      "y": 0.404709
+    },
+    {
+      "base_id": "FarranacCoastHex:40a3c93722",
+      "base_type": "Town Base III",
+      "current_owner": "COLONIALS",
+      "flags": 41,
+      "icon_type": 58,
+      "map_name": "FarranacCoastHex",
+      "name": "The Jade Cove",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.437369,
+      "y": 0.644607
+    },
+    {
+      "base_id": "FarranacCoastHex:4fb8af705f",
+      "base_type": "Town Base III",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 58,
+      "map_name": "FarranacCoastHex",
+      "name": "Macha's Keening",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.703311,
+      "y": 0.77943
+    },
+    {
+      "base_id": "FarranacCoastHex:68b7b051b8",
+      "base_type": "Relic Base",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "FarranacCoastHex",
+      "name": "Scythe",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.781922,
+      "y": 0.335123
+    },
+    {
+      "base_id": "FarranacCoastHex:82635d7de5",
+      "base_type": "Relic Base",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "FarranacCoastHex",
+      "name": "Transient Valley",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.65413,
+      "y": 0.147521
+    },
+    {
+      "base_id": "FarranacCoastHex:9f7cb0cc53",
+      "base_type": "Relic Base",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "FarranacCoastHex",
+      "name": "Scarp of Ambrose",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.476136,
+      "y": 0.381507
+    },
+    {
+      "base_id": "FarranacCoastHex:a5d0e88797",
+      "base_type": "Relic Base",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "FarranacCoastHex",
+      "name": "Pleading Wharf",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.628008,
+      "y": 0.717074
+    },
+    {
+      "base_id": "FarranacCoastHex:ad51976903",
+      "base_type": "Town Base III",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 58,
+      "map_name": "FarranacCoastHex",
+      "name": "The Bone Haft",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.501003,
+      "y": 0.225316
+    },
+    {
+      "base_id": "FarranacCoastHex:bf026d82c5",
+      "base_type": "Town Base III",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 58,
+      "map_name": "FarranacCoastHex",
+      "name": "Victa",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.433185,
+      "y": 0.872387
+    },
+    {
+      "base_id": "FarranacCoastHex:fee118c3cf",
+      "base_type": "Town Base II",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 57,
+      "map_name": "FarranacCoastHex",
+      "name": "Huskhollow",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.585967,
+      "y": 0.567277
+    },
+    {
+      "base_id": "LinnMercyHex:1d07b15e43",
+      "base_type": "Town Base I",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 56,
+      "map_name": "LinnMercyHex",
+      "name": "The Crimson Gardens",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.231626,
+      "y": 0.629754
+    },
+    {
+      "base_id": "LinnMercyHex:40b170f703",
+      "base_type": "Town Base I",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 56,
+      "map_name": "LinnMercyHex",
+      "name": "The First Coin",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.416153,
+      "y": 0.705171
+    },
+    {
+      "base_id": "LinnMercyHex:6eb37fb60f",
+      "base_type": "Town Base III",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 58,
+      "map_name": "LinnMercyHex",
+      "name": "Rotdust",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.585404,
+      "y": 0.154373
+    },
+    {
+      "base_id": "LinnMercyHex:7016da2de5",
+      "base_type": "Town Base I",
+      "current_owner": "COLONIALS",
+      "flags": 41,
+      "icon_type": 56,
+      "map_name": "LinnMercyHex",
+      "name": "Ulster Falls",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.465252,
+      "y": 0.451901
+    },
+    {
+      "base_id": "LinnMercyHex:77e235007b",
+      "base_type": "Relic Base",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "LinnMercyHex",
+      "name": "Fort Duncan",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.742014,
+      "y": 0.764888
+    },
+    {
+      "base_id": "LinnMercyHex:7e00e2b059",
+      "base_type": "Relic Base",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "LinnMercyHex",
+      "name": "The Last Grove",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.38053,
+      "y": 0.880159
+    },
+    {
+      "base_id": "LinnMercyHex:a0d5b3524b",
+      "base_type": "Town Base I",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 56,
+      "map_name": "LinnMercyHex",
+      "name": "The Long Whine",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.360547,
+      "y": 0.211373
+    },
+    {
+      "base_id": "LinnMercyHex:be4d433fb0",
+      "base_type": "Relic Base",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "LinnMercyHex",
+      "name": "Hardline",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.358791,
+      "y": 0.589584
+    },
+    {
+      "base_id": "LinnMercyHex:c2e106c50e",
+      "base_type": "Town Base II",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 57,
+      "map_name": "LinnMercyHex",
+      "name": "The Prairie Bazaar",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.61718,
+      "y": 0.741098
+    },
+    {
+      "base_id": "LinnMercyHex:c54deb2bb2",
+      "base_type": "Relic Base",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "LinnMercyHex",
+      "name": "Lathair",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.726492,
+      "y": 0.315087
+    },
+    {
+      "base_id": "LinnMercyHex:ff5435119c",
+      "base_type": "Town Base III",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 58,
+      "map_name": "LinnMercyHex",
+      "name": "Outwich Ranch",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.837084,
+      "y": 0.488101
+    },
+    {
+      "base_id": "StlicanShelfHex:09a8db6343",
+      "base_type": "Relic Base",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "StlicanShelfHex",
+      "name": "Briar",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.328845,
+      "y": 0.214491
+    },
+    {
+      "base_id": "StlicanShelfHex:1e69948301",
+      "base_type": "Town Base I",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 56,
+      "map_name": "StlicanShelfHex",
+      "name": "Vulpine Watch",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.430294,
+      "y": 0.716716
+    },
+    {
+      "base_id": "StlicanShelfHex:206261de71",
+      "base_type": "Relic Base",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "StlicanShelfHex",
+      "name": "Fort Hoarfrost",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.608746,
+      "y": 0.573186
+    },
+    {
+      "base_id": "StlicanShelfHex:5dd203a06f",
+      "base_type": "Town Base I",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 56,
+      "map_name": "StlicanShelfHex",
+      "name": "Breaker Town",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.358264,
+      "y": 0.436988
+    },
+    {
+      "base_id": "StlicanShelfHex:83aee5c728",
+      "base_type": "Town Base III",
+      "current_owner": "WARDENS",
+      "flags": 41,
+      "icon_type": 58,
+      "map_name": "StlicanShelfHex",
+      "name": "Port of Rime",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.67175,
+      "y": 0.314278
+    },
+    {
+      "base_id": "StlicanShelfHex:abd38f27e2",
+      "base_type": "Relic Base",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "StlicanShelfHex",
+      "name": "The South Wind",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.610037,
+      "y": 0.852651
+    },
+    {
+      "base_id": "StlicanShelfHex:b98ed48c9d",
+      "base_type": "Relic Base",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "StlicanShelfHex",
+      "name": "Thornhold",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.232963,
+      "y": 0.594588
+    },
+    {
+      "base_id": "StlicanShelfHex:ec2e127b65",
+      "base_type": "Town Base I",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 56,
+      "map_name": "StlicanShelfHex",
+      "name": "The Pale House",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.189278,
+      "y": 0.441596
+    },
+    {
+      "base_id": "StlicanShelfHex:ff5e9a0918",
+      "base_type": "Relic Base",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "StlicanShelfHex",
+      "name": "The Old Mourn",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.288689,
+      "y": 0.754596
+    },
+    {
+      "base_id": "StonecradleHex:21dbf207d3",
+      "base_type": "Relic Base",
+      "current_owner": "NONE",
+      "flags": 0,
+      "icon_type": 45,
+      "map_name": "StonecradleHex",
+      "name": "The Heir's Knife",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "CAPTURED_BY_COLONIALS"
+      ],
+      "x": 0.276446,
+      "y": 0.779548
+    },
+    {
+      "base_id": "StonecradleHex:3947c45d8a",
+      "base_type": "Town Base III",
+      "current_owner": "WARDENS",
+      "flags": 41,
+      "icon_type": 58,
+      "map_name": "StonecradleHex",
+      "name": "Buckler Sound",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.512497,
+      "y": 0.513576
+    },
+    {
+      "base_id": "StonecradleHex:4862a9dc29",
+      "base_type": "Relic Base",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "StonecradleHex",
+      "name": "The Reach",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.701734,
+      "y": 0.207197
+    },
+    {
+      "base_id": "StonecradleHex:640146155d",
+      "base_type": "Relic Base",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "StonecradleHex",
+      "name": "The Dais",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.593975,
+      "y": 0.102707
+    },
+    {
+      "base_id": "StonecradleHex:66dff0219e",
+      "base_type": "Relic Base",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "StonecradleHex",
+      "name": "The Cord",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.553302,
+      "y": 0.699656
+    },
+    {
+      "base_id": "StonecradleHex:9740ec45e8",
+      "base_type": "Town Base II",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 57,
+      "map_name": "StonecradleHex",
+      "name": "Fading Lights",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.732364,
+      "y": 0.689709
+    },
+    {
+      "base_id": "StonecradleHex:9f5923d500",
+      "base_type": "Relic Base",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "StonecradleHex",
+      "name": "Trammel Pool",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.772629,
+      "y": 0.46115
+    },
+    {
+      "base_id": "StonecradleHex:be53bac821",
+      "base_type": "Relic Base",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "StonecradleHex",
+      "name": "World's End",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.215624,
+      "y": 0.556145
+    },
+    {
+      "base_id": "StonecradleHex:fa3f40bee9",
+      "base_type": "Relic Base",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "StonecradleHex",
+      "name": "The Long Fast",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.417413,
+      "y": 0.890054
+    },
+    {
+      "base_id": "ViperPitHex:04f31848f8",
+      "base_type": "Relic Base",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "ViperPitHex",
+      "name": "Fleck Crossing",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.533053,
+      "y": 0.541498
+    },
+    {
+      "base_id": "ViperPitHex:42faadcbd5",
+      "base_type": "Relic Base",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "ViperPitHex",
+      "name": "The Friars",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.269609,
+      "y": 0.821563
+    },
+    {
+      "base_id": "ViperPitHex:6030ebbdbd",
+      "base_type": "Town Base I",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 56,
+      "map_name": "ViperPitHex",
+      "name": "Blackthroat",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.384444,
+      "y": 0.828744
+    },
+    {
+      "base_id": "ViperPitHex:899f347825",
+      "base_type": "Town Base III",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 58,
+      "map_name": "ViperPitHex",
+      "name": "Earl Crowley",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.816687,
+      "y": 0.513231
+    },
+    {
+      "base_id": "ViperPitHex:a3df521882",
+      "base_type": "Relic Base",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "ViperPitHex",
+      "name": "Fort Viper",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.345165,
+      "y": 0.599246
+    },
+    {
+      "base_id": "ViperPitHex:cbe0f2ad74",
+      "base_type": "Town Base III",
+      "current_owner": "WARDENS",
+      "flags": 41,
+      "icon_type": 58,
+      "map_name": "ViperPitHex",
+      "name": "Kirknell",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.280595,
+      "y": 0.552264
+    },
+    {
+      "base_id": "ViperPitHex:e2cc6185cc",
+      "base_type": "Town Base III",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 58,
+      "map_name": "ViperPitHex",
+      "name": "Moltworth",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.624565,
+      "y": 0.711864
+    },
+    {
+      "base_id": "ViperPitHex:ed5bc573b2",
+      "base_type": "Town Base III",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 58,
+      "map_name": "ViperPitHex",
+      "name": "Serenity's Blight",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.443148,
+      "y": 0.353563
+    },
+    {
+      "base_id": "WeatheredExpanseHex:1f7ba4b7bc",
+      "base_type": "Town Base I",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 56,
+      "map_name": "WeatheredExpanseHex",
+      "name": "Wightwalk",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.691409,
+      "y": 0.498604
+    },
+    {
+      "base_id": "WeatheredExpanseHex:4387b92dfb",
+      "base_type": "Relic Base",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "WeatheredExpanseHex",
+      "name": "Frostmarch",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.158799,
+      "y": 0.471215
+    },
+    {
+      "base_id": "WeatheredExpanseHex:65d6048922",
+      "base_type": "Relic Base",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "WeatheredExpanseHex",
+      "name": "Huntsfort",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.48487,
+      "y": 0.538093
+    },
+    {
+      "base_id": "WeatheredExpanseHex:75278eb31f",
+      "base_type": "Town Base III",
+      "current_owner": "WARDENS",
+      "flags": 41,
+      "icon_type": 58,
+      "map_name": "WeatheredExpanseHex",
+      "name": "The Weathering Halls",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.459478,
+      "y": 0.153887
+    },
+    {
+      "base_id": "WeatheredExpanseHex:9e0c18043e",
+      "base_type": "Town Base I",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 56,
+      "map_name": "WeatheredExpanseHex",
+      "name": "Crow's Nest",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.271787,
+      "y": 0.524258
+    },
+    {
+      "base_id": "WeatheredExpanseHex:b8824c6799",
+      "base_type": "Relic Base",
+      "current_owner": "WARDENS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "WeatheredExpanseHex",
+      "name": "Shattered Advance",
+      "valid_outcomes": [
+        "CAPTURED_BY_COLONIALS",
+        "DESTROYED"
+      ],
+      "x": 0.386657,
+      "y": 0.307432
+    },
+    {
+      "base_id": "WeatheredExpanseHex:c8cd08eacb",
+      "base_type": "Town Base II",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 57,
+      "map_name": "WeatheredExpanseHex",
+      "name": "Foxcatcher",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.520403,
+      "y": 0.77793
+    },
+    {
+      "base_id": "WeatheredExpanseHex:eda998f629",
+      "base_type": "Relic Base",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "WeatheredExpanseHex",
+      "name": "Necropolis",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.348788,
+      "y": 0.691701
+    },
+    {
+      "base_id": "WeatheredExpanseHex:fe497c03b5",
+      "base_type": "Relic Base",
+      "current_owner": "COLONIALS",
+      "flags": 8,
+      "icon_type": 45,
+      "map_name": "WeatheredExpanseHex",
+      "name": "Spirit Watch",
+      "valid_outcomes": [
+        "CAPTURED_BY_WARDENS",
+        "DESTROYED"
+      ],
+      "x": 0.652364,
+      "y": 0.722522
+    }
+  ],
+  "war": {
+    "conquestEndTime": null,
+    "conquestStartTime": 1787677208260,
+    "requiredVictoryTowns": 34,
+    "resistanceStartTime": null,
+    "scheduledConquestEndTime": null,
+    "shortRequiredVictoryTowns": 0,
+    "warId": "130a8372-9f95-40d0-ac21-53a3450ecb0d",
+    "warNumber": 140,
+    "winner": "NONE"
+  }
+}
