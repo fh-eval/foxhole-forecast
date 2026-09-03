@@ -30,8 +30,8 @@ on:
         description: Optional audited output-ceiling increase for a truncated replay
         required: false
         type: string
-      allow_second_replay:
-        description: Explicitly permit replay #2 when replay #1 is invalid
+      allow_manual_replay:
+        description: Permit another frozen replay after an earlier replay failed
         required: false
         default: false
         type: boolean
@@ -112,8 +112,8 @@ jobs:
             bundle="data/raw/cohorts/${cohort_id}/${series_id}-replay-bundle.json"
             if [[ -f "$bundle" ]]; then
               replay_args=(--run-id "$RETRY_RUN_ID" --allow-paid)
-              if [[ "${{ inputs.allow_second_replay }}" == "true" ]]; then
-                replay_args+=(--allow-second-replay)
+              if [[ "${{ inputs.allow_manual_replay }}" == "true" ]]; then
+                replay_args+=(--allow-manual-replay)
               fi
               if [[ -n "$REPLAY_MAX_TOKENS" ]]; then
                 if [[ ! "$REPLAY_MAX_TOKENS" =~ ^[0-9]+$ ]]; then
@@ -389,13 +389,13 @@ jobs:
         env:
           ISSUE_NUMBER: ${{ inputs.recovery_issue_number }}
           RETRY_RUN_ID: ${{ inputs.retry_run_id }}
-          ALLOW_SECOND_REPLAY: ${{ inputs.allow_second_replay }}
+          ALLOW_MANUAL_REPLAY: ${{ inputs.allow_manual_replay }}
         with:
           script: |
             const fs = require('fs');
             const issueNumber = Number(process.env.ISSUE_NUMBER);
             const runId = process.env.RETRY_RUN_ID;
-            const allowSecondReplay = process.env.ALLOW_SECOND_REPLAY === 'true';
+            const allowManualReplay = process.env.ALLOW_MANUAL_REPLAY === 'true';
             if (!Number.isInteger(issueNumber) || !runId) {
               throw new Error('Recovery report inputs are invalid.');
             }
@@ -417,9 +417,16 @@ jobs:
               throw new Error(`Expected one original run; found ${originals.length}.`);
             }
             const replays = runs.filter((run) => run.replay_of === runId);
-            const expectedReplayCount = allowSecondReplay ? 2 : 1;
-            if (replays.length !== expectedReplayCount) {
-              throw new Error(`Expected ${expectedReplayCount} append-only replay(s); found ${replays.length}.`);
+            if (!allowManualReplay && replays.length !== 1) {
+              throw new Error(`Expected one automatic replay; found ${replays.length}.`);
+            }
+            if (allowManualReplay && (
+              replays.length < 2 || !(
+                replays[replays.length - 1].manual_replay_authorized
+                || replays[replays.length - 1].repeat_replay_authorized
+              )
+            )) {
+              throw new Error('Expected a recorded maintainer-authorized replay.');
             }
             const run = replays[replays.length - 1];
             const predictionCount = (run.forecast?.predictions || []).length;
@@ -462,11 +469,11 @@ jobs:
               : [
                   '## Automated recovery did not succeed',
                   '',
-                  `The one permitted frozen-input replay for \`${runId}\` remains invalid.`,
+                  `The latest frozen-input replay for \`${runId}\` remains invalid.`,
                   `Append-only replay: \`${run.run_id}\``,
                   overrideNote,
                   `Stored error: ${run.error || 'none recorded'}`,
-                  'ChatGPT/Codex or human review is required; no further automatic retry will be attempted.',
+                  'No further automatic retry will be attempted. A maintainer may explicitly authorize another frozen replay after reviewing the failure.',
                 ].join('\n');
             await github.rest.issues.createComment({
               owner: context.repo.owner,

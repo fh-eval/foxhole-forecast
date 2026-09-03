@@ -55,9 +55,9 @@ def main(argv: list[str] | None = None) -> int:
         help="Permit a paid replay after external authorization",
     )
     replay.add_argument(
-        "--allow-second-replay",
+        "--allow-manual-replay",
         action="store_true",
-        help="Permit one explicit second attempt after an invalid frozen replay",
+        help="Permit another maintainer-authorized attempt after an invalid replay",
     )
     replay.add_argument(
         "--max-tokens",
@@ -148,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
                 settings,
                 args.run_id,
                 allow_paid=args.allow_paid,
-                allow_second_replay=args.allow_second_replay,
+                allow_manual_replay=args.allow_manual_replay,
                 max_tokens_override=args.max_tokens,
             )
         elif args.command == "recover-model-runs":
