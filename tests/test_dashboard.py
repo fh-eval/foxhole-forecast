@@ -36,8 +36,31 @@ class DashboardTests(unittest.TestCase):
                         "latest": {"run_id": "latest"},
                         "latest_all_time": {"run_id": "all-time"},
                         "history": [{"run_id": "historical"}],
-                    }
+                    },
+                    {
+                        "series_id": "model-hidden",
+                        "label": "Retired Model",
+                        "latest": {"run_id": "hidden-latest"},
+                        "latest_all_time": {"run_id": "hidden-all-time"},
+                        "history": [{"run_id": "hidden-historical"}],
+                    },
                 ],
+                "model_behavior": {
+                    "current_war": [
+                        {"series_id": "model-a"},
+                        {"series_id": "model-hidden"},
+                    ],
+                    "all_time": [
+                        {"series_id": "model-a"},
+                        {"series_id": "model-hidden"},
+                    ],
+                    "by_war": {
+                        "war-1": [
+                            {"series_id": "model-a"},
+                            {"series_id": "model-hidden"},
+                        ]
+                    },
+                },
                 "rounds": [
                     {
                         "war_id": "war-1",
@@ -45,11 +68,19 @@ class DashboardTests(unittest.TestCase):
                         "protocol": "current",
                     }
                     for hour in (9, 6, 3, 0)
+                ]
+                + [
+                    {
+                        "war_id": "war-1",
+                        "round_slot": "2026-01-01T09:00:00Z",
+                        "protocol": "current",
+                        "series_id": "model-hidden",
+                    }
                 ],
                 "base_forecasts": [{"base_id": "unused"}],
             }
             with patch("foxhole_forecast.dashboard.ROOT", root):
-                _write_dashboard_shards(output)
+                _write_dashboard_shards(output, {"model-hidden"})
 
             data = root / "web" / "public" / "data"
             main = read_json(data / "dashboard-main.json")
@@ -58,12 +89,30 @@ class DashboardTests(unittest.TestCase):
             self.assertFalse((data / "dashboard.json").exists())
             self.assertNotIn("history", main["models"][0])
             self.assertNotIn("latest_all_time", main["models"][0])
+            self.assertEqual(
+                [model["series_id"] for model in main["models"]], ["model-a"]
+            )
+            self.assertEqual(
+                [row["series_id"] for row in main["model_behavior"]["all_time"]],
+                ["model-a"],
+            )
+            self.assertEqual(
+                [row["series_id"] for row in main["model_behavior"]["by_war"]["war-1"]],
+                ["model-a"],
+            )
             self.assertEqual(len(main["rounds"]), 3)
+            self.assertNotIn(
+                "model-hidden", {row.get("series_id") for row in main["rounds"]}
+            )
             self.assertEqual(main["base_forecasts"], [])
-            self.assertEqual(len(rounds["rounds"]), 4)
+            self.assertEqual(len(rounds["rounds"]), 5)
+            self.assertIn(
+                "model-hidden", {row.get("series_id") for row in rounds["rounds"]}
+            )
             self.assertEqual(
                 summaries["models"][0]["history"], [{"run_id": "historical"}]
             )
+            self.assertEqual(len(summaries["models"]), 2)
 
     def test_latest_round_groups_keeps_every_participant_in_three_newest_slots(self) -> None:
         rounds = [

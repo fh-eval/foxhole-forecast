@@ -12,7 +12,14 @@ from .archives import (
     read_rows_with_archives,
     read_wars_with_archives,
 )
-from .config import DATA_DIR, ROOT, Settings, load_models, load_series_aliases
+from .config import (
+    DATA_DIR,
+    ROOT,
+    Settings,
+    load_dashboard_hidden_series,
+    load_models,
+    load_series_aliases,
+)
 from .domain import strategic_base_type
 from .packets import build_scout_packet
 from .score_metrics import summarize_crps, summarize_selection
@@ -153,13 +160,16 @@ def _latest_round_groups(
     return selected
 
 
-def _write_dashboard_shards(output: dict[str, Any]) -> None:
-    """Write only the three payloads consumed by the static site."""
+def _write_dashboard_shards(
+    output: dict[str, Any], hidden_series: set[str] | None = None
+) -> None:
+    """Write the live dashboard and complete, auditable history payloads."""
+    hidden = hidden_series or set()
     public_data = ROOT / "web" / "public" / "data"
     main = {
         key: value
         for key, value in output.items()
-        if key not in {"models", "rounds", "base_forecasts"}
+        if key not in {"models", "model_behavior", "rounds", "base_forecasts"}
     }
     main["models"] = [
         {
@@ -168,9 +178,31 @@ def _write_dashboard_shards(output: dict[str, Any]) -> None:
             if key not in {"history", "latest_all_time"}
         }
         for model in output.get("models", [])
+        if model.get("series_id") not in hidden
     ]
+    main["model_behavior"] = {
+        scope: (
+            {
+                war_id: [
+                    row
+                    for row in rows
+                    if row.get("series_id") not in hidden
+                ]
+                for war_id, rows in value.items()
+            }
+            if scope == "by_war"
+            else [
+                row for row in value if row.get("series_id") not in hidden
+            ]
+        )
+        for scope, value in output.get("model_behavior", {}).items()
+    }
     main["rounds"] = _latest_round_groups(
-        output.get("rounds", []),
+        [
+            row
+            for row in output.get("rounds", [])
+            if row.get("series_id") not in hidden
+        ],
         output.get("methodology", {}).get("current_protocol"),
     )
     main["base_forecasts"] = []
@@ -728,7 +760,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
             "forecast_status": forecast_status,
         },
     )
-    _write_dashboard_shards(output)
+    _write_dashboard_shards(output, load_dashboard_hidden_series())
     return output
 
 
