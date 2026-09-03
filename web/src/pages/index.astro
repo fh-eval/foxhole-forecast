@@ -297,7 +297,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       const formatDate = (value) => value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value)) + " UTC" : "—";
       const modelFormat = (record) => {
         const series = String(record?.series_id || "");
-        if (record?.protocol === "event_outcome_v5_crps" || series.includes("-event-v4")) return "";
+        if (record?.protocol === "event_outcome_v5_crps" || /-event-v\d+$/.test(series)) return "";
         if (record?.protocol === "timed_transition_v3" || series.includes("-timed-v3")) return " · Legacy timed format";
         if (series.includes("war-overview-v2")) return " · Legacy war overview";
         return " · Legacy format";
