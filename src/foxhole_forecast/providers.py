@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -25,6 +26,75 @@ class ProviderResponse:
 
 class MissingApiKey(RuntimeError):
     pass
+
+
+_PRIVATE_ERROR_FIELDS = frozenset(
+    {
+        "access_token",
+        "account_id",
+        "api_key",
+        "apikey",
+        "authorization",
+        "organization_id",
+        "refresh_token",
+        "secret",
+        "token",
+        "user_id",
+    }
+)
+
+
+def _redact_provider_error(detail: str, api_key: str | None = None) -> str:
+    """Retain useful provider diagnostics without publishing credentials or IDs."""
+    redacted = detail.replace(api_key, "[REDACTED]") if api_key else detail
+    redacted = re.sub(
+        r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+",
+        "Bearer [REDACTED]",
+        redacted,
+    )
+    try:
+        value = json.loads(redacted)
+    except json.JSONDecodeError:
+        return redacted
+
+    private_values: set[str] = set()
+
+    def collect_private_values(item: Any) -> None:
+        if isinstance(item, dict):
+            for key, child in item.items():
+                normalized = str(key).casefold().replace("-", "_")
+                if (
+                    normalized in _PRIVATE_ERROR_FIELDS
+                    and isinstance(child, str)
+                    and len(child) >= 4
+                ):
+                    private_values.add(child)
+                else:
+                    collect_private_values(child)
+        elif isinstance(item, list):
+            for child in item:
+                collect_private_values(child)
+
+    collect_private_values(value)
+
+    def scrub(item: Any) -> Any:
+        if isinstance(item, dict):
+            return {
+                key: (
+                    "[REDACTED]"
+                    if str(key).casefold().replace("-", "_") in _PRIVATE_ERROR_FIELDS
+                    else scrub(child)
+                )
+                for key, child in item.items()
+            }
+        if isinstance(item, list):
+            return [scrub(child) for child in item]
+        if isinstance(item, str):
+            for private_value in private_values:
+                item = item.replace(private_value, "[REDACTED]")
+        return item
+
+    return json.dumps(scrub(value), separators=(",", ":"), ensure_ascii=False)
 
 
 class ModelProvider:
@@ -170,7 +240,8 @@ class ModelProvider:
                     return json.loads(response.read().decode("utf-8"))
             except urllib.error.HTTPError as error:
                 detail = error.read().decode("utf-8", errors="replace")
-                last_error = RuntimeError(f"Provider returned HTTP {error.code}: {detail[:1000]}")
+                detail = _redact_provider_error(detail, self.api_key)[:1000]
+                last_error = RuntimeError(f"Provider returned HTTP {error.code}: {detail}")
                 if error.code not in {408, 429, 500, 502, 503, 504}:
                     raise last_error
             except (
