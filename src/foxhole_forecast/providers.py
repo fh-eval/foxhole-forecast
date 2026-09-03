@@ -250,6 +250,7 @@ def _cost(model: str, usage: dict[str, Any]) -> float:
         "openai/gpt-5.6-luna": (0.20, 1.20),
         "google/gemini-3.7-flash": (0.75, 3.75),
         "google/gemini-3.8-flash": (0.75, 3.75),
+        "meta/muse-spark-1.3-contributor": (0.10, 0.20),
         # Conservative list-price fallback. OpenRouter normally reports exact
         # cost, including Z.AI's time-limited 50% launch discount.
         "z-ai/glm-5.3-flash": (0.15, 0.50),

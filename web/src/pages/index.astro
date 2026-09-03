@@ -1264,12 +1264,12 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         return eventLabel(outcome || "control change").toLowerCase();
       }
 
-      function reasoningLabel(round) {
+      function modelSetupLabel(round) {
+        const slug = round?.requested_model || "model slug not recorded";
         const reasoning = round?.reasoning;
-        const provider = round?.provider_label || "Provider unrecorded";
-        if (!reasoning) return `${provider} · reasoning setting not recorded`;
-        if (!reasoning.enabled) return `${provider} · thinking disabled — historical limitation`;
-        return `${provider} · ${reasoning.effort ? `${reasoning.effort} reasoning` : "reasoning used"}`;
+        if (!reasoning) return `${slug} · reasoning not recorded`;
+        if (!reasoning.enabled) return `${slug} · reasoning disabled`;
+        return `${slug} · ${reasoning.effort ? `${reasoning.effort} reasoning` : "reasoning used"}`;
       }
 
       function compactPredictionPreview(bet) {
@@ -1304,8 +1304,13 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const droppedAdvice = (round.dropped_strategic_advice || []).length;
         const dispatch = element("span", "dispatch-model");
         const header = element("span", "dispatch-model__header");
-        header.append(
+        const identity = element("span", "dispatch-model__identity");
+        identity.append(
           element("strong", "dispatch-model__name", modelLabel(round)),
+          element("small", "dispatch-model__setup", modelSetupLabel(round)),
+        );
+        header.append(
+          identity,
           element("span", "dispatch-model__progress", `${resolved}/${bets.length} resolved · ${scored}/${bets.length} scored`),
         );
         const headline = element("span", "dispatch-model__headline", summaryHeadline(round));
@@ -1420,7 +1425,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             participantBody.append(element(
               "p",
               `dispatch-audit${round?.reasoning?.enabled === false ? " dispatch-audit--limited" : ""}`,
-              `${reasoningLabel(round)} · Data cutoff ${formatDate(round.cutoff)}${round.retried_at ? ` · Recovered later from frozen cutoff data (${formatDate(round.retried_at)})` : ""}${round.replay_config_overrides?.max_tokens ? ` · Audited output ceiling ${round.replay_config_overrides.max_tokens.frozen}→${round.replay_config_overrides.max_tokens.replay} tokens` : ""}`,
+              `${round.provider_label || "Provider unrecorded"} · Data cutoff ${formatDate(round.cutoff)}${round.retried_at ? ` · Recovered later from frozen cutoff data (${formatDate(round.retried_at)})` : ""}${round.replay_config_overrides?.max_tokens ? ` · Audited output ceiling ${round.replay_config_overrides.max_tokens.frozen}→${round.replay_config_overrides.max_tokens.replay} tokens` : ""}`,
             ));
             participant.append(participantSummary, participantBody);
             participant.addEventListener("toggle", () => {
