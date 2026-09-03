@@ -84,4 +84,5 @@ jobs:
           PYTHONPATH=src python3 -m foxhole_forecast score >/dev/null
           PYTHONPATH=src python3 -m foxhole_forecast build-dashboard >/dev/null
       - name: Commit new observations and results
-        run: .github/scripts/persist-data.sh "data: update observations and scores"
+        run: |
+          .github/scripts/persist-data.sh "data: update observations and scores"
