@@ -55,6 +55,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Permit a paid replay after external authorization",
     )
     replay.add_argument(
+        "--allow-second-replay",
+        action="store_true",
+        help="Permit one explicit second attempt after an invalid frozen replay",
+    )
+    replay.add_argument(
         "--max-tokens",
         type=int,
         help="Raise only the frozen run's output ceiling and record the override",
@@ -143,6 +148,7 @@ def main(argv: list[str] | None = None) -> int:
                 settings,
                 args.run_id,
                 allow_paid=args.allow_paid,
+                allow_second_replay=args.allow_second_replay,
                 max_tokens_override=args.max_tokens,
             )
         elif args.command == "recover-model-runs":
