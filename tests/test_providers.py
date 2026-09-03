@@ -5,7 +5,12 @@ import unittest
 from unittest.mock import patch
 
 from foxhole_forecast.config import Settings, load_models
-from foxhole_forecast.providers import ModelProvider, _cost, _parse_json_content
+from foxhole_forecast.providers import (
+    ModelProvider,
+    _cost,
+    _parse_json_content,
+    _redact_provider_error,
+)
 
 
 class _Response:
@@ -43,6 +48,40 @@ class _MalformedPaidResponse:
 
 
 class ProviderTests(unittest.TestCase):
+    def test_provider_error_redacts_private_fields_recursively(self) -> None:
+        detail = json.dumps(
+            {
+                "error": {
+                    "message": "Account user_private needs confirmation",
+                    "metadata": {
+                        "user_id": "user_private",
+                        "account-id": "account_private",
+                        "token": "token_private",
+                        "code": 403,
+                    },
+                }
+            }
+        )
+
+        redacted = json.loads(_redact_provider_error(detail))
+
+        self.assertEqual(redacted["error"]["metadata"]["user_id"], "[REDACTED]")
+        self.assertEqual(redacted["error"]["metadata"]["account-id"], "[REDACTED]")
+        self.assertEqual(redacted["error"]["metadata"]["token"], "[REDACTED]")
+        self.assertEqual(redacted["error"]["metadata"]["code"], 403)
+        self.assertEqual(redacted["error"]["message"], "Account [REDACTED] needs confirmation")
+
+    def test_provider_error_redacts_key_and_bearer_token_in_plain_text(self) -> None:
+        redacted = _redact_provider_error(
+            "request key-private failed with Bearer header.payload.signature",
+            "key-private",
+        )
+
+        self.assertEqual(
+            redacted,
+            "request [REDACTED] failed with Bearer [REDACTED]",
+        )
+
     def test_connection_reset_is_retried(self) -> None:
         config = {
             "gateway": "nvidia_nim",
