@@ -184,20 +184,7 @@ jobs:
           PYTHONPATH=src python3 -m foxhole_forecast score >/dev/null
           PYTHONPATH=src python3 -m foxhole_forecast build-dashboard >/dev/null
       - name: Commit new forecasts and scores
-        run: |
-          git config user.name "foxhole-forecast[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data
-          if git diff --cached --quiet; then
-            echo "No persisted changes"
-          else
-            .github/scripts/assert-data-only.sh --staged
-            git commit -m "data: update forecasts and scores"
-            git fetch origin main
-            git rebase origin/main
-            .github/scripts/assert-data-only.sh origin/main
-            git push
-          fi
+        run: .github/scripts/persist-data.sh "data: update forecasts and scores"
 
   audit:
     needs: persist
