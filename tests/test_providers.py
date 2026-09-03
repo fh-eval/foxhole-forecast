@@ -111,6 +111,13 @@ class ProviderTests(unittest.TestCase):
         )
         self.assertEqual(cost, 4.5)
 
+    def test_muse_spark_contributor_fallback_cost_uses_current_rate(self) -> None:
+        cost = _cost(
+            "meta/muse-spark-1.3-contributor",
+            {"prompt_tokens": 1_000_000, "completion_tokens": 1_000_000},
+        )
+        self.assertEqual(cost, 0.3)
+
     def test_glm_flash_fallback_cost_uses_conservative_list_rate(self) -> None:
         cost = _cost(
             "z-ai/glm-5.3-flash",
@@ -186,6 +193,21 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(gemini["provider_only"], ["google-vertex"])
         self.assertFalse(gemini["allow_fallbacks"])
         self.assertEqual(gemini["reasoning"], {"effort": "medium", "exclude": False})
+
+    def test_muse_spark_config_pins_contributor_with_medium_reasoning(self) -> None:
+        muse = next(
+            model
+            for model in load_models()
+            if model["series_id"]
+            == "openrouter-meta-muse-spark-1.3-contributor-event-v4"
+        )
+
+        self.assertEqual(muse["label"], "Muse Spark 1.3")
+        self.assertEqual(muse["model"], "meta/muse-spark-1.3-contributor")
+        self.assertEqual(muse["provider_only"], ["meta"])
+        self.assertFalse(muse["allow_fallbacks"])
+        self.assertEqual(muse["reasoning"], {"effort": "medium", "exclude": False})
+        self.assertNotIn("budget_group", muse)
 
     def test_openrouter_uses_per_model_reasoning_and_token_budget(self) -> None:
         captured = {}
