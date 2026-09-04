@@ -1,0 +1,368 @@
+{
+  "bundle_type": "forecast_replay",
+  "cutoff": "2026-09-04T00:10:44.378591Z",
+  "inputs": {
+    "detail_packet": "openrouter-openai-gpt-5.6-luna-event-v4-detail-packet.json",
+    "detail_packet_sha256": "60d3c9e282f1e2011c4818a30b6df6197f9710e1b65b2baedd67ee32e5b7b0bf",
+    "detail_source": "replay-detail-source.json.gz",
+    "detail_source_sha256": "2f1b30e99f5cd7efbc8d6190809ba97c3ce39e5acd6f2a82af7097306e4fd6a6",
+    "scout_packet": "openrouter-openai-gpt-5.6-luna-event-v4-scout-packet.json",
+    "scout_packet_sha256": "bb8fe7d4837da690dd43d4f20f72cf8e393afb094d003f4abd48e4b76cffaa33"
+  },
+  "model_config": {
+    "allow_fallbacks": false,
+    "api_key_env": "OPENROUTER_API_KEY",
+    "enabled": true,
+    "gateway": "openrouter",
+    "label": "GPT-5.6 Luna",
+    "max_tokens": 16384,
+    "model": "openai/gpt-5.6-luna",
+    "omit_temperature": true,
+    "paid": true,
+    "provider_only": [
+      "openai"
+    ],
+    "reasoning": {
+      "effort": "medium",
+      "exclude": false
+    },
+    "request_timeout_seconds": 240,
+    "series_id": "openrouter-openai-gpt-5.6-luna-event-v4"
+  },
+  "overview": {
+    "headline": "Base Fighting Shifts Across Divided Fronts",
+    "selected_regions": [
+      "WeatheredExpanseHex",
+      "StonecradleHex",
+      "StlicanShelfHex",
+      "LinnMercyHex",
+      "GodcroftsHex",
+      "FishermansRowHex"
+    ],
+    "war_summary": "The latest ledger shows the heaviest base movement concentrated on several divided fronts. Weathered Expanse remains the busiest recorded sector, with 59 events in 24 hours and 13 in the latest six, its holdings six Warden to three Colonial. Stonecradle has climbed to 27 daily events, including five in the latest two hours and 19 in six, while its nine bases stand three Warden to six Colonial. Stlican Shelf has logged 50 events across the day and eight in six hours, though none in the latest two; seven of its nine bases are Warden-held. Linn Mercy records 20 daily events, two in the latest two hours, with one Warden, nine Colonial and one neutral base. Godcrofts is active at the latest cutoff, posting three events in two hours and 16 in 24, with four bases held by each faction and one neutral. Fisherman’s Row has become a sharp current contact, recording six events in two hours and 13 across the day; its split is five Colonial to four Warden. Farranac Coast remains contested but has gone quiet in the latest two-hour window, while Callahan’s Passage reports severe casualties without recent base events."
+  },
+  "prompts": {
+    "correction": "Your prior response failed local validation: {error}. Return a corrected JSON object only.",
+    "forecast": "Hello again! We're running a game predicting events in the video game Foxhole. Basically we're trying to see if you can predict which bases change and how. We're checking the game's official API roughly every ~15 minutes to see if the predictions are accurate. The window between checks isn't precise, so always make an exact UTC prediction for when the state-change happens (trying to game it will compound the noise).\n\nPlease return exactly eight ranked bets on eight different strategic bases from the supplied regions. Rank 1-4 are your immediate priorities and rank 5-8 are your extended priorities. Aim for ranks 1-4 to land within 6 hours and ranks 5-8 to land more than 6 hours out, but give the exact minute you actually believe: the evaluator will keep a valid bet when it is near that boundary.\n\nFor each base, predict what happens next by copying `outcome` from that base's `valid_outcomes`. `CAPTURED_BY_WARDENS` means the base will be captured by Wardens; `CAPTURED_BY_COLONIALS` means it will be captured by Colonials. Neutral bases (`current_owner` is `NONE`) must use one of those two faction-specific capture outcomes—do not use a generic capture call. `DESTROYED` means a faction-owned base is demolished and remains unbuilt until the next API check window. Give an exact-minute UTC ETA. Destruction followed by capture inside the same window counts as the named faction capture; choose `DESTROYED` if you expect the base to remain unbuilt into the next ~15 minute window. A destruction and a faction capture are distinct outcomes, but confusing them receives partial credit because a base change did happen.\n\nFor every bet, copy one value exactly from that base's own `valid_outcomes`. Here's how that works:\n\n[Warden Controlled Base] -> `CAPTURED_BY_COLONIALS` or `DESTROYED` (Both options are predicting a Colonial push succeeding, right?).\n[Colonial Controlled Base] -> `CAPTURED_BY_WARDENS` or `DESTROYED` (Again, same rationale. This means the Wardens successfully attacked the base).\n[Neutral/Unowned Base] -> `CAPTURED_BY_COLONIALS` or `CAPTURED_BY_WARDENS` (If a base is up for grabs, one of the two teams will take it. Your bet should say who).\n\n`confidence` is the probability from 0.00 to 1.00 that the exact named outcome happens by three hours after your ETA. `sigma_minutes` is your timing uncertainty conditional on that event happening: give the standard deviation in minutes of a Normal event-time distribution centered on your ETA. It must be an integer from 15 to 180. Use a smaller sigma only when you can locate the event time tightly; confidence and sigma measure different uncertainties.\n\nUse only supplied metric IDs as evidence and rate each metric's relevance from 1 to 10. Please return only the requested JSON.\n\nAfter making the eight bets, give four short, symmetric strategic recommendations using bases from the supplied packet:\n\n- `colonial_reinforce`: one Colonial-owned base the Colonials should reinforce, and why.\n- `colonial_attack`: one Warden-owned base the Colonials should attack, and why.\n- `warden_reinforce`: one Warden-owned base the Wardens should reinforce, and why.\n- `warden_attack`: one Colonial-owned base the Wardens should attack, and why.\n\nFor each recommendation, copy the exact `base_id`, write a concise reason, and cite 1-3 supplied metric IDs with relevance ratings in the same format as prediction evidence. You may choose a base from your eight bets, but you do not have to. Use only the packet. Do not invent stockpiles, troop movements, tactics, intentions, or intelligence the public data does not contain. These recommendations are collected as qualitative strategic-adviser evidence; they do not replace or alter the eight scoreable predictions, and we do not treat an unacted-upon recommendation as objectively proven right or wrong.",
+    "scout": "Hello! We're running a prediction game for the video game Foxhole. This first stage is the broad war-desk overview.\n\nWrite `headline` as a concise, factual newspaper headline of roughly 4–12 words. Give it a little 1920s–1940s field-report character, but do not use a dateline, quotation marks, invented claims, or factional cheerleading.\n\nWrite `war_summary` as a compact 1920s–1940s newspaper dispatch: lively, economical, and readable, with the air of a correspondent filing the latest edition. This is the body of the clipping, so do not repeat the headline or begin with a separate headline/dateline. Use one factual paragraph explaining what the current data shows. Aim for roughly 120–220 words. Period flavor is welcome, but clarity comes first: do not invent quotations, causes, troop intentions, battlefield details, or certainty that the packet does not support, and do not favor either faction.\n\nYou may receive `previous_model_summary`, your own most recent valid dispatch from an earlier cohort in the current war. Treat it as the previous edition: lead with what has changed since then, note important fronts that remain active or have gone quiet, and avoid repeating the old report word for word. A dispatch from an earlier war is never provided. The current packet is always authoritative; omit an old claim when the new data no longer supports it. If there is no previous summary, write this as the opening edition rather than pretending an earlier report exists.\n\nAfter the dispatch, select the most active regions whose detailed history would be most useful for predicting strategic-base ownership changes during the next 24 hours. Do not make specific base predictions yet. Return only the requested JSON."
+  },
+  "schema_version": 1,
+  "schemas": {
+    "forecast": {
+      "additionalProperties": false,
+      "properties": {
+        "predictions": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "base_id": {
+                "type": "string"
+              },
+              "confidence": {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              "eta_utc": {
+                "type": "string"
+              },
+              "evidence": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "metric_id": {
+                      "type": "string"
+                    },
+                    "relevance": {
+                      "maximum": 10,
+                      "minimum": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "metric_id",
+                    "relevance"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 5,
+                "minItems": 1,
+                "type": "array"
+              },
+              "outcome": {
+                "enum": [
+                  "CAPTURED_BY_WARDENS",
+                  "CAPTURED_BY_COLONIALS",
+                  "DESTROYED"
+                ],
+                "type": "string"
+              },
+              "rank": {
+                "maximum": 8,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "sigma_minutes": {
+                "maximum": 180,
+                "minimum": 15,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "rank",
+              "base_id",
+              "outcome",
+              "confidence",
+              "sigma_minutes",
+              "eta_utc",
+              "evidence"
+            ],
+            "type": "object"
+          },
+          "maxItems": 8,
+          "minItems": 8,
+          "type": "array"
+        },
+        "strategic_advice": {
+          "additionalProperties": false,
+          "properties": {
+            "colonial_attack": {
+              "additionalProperties": false,
+              "properties": {
+                "base_id": {
+                  "type": "string"
+                },
+                "evidence": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "metric_id": {
+                        "type": "string"
+                      },
+                      "relevance": {
+                        "maximum": 10,
+                        "minimum": 1,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "metric_id",
+                      "relevance"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 3,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "base_id",
+                "reason",
+                "evidence"
+              ],
+              "type": "object"
+            },
+            "colonial_reinforce": {
+              "additionalProperties": false,
+              "properties": {
+                "base_id": {
+                  "type": "string"
+                },
+                "evidence": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "metric_id": {
+                        "type": "string"
+                      },
+                      "relevance": {
+                        "maximum": 10,
+                        "minimum": 1,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "metric_id",
+                      "relevance"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 3,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "base_id",
+                "reason",
+                "evidence"
+              ],
+              "type": "object"
+            },
+            "warden_attack": {
+              "additionalProperties": false,
+              "properties": {
+                "base_id": {
+                  "type": "string"
+                },
+                "evidence": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "metric_id": {
+                        "type": "string"
+                      },
+                      "relevance": {
+                        "maximum": 10,
+                        "minimum": 1,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "metric_id",
+                      "relevance"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 3,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "base_id",
+                "reason",
+                "evidence"
+              ],
+              "type": "object"
+            },
+            "warden_reinforce": {
+              "additionalProperties": false,
+              "properties": {
+                "base_id": {
+                  "type": "string"
+                },
+                "evidence": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "metric_id": {
+                        "type": "string"
+                      },
+                      "relevance": {
+                        "maximum": 10,
+                        "minimum": 1,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "metric_id",
+                      "relevance"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 3,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "base_id",
+                "reason",
+                "evidence"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "colonial_reinforce",
+            "colonial_attack",
+            "warden_reinforce",
+            "warden_attack"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "predictions",
+        "strategic_advice"
+      ],
+      "type": "object"
+    },
+    "scout": {
+      "additionalProperties": false,
+      "properties": {
+        "headline": {
+          "maxLength": 120,
+          "minLength": 1,
+          "type": "string"
+        },
+        "selected_regions": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 6,
+          "minItems": 1,
+          "type": "array"
+        },
+        "war_summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "headline",
+        "war_summary",
+        "selected_regions"
+      ],
+      "type": "object"
+    }
+  },
+  "series_id": "openrouter-openai-gpt-5.6-luna-event-v4",
+  "settings": {
+    "event_bet_limit": 8,
+    "forecast_base_limit": 8,
+    "forecast_horizons_hours": [
+      1,
+      6,
+      24
+    ],
+    "forecast_interval_hours": 3,
+    "history_hours": 168,
+    "max_paid_usd_per_day": 3.0,
+    "minimum_forecast_history_hours": 2,
+    "output_token_limit": 5000,
+    "poll_minutes": 15,
+    "reasoning_effort": "medium",
+    "recent_event_hours": 24,
+    "schema_version": 1,
+    "scout_region_limit": 6,
+    "shard": "live-1",
+    "strategic_icon_types": [
+      27,
+      45,
+      46,
+      47,
+      56,
+      57,
+      58
+    ],
+    "temperature": 0.2,
+    "war_api_base": "https://war-service-live.foxholeservices.com/api/worldconquest"
+  },
+  "source_commit": "588df434c61c9b15d61a9986731dd6cde15b3927",
+  "stage": "forecast",
+  "war_id": "130a8372-9f95-40d0-ac21-53a3450ecb0d"
+}
