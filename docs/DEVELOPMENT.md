@@ -49,7 +49,7 @@ Trusted collection and forecast workflows are the sole exception: they may conti
 
 ## Managed multi-agent workflow
 
-The root agent owns ideas, the implementation overview, and the final check. It does not duplicate implementation or pre-review work. A Luna High manager coordinates the work:
+The root agent owns ideas, the implementation overview, and the final check. It does not duplicate implementation or pre-review work. A Luna High manager coordinates the work. If the manager harness cannot invoke collaboration controls, the manager prepares the complete bounded assignment and decision brief while root relays only the spawn/send call; root does not duplicate the manager's planning, coding, or review:
 
 - Spawn at most two workers with `model = "gpt-5.6-luna"` and `reasoning_effort = "high"`; give each a fresh compact brief, bounded file ownership, and target tests.
 - Keep contracts and overlapping edits with the manager; implementers change only their assigned files. After authors finish, commission one fresh independent Luna High reviewer read-only against the finished diff, boundary tests, and UI runtime when feasible. Send findings back to the owning implementer.
