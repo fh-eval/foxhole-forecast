@@ -1,6 +1,6 @@
 # Foxhole Forecast agent roles
 
-The primary agent owns integration, resolves cross-cutting decisions, and keeps the published evaluation internally consistent. Use the following subagent roles when the task matches their scope.
+The root agent owns ideas, the implementation overview, and the final check. The Luna High manager owns planning, contracts, worker routing, integration, and validation; use the following bounded roles when the task matches their scope.
 
 ## Luna: website UI and reader experience
 
@@ -34,7 +34,7 @@ The primary agent owns integration, resolves cross-cutting decisions, and keeps 
 ## Coordination
 
 - Subagents share the same worktree. Assign non-overlapping files whenever possible and announce overlapping edits before making them.
-- The primary agent reviews metric semantics before UI labels are finalized and reviews UI wording before publication.
+- The manager reviews metric semantics and UI wording during integration; the root agent performs the final check only after the manager's review and validation.
 - UI work may use existing dashboard fields immediately. New derived metrics require evaluation review and tests before Luna presents them as evidence.
 - Keep operational instructions out of the public README unless they are genuinely project documentation for contributors.
 
