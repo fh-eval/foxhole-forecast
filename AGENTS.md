@@ -46,3 +46,11 @@ The primary agent owns integration, resolves cross-cutting decisions, and keeps 
 - A pause of any duration must leave remote `main`, scheduled data collection, forecasting, and the deployed site on their last known-good code. Record remaining work in the branch commit or handoff notes, not in a partially deployed change.
 - Before integration, rebase the feature branch onto current `origin/main`, run the full Python tests, Ruff undefined-name/import checks, the watchdog tests, and the Astro production build. Open a pull request and wait for every `Validate` job to pass before merging.
 - Do not bypass failed checks. Automated append-only data commits made by the trusted workflows are the only direct-to-`main` exception.
+
+## Multi-agent delivery workflow
+
+- The root agent owns ideas, the implementation overview, and the final check. It does not duplicate implementation or review before that final check.
+- The Luna High manager owns task planning, metric/data contracts, worker routing, target tests, integration, and the final full suite. Keep no more than two active implementation workers under the manager.
+- Luna High implementers receive fresh compact briefs, own their bounded files, and run their target tests. They must announce any necessary overlap before editing it.
+- After implementation is complete, a fresh independent Luna High reviewer reads the finished diff and tests read-only. Route findings back to the implementers for resolution; do not have the root agent pre-review or duplicate the reviewer.
+- Use explicit Luna High model/reasoning settings for spawned workers, preserve the repository permission and network fields, and do not silently escalate to a larger model. The manager integrates only after reviewer findings are resolved, then runs the full validation suite and prepares the pull request. Do not merge or deploy before the root's final check.

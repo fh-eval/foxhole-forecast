@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 import re
 import statistics
 from typing import Any
@@ -21,7 +21,9 @@ from .config import (
     load_models,
     load_series_aliases,
 )
+from .comparisons import eligible_pair_rounds, summarize_comparisons
 from .domain import strategic_base_type
+from .evidence_analysis import summarize_pair_evidence
 from .packets import build_scout_packet
 from .score_metrics import summarize_crps, summarize_retention, summarize_selection
 from .storage import isoformat, parse_time, read_json, write_json
@@ -188,7 +190,7 @@ def _write_dashboard_shards(
     main = {
         key: value
         for key, value in output.items()
-        if key not in {"models", "model_behavior", "rounds", "base_forecasts"}
+        if key not in {"models", "model_behavior", "rounds", "base_forecasts", "comparison_analysis"}
     }
     main["models"] = [
         {
@@ -226,6 +228,16 @@ def _write_dashboard_shards(
     )
     main["base_forecasts"] = []
     write_json(public_data / "dashboard-main.json", main)
+    write_json(
+        public_data / "comparison-analysis.json",
+        {
+            "schema_version": 1,
+            "generated_at": output.get("generated_at"),
+            "as_of": output.get("generated_at"),
+            "available_wars": output.get("available_wars", []),
+            "comparison_analysis": output.get("comparison_analysis", {}),
+        },
+    )
     write_json(
         public_data / "round-history.json",
         {
@@ -321,7 +333,33 @@ def _provider_label(run: dict[str, Any]) -> str:
     }.get(run.get("gateway"), str(run.get("gateway") or "Provider unrecorded"))
 
 
-def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
+def _comparison_scope(rounds: list[dict[str, Any]], as_of: datetime) -> dict[str, Any]:
+    """Join performance and citation diagnostics on the very same mature pairs."""
+    groups = eligible_pair_rounds(rounds, as_of=as_of)
+    summaries = summarize_comparisons(rounds, as_of=as_of)
+    evidence = {
+        (group["left_series_id"], group["right_series_id"], group["submission_mode"]):
+            summarize_pair_evidence(group)
+        for group in groups
+    }
+    return {
+        "pairs": [
+            {
+                **summary,
+                "evidence": evidence[(
+                    summary["left_series_id"], summary["right_series_id"],
+                    summary["submission_mode"],
+                )],
+            }
+            for summary in summaries
+        ],
+    }
+
+
+def build_dashboard_data(
+    settings: Settings | None = None, *, now: datetime | None = None,
+) -> dict[str, Any]:
+    as_of = (now or datetime.now(UTC)).astimezone(UTC)
     current_settings = settings or Settings.load()
     series_aliases = load_series_aliases()
     dashboard_series_aliases = load_dashboard_series_aliases()
@@ -373,6 +411,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
     identity_by_series: dict[str, dict[str, Any]] = {}
     latest_valid_runs: dict[str, dict[str, Any]] = {}
     rounds_by_participant: dict[tuple[str, str, str], dict[str, Any]] = {}
+    comparison_rounds: list[dict[str, Any]] = []
     for run in runs:
         series = series_aliases.get(run["series_id"], run["series_id"])
         identity_by_series[series] = {**run, **configured_models.get(series, {})}
@@ -590,6 +629,17 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
                     else {}
                 ),
             }
+            # The existing dashboard folds model families and keeps one run per
+            # three-hour slot. Paired analysis instead needs every exact cutoff
+            # and the original series identity, including historical setups.
+            comparison_rounds.append({
+                **round_record,
+                "series_id": run["series_id"],
+                "model_label": run.get("label") or model_label,
+                "created_at": run.get("created_at"),
+                "settlement_updated_at": settlement.get("updated_at"),
+                "prediction_count": len(forecast_rows),
+            })
             participant_key = (war_id, round_slot, series)
             previous = rounds_by_participant.get(participant_key)
             if not previous or run["cutoff"] > previous["cutoff"]:
@@ -723,7 +773,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
     }
     output = {
         "schema_version": 12,
-        "generated_at": isoformat(),
+        "generated_at": isoformat(as_of),
         "war": latest.get("war"),
         "last_collected_at": latest.get("observed_at"),
         "forecast_status": forecast_status,
@@ -742,6 +792,19 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
         }),
         "models": models,
         "model_behavior": behavior,
+        "comparison_analysis": {
+            "current_war": _comparison_scope(
+                [row for row in comparison_rounds if row["war_id"] == current_war_id], as_of,
+            ),
+            "all_time": _comparison_scope(comparison_rounds, as_of),
+            "by_war": {
+                row["war_id"]: _comparison_scope(
+                    [record for record in comparison_rounds if record["war_id"] == row["war_id"]],
+                    as_of,
+                )
+                for row in available_wars
+            },
+        },
         "available_wars": available_wars,
         "rounds": rounds[:500],
         "base_forecasts": base_forecasts[:500],
