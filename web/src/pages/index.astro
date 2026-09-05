@@ -35,7 +35,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <div>
           <h1>Foxhole <span>Forecast</span></h1>
           <p class="lede">Can an AI read a battlefield?</p>
-          <p class="sublede">We hand several AI models the same public war reports from the game Foxhole and ask them to call what happens next — which base falls, who takes it, and when. Every call is written down <em>before</em> the front moves. Then we check.</p>
+          <p class="sublede">We hand several AI models the same public war reports from the game Foxhole and ask them to call what happens next — which base falls, who takes it, and when. Live submissions and labeled frozen-input replays are kept distinct, so you can see what each kind of run contributes. Then we check.</p>
         </div>
         <div class="war-stamp" aria-live="polite">
           <span class="pulse"></span>
@@ -64,7 +64,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <div><small>LAST OBSERVATION</small><strong id="last-observation">—</strong></div>
         <div><small>STRATEGIC BASES</small><strong id="base-count">—</strong></div>
         <div><small>COLLECTOR POLLS</small><strong id="poll-count">—</strong></div>
-        <div><small>TIMING RESOLUTION</small><strong>≤ 15 min</strong></div>
+        <div><small>NOMINAL OBSERVATION CADENCE</small><strong>~15 min</strong></div>
       </section>
 
       <section class="investigation-intro" aria-labelledby="investigation-title">
@@ -73,7 +73,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <h2 id="investigation-title">Say which base falls, who takes it, when — and how sure you are.</h2>
         </div>
         <div class="investigation-intro__copy">
-          <p>Sounding clever is easy, so we don’t score cleverness. Each model must point at a real base on the map, name the exact outcome, give a time, and attach a probability. Over many rounds we learn who is right, who is lucky, and who is confidently wrong.</p>
+          <p>Each model must point at a real base on the map, name the exact outcome, give a time, and attach a probability. We compare base selection, outcomes, and timing to see where models differ and where they struggle. It’s a small experiment on a limited budget, so the patterns are starting points for investigation.</p>
           <p class="plain-note"><strong>How to read this page</strong> Start with the scoreboard, then open the actual calls and the evidence behind them. Every technical detail stays on the page for anyone who wants to check our math.</p>
         </div>
       </section>
@@ -102,7 +102,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <div class="table-caption table-caption--equation">
             <p class="kicker">The headline number</p>
             <p><strong>Bullseye rate = exact outcome within ±3 hours of the model’s own ETA, out of every call we could fairly score.</strong></p>
-            <span>A model can pick only bases that later see action and still score zero bullseyes if it names the wrong result or misses the timing. False alarms, wrong outcomes, and correct-but-early-or-late calls all count as bullseye misses. Calls we can’t fairly judge are excluded — and you can see exactly how many in the evidence column. Small samples: read the counts, not just the percentages.</span>
+            <span>A model can pick only bases that later see action and still score zero bullseyes if it names the wrong result or misses the timing. False alarms, wrong outcomes, and correct-but-early-or-late calls all count as bullseye misses. The detailed score is a partial-credit CRPS-style loss over the cutoff-to-ETA-plus-three-hours window: certain capture/destruction near-matches receive 0.75, while exact-outcome counts remain separate. Dropped invalid bets, censored calls we could not fairly judge, and open calls are kept separate. Small samples: read the counts, not just the percentages.</span>
           </div>
           <div class="table-shell">
             <table class="adviser-table" aria-label="Compact adviser comparison">
@@ -154,36 +154,36 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <p>These numbers describe the calls we’ve seen so far. They are clues, not a verdict on which model is “the best”.</p>
         </div>
         <div class="limitations-grid">
-          <article><h3>It’s early</h3><p>Some models have made dozens of scored calls; others only a handful. A 60% rate on five calls is a very different claim from 60% on fifty — always read the counts next to the percentages.</p></article>
-          <article><h3>Same war, same rounds</h3><p>Models often bet on the same front in the same hours. Twenty calls from one war are not twenty independent experiments — one weird week can flatter or sink anyone.</p></article>
-          <article><h3>Timing has a catch</h3><p>Average timing error can only be computed when something actually happened, so it quietly ignores false alarms. The bullseye rate keeps those misses in view; the CRPS table below shows whether stated probabilities were honest.</p></article>
+          <article><h3>Read the sample size</h3><p>Models can have different numbers of scored calls. A 60% rate on five calls is a very different claim from 60% on fifty — always read the counts next to the percentages.</p></article>
+          <article><h3>Same war, same rounds</h3><p>Models often bet on the same front in the same hours. Twenty calls from one war are not twenty independent experiments — one weird week can flatter or sink anyone. The aggregate uses each model’s available rounds descriptively; it is not a paired comparison on shared, mature cases.</p></article>
+          <article><h3>Timing has a catch</h3><p>Average timing error can only be computed when something actually happened, so it quietly ignores false alarms. The bullseye rate keeps those misses in view; the custom CRPS-style table below combines timing, outcome, and stated probability.</p></article>
         </div>
       </section>
 
       <section id="probability" class="section-block">
         <div class="section-heading">
-          <div><p class="kicker">Probability quality</p><h2>How honest were the probabilities?</h2></div>
-          <p>A model can sound humble and still be useless, or nail every call while claiming it was never sure. Read this beside the practical scoreboard: CRPS grades the complete probability forecast, while the table above asks whether the calls were useful.</p>
+          <div><p class="kicker">Confidence and timing</p><h2>How do the whole forecasts compare?</h2></div>
+          <p>A model can sound humble and still be useless, or nail every call while claiming it was never sure. Read this beside the practical scoreboard: the partial-credit CRPS-style loss combines outcome, timing, and stated probability as an exploratory diagnostic. It does not establish calibration or a best model.</p>
         </div>
         <div class="table-caption table-caption--equation">
           <p class="kicker">Whole-forecast error</p>
-          <p><strong>CRPS = ∫ [forecast probability by time t − observed result by time t]² dt</strong></p>
-          <span>In plain words: at every moment, how far apart were the model’s probability curve and what the game actually did? Add up that gap over time. Lower is better, zero is perfect. Near-term and next-day calls are scored separately because their windows differ.</span>
+          <p><strong>Partial-credit CRPS-style loss = ∫ E[(F(t) − credit × I(T≤t))²] dt</strong></p>
+          <span>In plain words: across the window from the data cutoff through three hours after the model’s ETA, how far is its probability curve from the observed event state and timing? The window varies with each ETA, and event intervals are averaged when the exact time is unknown. Certain near-matches receive 0.75 credit; exact-outcome counts are reported separately. Lower loss is an exploratory signal, not a calibration verdict.</span>
         </div>
         <div class="table-shell">
           <table class="score-table probability-table" aria-describedby="score-guide">
             <thead>
               <tr>
                 <th>Model</th>
-                <th>Near-term forecast error<small>CRPS · 0–6h calls · lower ↓</small></th>
-                <th>Next-day forecast error<small>CRPS · 6–24h calls · lower ↓</small></th>
+                <th>Near-term forecast error<small>Partial-credit CRPS-style loss · 0–6h calls · lower ↓</small></th>
+                <th>Next-day forecast error<small>Partial-credit CRPS-style loss · 6–24h calls · lower ↓</small></th>
                 <th>Claimed chance<small>Mean confidence</small></th>
                 <th>Claimed timing spread<small>Mean sigma</small></th>
                 <th>Inside stated spread<small>Exact calls · model sigma only</small></th>
                 <th>Typical near-term target<small>Median after cutoff</small></th>
                 <th>Typical next-day target<small>Median after cutoff</small></th>
                 <th>Matched timing error<small>Matched events only · lower ↓</small></th>
-                <th>Call status<small>Scored / not scored / open</small></th>
+                <th>Call status<small>Scored / dropped / not scored / open</small></th>
               </tr>
             </thead>
             <tbody id="score-rows" aria-live="polite"></tbody>
@@ -191,7 +191,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <p id="score-empty" class="empty-state" hidden>No model has scoreable probability forecasts under the current protocol yet.</p>
         </div>
         <dl id="score-guide" class="score-guide">
-          <div><dt>Near-term / next-day error <span>(CRPS)</span></dt><dd>Average whole-forecast error in minutes. Lower is better — but a model can score well here with timid, unhelpful calls, which is why practical usefulness remains the headline.</dd></div>
+          <div><dt>Near-term / next-day error <span>(partial-credit CRPS-style loss)</span></dt><dd>Integrated loss over each call’s cutoff-to-ETA-plus-three-hours window, combining outcome credit, timing, and stated probability. Lower is better as an exploratory diagnostic; it does not establish calibration or model superiority.</dd></div>
           <div><dt>Stated chance <span>(confidence)</span></dt><dd>How likely the model said its named outcome was. A low-confidence call can score reasonably when nothing happens while offering little actionable advice — read this beside the bullseye rate.</dd></div>
           <div><dt>Timing window <span>(sigma)</span></dt><dd>How spread out the model’s own timing estimate is. A narrow window is a bold, risky claim; a wide one hedges.</dd></div>
           <div><dt>Inside stated spread</dt><dd>Among exact outcomes with a model-supplied sigma, how often did timing land inside that claimed spread? Read coverage beside average sigma: wider spreads are easier to cover. Legacy calls with inferred sigma are excluded.</dd></div>
@@ -199,6 +199,12 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <div><dt>Not scored <span>(censored)</span></dt><dd>Our observation coverage had gaps or the war ended before a fair judgment was possible. Excluded, not counted as misses.</dd></div>
         </dl>
       </section>
+
+      <details class="progressive-detail">
+        <summary>Audit view: retention and submission modes</summary>
+        <p class="method-caption">The denominator is published bets plus recorded dropped bets in the rounds shown. Failed runs with no usable forecast, missing slots, and discarded correction attempts are outside these counts; failures remain in the underlying run records. The scored fraction describes how much data can be evaluated, not how often a model was right. Live and delayed-replay breakdowns use each model’s available rounds.</p>
+        <div id="retention-summary"></div>
+      </details>
 
       <section id="war-data" class="section-block">
         <div class="section-heading">
@@ -257,26 +263,26 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <p>A good score means a model read public data well. It does not mean an AI understands the whole battlefield.</p>
         </div>
         <div class="limitations-grid">
-          <article><h3>Public data only</h3><p>We poll the official Foxhole War API every fifteen minutes. That keeps the playing field level and the whole experiment auditable — anyone can pull the same numbers.</p></article>
+          <article><h3>Public data only</h3><p>We poll the official Foxhole War API on a nominal fifteen-minute cadence, with coverage gaps possible. That keeps the playing field level and the whole experiment auditable — anyone can pull the same numbers.</p></article>
           <article><h3>No logistics intel</h3><p>Real Foxhole players would ask about shell stockpiles and supply lines. The public API doesn’t expose that, and we don’t scrape the game or run an in-game agent — so the models are forecasting with one hand tied behind their backs, on purpose.</p></article>
           <article><h3>Small on purpose</h3><p>Model calls cost money, so the experiment stays compact: a handful of models, eight calls per round. Treat everything here as an ongoing study, not a finished leaderboard.</p></article>
         </div>
       </section>
 
       <section id="method" class="section-block methodology">
-        <div><p class="kicker">How it works</p><h2>No hindsight allowed</h2></div>
+        <div><p class="kicker">How it works</p><h2>Frozen evidence, recorded calls</h2></div>
         <div class="method-grid">
-          <article><span>01</span><h3>Snapshot</h3><p>Every fifteen minutes we save the official public war data. Before each round, every model gets the same frozen slice of it — identical evidence, identical cutoff.</p></article>
-          <article><span>02</span><h3>Predict</h3><p>Each model scouts six regions, then commits to eight ranked calls: four about the next six hours, four about the following day. Base, outcome, exact time, confidence.</p></article>
-          <article><span>03</span><h3>Check</h3><p>Later snapshots reveal what actually happened. Each call is scored against reality — outcome, timing, and honesty of its stated probability all count.</p></article>
+          <article><span>01</span><h3>Snapshot</h3><p>We collect public war data on a nominal fifteen-minute cadence. Models in a cohort share the same data cutoff; the regions they select determine which detailed evidence they receive.</p></article>
+          <article><span>02</span><h3>Predict</h3><p>Each model selects up to six regions and is asked for eight ranked calls: four about the next six hours, four about the following day. Valid bets survive even when other bets in the answer fail validation.</p></article>
+          <article><span>03</span><h3>Check</h3><p>Observations after the cutoff settle each bet separately. Invalid bets are dropped with a reason; unresolved observations are censored; unfinished calls stay open. Delayed replays use frozen inputs but can be generated after an outcome, so they are labeled separately.</p></article>
         </div>
         <details class="progressive-detail method-detail">
           <summary>The fine print: settlement rules and edge cases</summary>
           <div class="rule-grid rule-grid--two">
             <article class="rule-card"><h3>When a call closes</h3><p>Each prediction stays open until three hours after its stated ETA. If nothing qualifying happened by then and our observation coverage was solid, it scores as a miss.</p></article>
-            <article class="rule-card"><h3>Partial credit exists</h3><p>Naming the exact outcome earns full credit. Confusing a capture with a destruction earns 0.75 — the model still saw the base falling, just misread who did it.</p></article>
-            <article class="rule-card"><h3>Why timing is fuzzy</h3><p>Fifteen-minute polling means we know an event happened <em>between</em> two observations, not the exact second. Scoring averages over that interval rather than pretending we have stopwatch precision.</p></article>
-            <article class="rule-card"><h3>When we refuse to score</h3><p>If our coverage had gaps, the transition window was ambiguous, or the war ended mid-round, a call is marked “not scored” instead of being turned into a fake miss. You can see those counts on the scoreboard.</p></article>
+            <article class="rule-card"><h3>Partial credit exists</h3><p>An exact outcome earns full state credit. Certain capture/destruction near-matches can earn 0.75 — for example, a predicted capture when the base becomes neutral but the capture does not complete. The exact-outcome count still treats that as non-exact.</p></article>
+            <article class="rule-card"><h3>Why timing is fuzzy</h3><p>Our nominal polling cadence is fifteen minutes, but coverage can vary. We know an event happened <em>between</em> observations when both are available, not the exact second; scoring averages over that interval rather than pretending we have stopwatch precision.</p></article>
+            <article class="rule-card"><h3>When we cannot settle a call</h3><p>Coverage gaps, ambiguous transition intervals, or the war ending can leave an individual bet censored. The other bets remain eligible. The existing rules can keep a coarse interval when every possible event time gives the same timing credit; we do not automatically discard every bet touched by a gap.</p></article>
           </div>
         </details>
         <a class="method-link" href={`${basePath}prompt-flow/`}>See the exact prompts and data flow →</a>
@@ -709,6 +715,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             transitionExactHits: firstDefined(summary.transition_exact_outcome_hits, summary.exact_outcome_hits),
             transitionExactBets: firstDefined(summary.transition_exact_outcome_bets, summary.transition_hits),
             transitionExactRate: firstDefined(summary.transition_exact_outcome_rate, summary.exact_outcome_rate),
+            retention: summary.retention || null,
           } : modelBehavior(model, rounds);
         }).sort((a, b) =>
           (a.actionableExact3hRate == null) - (b.actionableExact3hRate == null)
@@ -716,6 +723,24 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           || (b.transitionRate ?? -Infinity) - (a.transitionRate ?? -Infinity)
           || modelLabel(a.model).localeCompare(modelLabel(b.model))
         );
+        const retentionRoot = document.querySelector("#retention-summary");
+        retentionRoot?.replaceChildren();
+        const reasonLabels = (counts) => Object.entries(counts || {})
+          .map(([reason, count]) => `${eventLabel(reason)}: ${count}`)
+          .join(" · ") || "none recorded";
+        behaviors.forEach((behavior) => {
+          const retention = behavior.retention;
+          if (!retention || !retentionRoot) return;
+          const note = element("div", "method-note");
+          note.append(element("strong", "", `${modelLabel(behavior.model)} · retention`));
+          note.append(element("p", "", `${retention.scored_bets ?? behavior.scoreableCount} scored of ${retention.considered_bets ?? behavior.publishedCount} considered (${retention.scored_fraction == null ? "—" : percentage(retention.scored_fraction)}); ${retention.published_bets ?? behavior.publishedCount} published, ${retention.dropped_bets ?? 0} dropped, ${retention.censored_bets ?? behavior.censored} censored, ${retention.open_bets ?? behavior.open} open, ${retention.other_unscored_bets ?? 0} other unscored.`));
+          const reasons = element("ul", "rationale-list");
+          Object.entries(retention.by_submission_mode || {}).forEach(([mode, counts]) => {
+            reasons.append(element("li", "", `${mode === "delayed_replay" ? "Delayed replay" : "Live"}: ${counts.scored_bets ?? 0} scored / ${counts.dropped_bets ?? 0} dropped / ${counts.censored_bets ?? 0} censored / ${counts.open_bets ?? 0} open; dropped reasons: ${reasonLabels(counts.dropped_reasons)}; censored reasons: ${reasonLabels(counts.censored_reasons)}.`));
+          });
+          if (!Object.keys(retention.by_submission_mode || {}).length) reasons.append(element("li", "", `Dropped reasons: ${reasonLabels(retention.dropped_reasons)}; censored reasons: ${reasonLabels(retention.censored_reasons)}.`));
+          note.append(reasons); retentionRoot.append(note);
+        });
         behaviors.forEach((behavior) => {
           const adviserRow = document.createElement("tr");
           const adviserModel = element("td", "adviser-table__model");
@@ -729,7 +754,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             adviserCell(percentage(behavior.transitionRate), `${behavior.transitionHits}/${behavior.selectionScoredBets} had a transition · outcome and ETA ignored`),
             adviserCell(percentage(behavior.transitionExactRate), `${behavior.transitionExactHits ?? 0}/${behavior.transitionExactBets ?? behavior.transitionHits} moved bases named correctly`),
             adviserCell(ratio(behavior.captureLift), `${percentage(behavior.captureRate)} selected-base capture rate · ${percentage(behavior.captureBaselineRate)} eligible-base baseline`),
-            adviserCell(`${behavior.scoreableCount} scored`, `${behavior.publishedCount} published · ${behavior.open} open · ${behavior.censored} not scored`),
+            adviserCell(`${behavior.scoreableCount} scored`, `${behavior.retention?.considered_bets ?? behavior.publishedCount} considered · ${behavior.retention?.dropped_bets ?? 0} dropped · ${behavior.open} open · ${behavior.censored} not scored`),
           );
           adviserRows.append(adviserRow);
 
@@ -741,8 +766,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           );
           const resultsCell = element("td", "score-table__results");
           resultsCell.append(
-            element("strong", "", `${behavior.scoreableCount} / ${behavior.censored} / ${behavior.open}`),
-            element("small", "", "scored / censored / open"),
+            element("strong", "", `${behavior.scoreableCount} / ${behavior.retention?.dropped_bets ?? 0} / ${behavior.censored} / ${behavior.open}`),
+            element("small", "", "scored / dropped / censored / open"),
           );
           row.append(
             modelCell,
@@ -1142,10 +1167,23 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const source = bet.settlement_sources?.includes("foxholestats_gap_recovery")
           ? " · FoxholeStats recovery"
           : "";
+        if (bet.status === "open" && bet.settlement_reason === "awaiting_capture_followup") return `Open · awaiting capture follow-up${source}`;
+        if (bet.status === "open") return `Open · ${bet.settlement_reason === "awaiting_deadline" ? "awaiting deadline" : bet.settlement_reason ? eventLabel(bet.settlement_reason) : "reason not recorded"}${source}`;
         if (bet.status === "censored" && bet.settlement_reason === "ambiguous_transition_interval") {
           return `Not scored · transition time ambiguous${source}`;
         }
-        if (bet.status === "censored") return `Not scored · missing observations${source}`;
+        if (bet.status === "censored") {
+          const reason = bet.settlement_reason === "awaiting_capture_followup"
+            ? "awaiting capture follow-up"
+            : bet.settlement_reason === "insufficient_capture_followup_coverage"
+              ? "insufficient capture follow-up coverage"
+              : bet.settlement_reason === "insufficient_observation_coverage"
+                ? "insufficient observation coverage"
+                : bet.settlement_reason === "war_ended_before_scoring_window_closed"
+                  ? "war ended before settlement"
+                  : bet.settlement_reason ? eventLabel(bet.settlement_reason) : "reason not recorded";
+          return `Not scored · ${reason}${source}`;
+        }
         if (bet.crps_minutes != null && bet.settlement_reason === "no_transition_by_deadline") {
           return `Scored · no qualifying transition by deadline${source}`;
         }
@@ -1207,16 +1245,16 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const displayStatus = quality || bet.status || "open";
         const status = element("small", `status status--${displayStatus}`, predictionStatus(bet));
         if (quality) status.title = quality === "hit"
-          ? "Correct: the named outcome was observed inside the model's timing spread."
+          ? "Exact outcome: the named outcome was observed and the timing landed inside the model's stated spread."
           : quality === "partial"
             ? "Error: the call received partial credit or landed outside the model's timing spread."
-            : "Bad call: the named outcome or timing received no credit.";
+            : "No exact credit: the named outcome or timing received no credit; inspect the settlement details for partial state credit.";
         result.append(status);
         if (score != null) {
           const badge = element("span", "prediction-score prediction-score--scored");
-          badge.title = status.title || "Forecast error measured by CRPS.";
+          badge.title = status.title || "Forecast error measured by the existing partial-credit CRPS-style loss.";
           badge.append(
-            element("span", "prediction-score__label", "Forecast error · CRPS"),
+            element("span", "prediction-score__label", "Forecast error · partial-credit CRPS-style loss"),
             element("strong", `prediction-score__value prediction-score--${quality || "partial"}`, crps(score)),
           );
           result.append(badge);

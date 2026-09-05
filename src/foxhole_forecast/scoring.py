@@ -317,11 +317,13 @@ def _settle_timed_run(
                     else:
                         status = "censored"
                         outcome = None
+                        settlement_reason = "insufficient_capture_followup_coverage"
                 elif followup:
                     state_credit = 0.75
                 elif now < bet_deadline:
                     status = "open"
                     outcome = None
+                    settlement_reason = "awaiting_capture_followup"
                 elif _coverage_status(
                     collector_runs,
                     run["war_id"],
@@ -333,6 +335,7 @@ def _settle_timed_run(
                 else:
                     status = "censored"
                     outcome = None
+                    settlement_reason = "insufficient_observation_coverage"
             else:
                 if predicted_outcome:
                     state_credit = _outcome_credit(
@@ -653,11 +656,14 @@ def _event_time_crps_minutes(
     observed_end: datetime | None,
     outcome_credit: float,
 ) -> float:
-    """Finite-window CRPS for event probability and conditional Normal timing.
+    """Existing partial-credit CRPS-style loss with conditional Normal timing.
 
     The forecast CDF reaches ``confidence`` at the deadline; the remaining
     mass represents no qualifying event. API interval uncertainty is averaged
-    uniformly over the observed transition interval.
+    uniformly over the observed transition interval. The outcome-credit factor
+    changes the observed target, so this is not ordinary exact-event CRPS.
+    Keep this formula stable for historical comparisons; alternative scoring
+    rules belong in separately named derived analyses.
     """
     horizon = max(0.0, (deadline - cutoff).total_seconds() / 60)
     if horizon == 0:

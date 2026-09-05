@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import statistics
+from collections import Counter
 from typing import Any, Callable, Iterable
 
 
@@ -14,6 +15,53 @@ CRPS_SCALE_MINUTES = {
     SHORT_TRANCHE: 9 * 60.0,
     LONG_TRANCHE: 27 * 60.0,
 }
+
+
+def summarize_retention(rounds: Iterable[dict[str, Any]]) -> dict[str, Any]:
+    """Account for calls in published rounds, including recorded validation drops.
+
+    This is retention of published-round candidates, not provider reliability:
+    failed attempts and candidates from discarded correction attempts are absent.
+    """
+    records = list(rounds)
+
+    def counts(rows: list[dict[str, Any]]) -> dict[str, Any]:
+        bets = [bet for row in rows for bet in row.get("predictions", [])]
+        dropped = [bet for row in rows for bet in row.get("dropped_predictions", [])]
+        unscored = [bet for bet in bets if bet.get("crps_minutes") is None]
+        scored = len(bets) - len(unscored)
+        opened = sum(bet.get("status") == "open" for bet in unscored)
+        censored = [bet for bet in unscored if bet.get("status") == "censored"]
+        considered = len(bets) + len(dropped)
+        return {
+            "published_rounds": len(rows),
+            "published_bets": len(bets),
+            "dropped_bets": len(dropped),
+            "considered_bets": considered,
+            "scored_bets": scored,
+            "open_bets": opened,
+            "censored_bets": len(censored),
+            "other_unscored_bets": len(unscored) - opened - len(censored),
+            "scored_fraction": _round(scored / considered) if considered else None,
+            "censored_reasons": dict(sorted(Counter(
+                bet.get("settlement_reason") or "unspecified" for bet in censored
+            ).items())),
+            "dropped_reasons": dict(sorted(Counter(
+                bet.get("reason") or "unspecified" for bet in dropped
+            ).items())),
+        }
+
+    modes = sorted({row.get("submission_mode") or "live" for row in records})
+    return {
+        **counts(records),
+        "by_submission_mode": {
+            mode: counts([
+                row for row in records
+                if (row.get("submission_mode") or "live") == mode
+            ])
+            for mode in modes
+        },
+    }
 
 
 def summarize_crps(bets: Iterable[dict[str, Any]]) -> dict[str, float | int | None]:

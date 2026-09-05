@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from foxhole_forecast.dashboard import (
+    build_dashboard_data,
     _build_war_api_snapshot,
     _behavior_summary,
     _dashboard_family_rounds,
@@ -19,10 +20,48 @@ from foxhole_forecast.dashboard import (
     _write_dashboard_shards,
 )
 from foxhole_forecast.forecasting import _freeze_evidence
-from foxhole_forecast.storage import read_json
+from foxhole_forecast.config import Settings
+from foxhole_forecast.storage import append_jsonl, read_json, read_jsonl
 
 
 class DashboardTests(unittest.TestCase):
+    def test_dashboard_sanitizes_malformed_dropped_ids_without_publishing_raw(self) -> None:
+        run = {
+            "run_id": "run-1",
+            "cohort_id": "cohort-1",
+            "series_id": "model-1",
+            "war_id": "war-1",
+            "cutoff": "2026-01-01T00:00:00Z",
+            "status": "valid",
+            "forecast": {"predictions": [{"base_id": "Map:valid"}]},
+            "dropped_predictions": [
+                {"base_id": ["invalid"], "reason": "invalid base", "raw_prediction": {"base_id": ["invalid"]}},
+                {"base_id": "Map:missing", "reason": "unknown base"},
+            ],
+            "dropped_strategic_advice": [
+                {"base_id": {"invalid": True}, "reason": "invalid base", "raw_recommendation": {"base_id": {"invalid": True}}},
+            ],
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "data"
+            append_jsonl(data / "model_runs.jsonl", run)
+            with (
+                patch("foxhole_forecast.dashboard.ROOT", root),
+                patch("foxhole_forecast.dashboard.DATA_DIR", data),
+            ):
+                output = build_dashboard_data(Settings.load())
+
+            round_record = output["rounds"][0]
+            self.assertIsNone(round_record["dropped_predictions"][0]["base_id"])
+            self.assertEqual(round_record["dropped_predictions"][1]["base_id"], "Map:missing")
+            self.assertIsNone(round_record["dropped_strategic_advice"][0]["base_id"])
+            for path in (root / "web" / "public" / "data").glob("*.json"):
+                payload = path.read_text()
+                self.assertNotIn("raw_prediction", payload)
+                self.assertNotIn("raw_recommendation", payload)
+            self.assertEqual(read_jsonl(data / "model_runs.jsonl"), [run])
+
     def test_dashboard_family_rounds_preserve_source_records(self) -> None:
         rounds = [
             {"series_id": "deepseek-v4", "predictions": [{"rank": 1}]},
@@ -174,6 +213,8 @@ class DashboardTests(unittest.TestCase):
             }
 
         rounds = [round_for("war-1", 0), round_for("war-2", 1)]
+        rounds[0]["dropped_predictions"] = [{"reason": "invalid base"}]
+        rounds[1]["submission_mode"] = "delayed_replay"
 
         current = _behavior_summary(rounds, "war-2", 1)[0]
         all_time = _behavior_summary(rounds, None, 1)[0]
@@ -184,6 +225,12 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(current["published_bets"], 1)
         self.assertEqual(all_time["crps_minutes"], 0.5)
         self.assertEqual(all_time["published_bets"], 2)
+        self.assertEqual(current["retention"]["considered_bets"], 1)
+        self.assertEqual(current["retention"]["dropped_bets"], 0)
+        self.assertEqual(current["retention"]["by_submission_mode"]["delayed_replay"]["scored_bets"], 1)
+        self.assertEqual(all_time["retention"]["considered_bets"], 3)
+        self.assertEqual(all_time["retention"]["dropped_reasons"], {"invalid base": 1})
+        self.assertEqual(all_time["retention"]["by_submission_mode"]["live"]["scored_bets"], 1)
 
     def test_behavior_summary_scopes_actionable_outcomes_by_war(self) -> None:
         def round_for(war_id: str, eta_error: float | None) -> dict:

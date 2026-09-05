@@ -60,6 +60,32 @@ class ValidationTests(unittest.TestCase):
         self.assertEqual(validate_scout(overview, self.scout, self.settings), overview)
         validate_forecast(self.valid, self.packet, self.settings)
 
+    def test_malformed_json_fields_raise_validation_errors(self) -> None:
+        malformed = [
+            ("base_id", []), ("base_id", {}), ("outcome", []),
+            ("eta_utc", None), ("eta_utc", 123),
+            ("eta_utc", "2026-01-01T01:00:00"),
+            ("evidence", [None]), ("evidence", ["metric"]),
+            ("evidence", [{"metric_id": [], "relevance": 8}]),
+        ]
+        for field, invalid in malformed:
+            with self.subTest(field=field, invalid=invalid):
+                value = copy.deepcopy(self.valid)
+                value["predictions"][0][field] = invalid
+                with self.assertRaises(ValidationError):
+                    validate_forecast(value, self.packet, self.settings)
+        for value in (None, [], {"predictions": [None]}):
+            with self.subTest(value=value), self.assertRaises(ValidationError):
+                validate_forecast(value, self.packet, self.settings)
+
+    def test_scout_rejects_unhashable_region(self) -> None:
+        with self.assertRaisesRegex(ValidationError, "unknown region"):
+            validate_scout({
+                "headline": "The Central Front Stirs",
+                "war_summary": "The central front is active.",
+                "selected_regions": [[]],
+            }, self.scout, self.settings)
+
     def test_war_summary_belongs_to_overview(self) -> None:
         with self.assertRaisesRegex(ValidationError, "war_summary"):
             validate_scout(

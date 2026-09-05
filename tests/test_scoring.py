@@ -255,6 +255,62 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(bet["selection_capture_baseline"], 0)
         self.assertEqual(settlement["protocol"], "event_outcome_v5_crps")
 
+    def test_capture_followup_exclusions_have_reasons_without_losing_neighbor(self) -> None:
+        settings = Settings.load()
+        cutoff = datetime(2026, 1, 1, tzinfo=UTC)
+        eta = cutoff + timedelta(hours=2)
+        run = self._single_timed_run(cutoff, eta)
+        run["forecast"]["predictions"].append({
+            **run["forecast"]["predictions"][0],
+            "base_id": "base-2",
+            "rank": 2,
+        })
+        neutralization = {
+            "war_id": "war-1",
+            "base_id": "base-1",
+            "from_team": "WARDENS",
+            "to_team": "NONE",
+            "observed_from": isoformat(eta - timedelta(minutes=15)),
+            "observed_to": isoformat(eta),
+        }
+        neighbor_capture = {
+            **neutralization,
+            "base_id": "base-2",
+            "to_team": "COLONIALS",
+        }
+        collectors = [
+            {"war_id": "war-1", "observed_at": isoformat(cutoff + timedelta(minutes=15 * i))}
+            for i in range(9)
+        ]
+        late_capture = {
+            **neutralization,
+            "from_team": "NONE",
+            "to_team": "COLONIALS",
+            "observed_from": isoformat(eta + timedelta(minutes=45)),
+            "observed_to": isoformat(eta + timedelta(hours=1)),
+        }
+        cases = [
+            (eta, [], "open", "awaiting_capture_followup"),
+            (eta + timedelta(hours=4), [], "censored", "insufficient_observation_coverage"),
+            (eta + timedelta(hours=4), [late_capture], "censored", "insufficient_capture_followup_coverage"),
+        ]
+        neighbor_loss = None
+        for now, followups, status, reason in cases:
+            with self.subTest(reason=reason):
+                result = settle_run(
+                    run, {"strategic_base_ids": ["base-1", "base-2"]},
+                    [neutralization, neighbor_capture, *followups], collectors, settings, now,
+                )
+                excluded, neighbor = result["timed_predictions"]
+                self.assertEqual((excluded["status"], excluded["settlement_reason"]), (status, reason))
+                self.assertIsNone(excluded["crps_minutes"])
+                self.assertEqual(neighbor["status"], "hit")
+                self.assertEqual(neighbor["state_credit"], 1)
+                self.assertIsNotNone(neighbor["crps_minutes"])
+                if neighbor_loss is not None:
+                    self.assertEqual(neighbor["crps_minutes"], neighbor_loss)
+                neighbor_loss = neighbor["crps_minutes"]
+
     def test_selection_baseline_uses_the_models_scouted_regions(self) -> None:
         settings = Settings.load()
         cutoff = datetime(2026, 1, 1, tzinfo=UTC)

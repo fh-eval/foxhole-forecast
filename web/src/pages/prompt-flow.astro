@@ -21,7 +21,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <div>
           <p class="kicker">Inside one round</p>
           <h1>How a forecast<br /><span>gets made</span></h1>
-          <p class="sublede">The whole pipeline in plain view: what the model saw, what it wrote, what it bet on, and how the game later proved it right or wrong.</p>
+          <p class="sublede">The whole pipeline in plain view: what the model saw, what it wrote, what it bet on, and how later game observations settle the call.</p>
         </div>
         <a class="method-back" href={basePath}>← Return to dashboard</a>
       </div>
@@ -39,19 +39,19 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       <section class="method-intro prompt-flow-intro">
         <p class="kicker">The basic idea</p>
         <p>No model sees a live feed. Each one gets a frozen snapshot, writes a short dispatch, picks the regions worth watching, then commits to eight timed predictions — plus four friendly recommendations that we deliberately don’t score.</p>
-        <aside class="method-callout"><strong>Why unscored advice?</strong><span>The recommendations (who should reinforce or attack what) are answered into the void: no player ever saw them, so nothing that happens later can prove a recommendation <em>caused</em> anything. We keep them for colour and comparison — the eight predictions carry all the scoring.</span></aside>
+        <aside class="method-callout"><strong>Why unscored advice?</strong><span>We do not observe whether players followed the recommendations or what would have happened otherwise. Later activity therefore cannot establish that advice <em>caused</em> an outcome. We keep the recommendations for descriptive comparison; the valid predictions carry the scoring.</span></aside>
       </section>
 
       <section class="flow-section" aria-labelledby="flow-title">
         <div class="scoring-section__heading"><p class="kicker">01–07</p><h2 id="flow-title">One round, step by step</h2></div>
         <div class="flow-timeline">
-          <article class="flow-step"><span>01</span><div><h3>The snapshot</h3><p>At a shared UTC moment, the model sees the whole public map: who owns each base, recent captures, casualty pace, and enlistment activity.</p><small>Every model in the round gets the identical snapshot.</small></div></article>
+          <article class="flow-step"><span>01</span><div><h3>The snapshot</h3><p>At a shared UTC cutoff, the model receives a compact whole-map overview of ownership and recent activity.</p><small>Models share the cutoff-time data; a model may also receive its own previous summary.</small></div></article>
           <article class="flow-step"><span>02</span><div><h3>Dispatch and picks</h3><p>First it writes a short newspaper-style summary of the war, then names up to six regions whose detailed history it wants to inspect.</p><small>The summary is archived as the model’s briefing.</small></div></article>
-          <article class="flow-step"><span>03</span><div><h3>A closer look</h3><p>It receives deeper, cutoff-safe history for exactly those regions. No facts from after the cutoff can leak in — the data was frozen beforehand.</p><small>Which regions a model asks for is itself something we can inspect.</small></div></article>
-          <article class="flow-step"><span>04</span><div><h3>Eight timed calls</h3><p>Now it commits: eight different bases, what will happen to each, an exact UTC time, a confidence, a timing spread, and the evidence it relied on.</p><small>Ranks 1–4 target the next six hours; ranks 5–8 target the following day.</small></div></article>
+          <article class="flow-step"><span>03</span><div><h3>A closer look</h3><p>It receives deeper history for exactly those regions, drawn from the frozen source and excluding observations after the cutoff.</p><small>Which regions a model asks for is itself something we can inspect.</small></div></article>
+          <article class="flow-step"><span>04</span><div><h3>Eight timed calls</h3><p>It is asked for eight different bases, what will happen to each, an exact UTC time, a confidence, a timing spread, and evidence references. Valid bets are retained even if another bet fails validation.</p><small>Ranks 1–4 are asked to target the next six hours; ranks 5–8 the following day. Survivors keep their original ranks.</small></div></article>
           <article class="flow-step"><span>05</span><div><h3>Four friendly tips</h3><p>It also answers four neutral prompts — where each faction should reinforce or attack. Advice only; these are never scored.</p><small>Each tip carries its own reasoning and evidence.</small></div></article>
-          <article class="flow-step"><span>06</span><div><h3>Locked in</h3><p>Predictions, recommendations, cutoff, evidence, and the raw model response are all stored. Nothing can be edited later to look smarter.</p><small>That’s what makes it a forecast instead of hindsight.</small></div></article>
-          <article class="flow-step"><span>07</span><div><h3>Reality votes</h3><p>We keep polling the official API every fifteen minutes. Ownership changes are observed in intervals, and the eight calls are scored against what actually happened.</p><small>The unscored tips can be compared descriptively with later activity — but never treated as cause and effect.</small></div></article>
+          <article class="flow-step"><span>06</span><div><h3>Recorded for audit</h3><p>Predictions, recommendations, cutoff, evidence, and received raw responses are stored. Exclusions and repairs are recorded explicitly. Delayed replays keep their frozen inputs and later generation times.</p><small>New explanations and derived analyses can reuse these records without another model call.</small></div></article>
+          <article class="flow-step"><span>07</span><div><h3>Reality votes</h3><p>We poll the official API on a nominal fifteen-minute cadence, subject to coverage gaps. Ownership changes are observed in intervals, and the eight calls are scored against what actually happened when a fair settlement is possible.</p><small>The unscored tips can be compared descriptively with later activity — but never treated as cause and effect.</small></div></article>
         </div>
       </section>
 

@@ -1,6 +1,6 @@
 # Foxhole Forecast
 
-Foxhole Forecast is a prospective LLM evaluation: every three hours, several models receive the same cutoff-safe public war data and make eight probabilistic, exact-ETA predictions about strategic base transitions. Later API observations settle those predictions, and a static dashboard publishes short- and long-range CRPS results.
+Foxhole Forecast is a small, budget-constrained experiment in LLM forecasting: do models make different battlefield calls, and which parts are hard for them? Every three hours, several models are asked for eight probabilistic, exact-ETA predictions about strategic base transitions using public war data frozen at the same cutoff. API observations settle those predictions, and a static dashboard publishes outcome counts and a custom partial-credit timing loss. Live submissions and delayed frozen-input replays are labeled separately.
 
 The implementation uses the [official Foxhole War API](https://github.com/clapfoot/warapi) by default. Provenance-tagged FoxholeStats event logs can recover documented polling outages without being presented as official observations.
 
@@ -11,11 +11,11 @@ Each model run has two calls:
 1. A war-overview call describes what the model sees across a compact whole-map packet and selects up to six of the most active regions.
 2. A forecast call receives detailed history for exactly those regions and returns eight ranked event bets with an outcome, confidence, ETA, timing uncertainty, and evidence references.
 
-Every model sees data with the same UTC cutoff. Local validation rejects malformed output, unknown bases or evidence IDs, invalid outcomes, and ETAs outside the 24-hour window. Invalid individual bets can be dropped without discarding the rest of a forecast round.
+Every model in a cohort sees data with the same UTC cutoff. Local validation rejects malformed output, unknown bases or evidence IDs, invalid outcomes, and ETAs outside the 24-hour window. Validation works at the smallest usable unit: a malformed bet is excluded with a reason while valid neighboring bets keep their original ranks and values; invalid adviser recommendations are handled separately. A run needs at least one valid bet. Raw provider responses remain available for audit, including excluded content. Validation does not guess a missing outcome, probability, ETA, or evidence reference.
 
 Before a provider call, the evaluator stores a hashed replay bundle containing the exact model configuration, prompts, schemas, scout packet, and the complete cutoff-safe detail source. The shared detail source is deterministically gzip-compressed, while its SHA-256 digest covers the canonical uncompressed JSON. If a free provider has a transient outage, the trusted workflow may later submit that bundle without exposing any newer war data. The failed live run remains immutable; a successful result is appended and visibly labeled as a delayed replay, with its generation time, delay, source commit, and input hashes. Live and replay run counts are reported separately.
 
-CRPS evaluates the full event-time probability distribution. It incorporates the probability that the named outcome occurs, the exact ETA, and the model's conditional timing uncertainty. Lower CRPS is better and 0 minutes is perfect.
+The existing fields named `crps_minutes` hold a **custom partial-credit CRPS-style loss**. It uses confidence, ETA, and conditional timing uncertainty, but also awards 0.75 outcome credit for a capture/destruction near-match. For example, a predicted capture can receive partial credit when the base is neutralized without the predicted capture completing. That credit changes the loss target: this is not ordinary exact-event CRPS and does not establish that confidence values are calibrated. Lower loss is better under these rules.
 
 ```text
 short CRPS = mean CRPS for ranks 1-4
@@ -23,11 +23,11 @@ long CRPS = mean CRPS for ranks 5-8
 forecast score = 100 * [1 - 0.5(short CRPS / 540) - 0.5(long CRPS / 1620)]
 ```
 
-The fixed 540- and 1,620-minute scales are the maximum short and long scoring windows. The 0-100 forecast score gives each timeline equal weight and is not percent accuracy. Open and censored bets are excluded, and the score remains pending until a model has a scored bet in both timelines. Evidence relevance is preserved for audit and display, not treated as truth by an LLM judge.
+The formula and stored field names above are retained for continuity. Each bet's loss is integrated from cutoff to its own ETA plus three hours; the fixed 540- and 1,620-minute scales are the maximum short and long scoring windows. These fixed scales do not make the models' chosen windows identical. The 0-100 forecast score gives each timeline equal weight and is not percent accuracy. Open and censored bets are excluded, and the score remains pending until a model has a scored bet in both timelines. Evidence relevance is preserved for audit and display, not treated as truth by an LLM judge.
 
-The dashboard separately reports capture precision, any-transition precision, exact-outcome precision, top-ranked capture rate, and capture lift. Capture lift compares the model's selected bases with all strategic bases available at the same round cutoff and observed through the same bet deadlines, so quiet and chaotic periods receive a matched baseline.
+The dashboard separately reports capture precision, any-transition precision, exact-outcome precision, top-ranked capture rate, and capture lift. These counts help distinguish choosing active bases, naming outcomes, and placing ETAs. Base-pick lift uses the model's scouted regions as its baseline; pipeline lift uses all strategic bases at the cutoff, through the same bet deadlines. These selection baselines are not probability-and-timing forecasting benchmarks. Aggregate model comparisons use each model's available rounds, so they are descriptive rather than a controlled ranking on identical cases.
 
-A result is censored instead of guessed when collector coverage has a gap longer than two polling intervals or an ownership transition straddles a cutoff/deadline. Because the API is sampled every 15 minutes, event time is an observation interval rather than an exact instant.
+An **open** bet is still waiting; a **censored** bet is retained but excluded from the score because the settlement rules cannot resolve it; a **dropped** bet failed output validation. Missing observations are not counted as model mistakes. Coverage checks use a two-poll tolerance, and the existing settlement rules can retain a coarse observed interval when every possible event time has the same timing credit. The target polling cadence is 15 minutes, not a guaranteed timing resolution. See [the evaluation contract](docs/EVALUATION.md) for the exact interpretation, retention policy, and limits.
 
 ## Repository layout
 

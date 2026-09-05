@@ -641,6 +641,73 @@ class ForecastBudgetTests(unittest.TestCase):
         self.assertIn("current_owner=WARDENS", message)
         self.assertIn("CAPTURED_BY_COLONIALS", message)
 
+    def test_malformed_rows_leave_good_predictions_untouched(self) -> None:
+        packet = {
+            "cutoff": "2026-01-01T00:00:00Z",
+            "strategic_bases": [
+                {"base_id": name, "current_owner": "WARDENS"}
+                for name in ("first", "bad", "last")
+            ],
+            "selected_metrics": [{"metric_id": "activity"}],
+        }
+        first = {
+            "rank": 1, "base_id": "first", "outcome": "DESTROYED",
+            "confidence": 0.6, "sigma_minutes": 60,
+            "eta_utc": "2026-01-01T02:00:00Z",
+            "evidence": [{"metric_id": "activity", "relevance": 8}],
+        }
+        last = {**first, "rank": 3, "base_id": "last"}
+        bad = {**first, "rank": 2, "base_id": "bad"}
+        malformed = [None, [], "bad", *[
+            {**bad, field: value} for field, value in [
+                ("base_id", []), ("outcome", {}), ("eta_utc", 123),
+                ("eta_utc", "2026-01-01T02:00:00"),
+                ("evidence", [None]),
+                ("evidence", [{"metric_id": [], "relevance": 8}]),
+                ("confidence", None), ("rank", 1), ("base_id", "first"),
+            ]
+        ]]
+        for row in malformed:
+            with self.subTest(row=row):
+                value = {"predictions": [first, row, last]}
+                original = copy.deepcopy(value)
+                filtered, dropped, _ = _filter_forecast_output(value, packet, Settings.load())
+                self.assertEqual(filtered["predictions"], [first, last])
+                self.assertEqual(value, original)
+                self.assertEqual(len(dropped), 1)
+                self.assertTrue(dropped[0]["reason"])
+                self.assertEqual(dropped[0]["raw_prediction"], row)
+
+    def test_malformed_advice_preserves_other_recommendations(self) -> None:
+        packet = {
+            "strategic_bases": [{"base_id": "warden", "current_owner": "WARDENS"}],
+            "selected_metrics": [{"metric_id": "activity"}],
+        }
+        good = {
+            "base_id": "warden",
+            "reason": "Recent activity makes this position strategically important despite the limited public evidence available.",
+            "evidence": [{"metric_id": "activity", "relevance": 8}],
+        }
+        for bad in (None, [], {**good, "base_id": []},
+                    {**good, "evidence": [None]},
+                    {**good, "evidence": [{"metric_id": {}, "relevance": 8}]}):
+            with self.subTest(bad=bad):
+                value = {"strategic_advice": {"colonial_attack": good, "warden_reinforce": bad}}
+                original = copy.deepcopy(value)
+                filtered, dropped = _drop_invalid_strategic_advice(value, packet)
+                self.assertEqual(filtered["strategic_advice"], {"colonial_attack": good})
+                self.assertEqual(value, original)
+                record = next(row for row in dropped if row["advice_key"] == "warden_reinforce")
+                self.assertEqual(record["raw_recommendation"], bad)
+
+    def test_unknown_advice_key_is_recorded_as_dropped(self) -> None:
+        filtered, dropped = _drop_invalid_strategic_advice(
+            {"strategic_advice": {"invented": {"base_id": "unknown"}}},
+            {"strategic_bases": [], "selected_metrics": []},
+        )
+        self.assertEqual(filtered["strategic_advice"], {})
+        self.assertTrue(any(row["advice_key"] == "invented" for row in dropped))
+
     def test_invalid_strategic_advice_is_dropped_individually(self) -> None:
         metric_id = "region.TestHex.activity.events_2h"
         packet = {
