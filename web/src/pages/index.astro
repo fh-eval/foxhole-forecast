@@ -52,6 +52,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <a href="#briefings">News from the Front</a>
         <a href="#probability">For nerds</a>
         <a href={`${basePath}predictions/`}>Round history</a>
+        <a href={`${basePath}comparisons/`}>Model comparisons</a>
         <a href={`${basePath}history/`}>Archive</a>
         <a href={`${basePath}prompt-flow/`}>Prompt flow</a>
         <a href="#limitations">Caveats</a>
@@ -146,6 +147,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <div><dt>Total pipeline lift</dt><dd>How the complete scout-and-predict process compared with a random map-wide base. Useful for the system as built, but it includes our prompt structure.</dd></div>
         </dl>
         </details>
+        <p class="section-followup"><a class="section-heading__link" href={`${basePath}comparisons/`}>Compare two models on the same rounds →</a></p>
       </section>
 
       <section class="section-block evidence-caution" aria-labelledby="evidence-caution-title">
@@ -1458,7 +1460,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
                 const droppedList = element("ul", "rationale-list");
                 round.dropped_predictions.forEach((dropped) => {
                   const target = String(dropped.outcome || "").replace("CAPTURED_BY_", "");
-                  droppedList.append(element("li", "", `#${dropped.rank ?? "—"} ${dropped.base_type || "Base"} ${dropped.base_name || dropped.base_id}: predicted capture by ${teamLabel(target)}, but ${teamLabel(dropped.current_owner)} already owned it.`));
+                  droppedList.append(element("li", "", `#${dropped.rank ?? "—"} ${dropped.base_type || "Base"} ${dropped.base_name || dropped.base_id}: ${dropped.reason || `predicted capture by ${teamLabel(target)}, but the recorded validation state rejected this call`}.`));
                 });
                 warning.append(droppedList);
                 outputBody.append(warning);

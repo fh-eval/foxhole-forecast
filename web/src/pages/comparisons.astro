@@ -1,0 +1,333 @@
+---
+import "../styles/global.css";
+
+const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3eedd" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#191d19" />
+    <meta name="description" content="Same-round model comparisons from the Foxhole Forecast experiment." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23262b21'/%3E%3Cpath d='M5 7h22v5H5zM5 15h16v5H5z' fill='%23f2dc9b'/%3E%3C/svg%3E" />
+    <title>Model Comparisons · Foxhole Forecast</title>
+  </head>
+  <body>
+    <header class="method-masthead comparison-masthead">
+      <div class="masthead__eyebrow">SAME CUTOFF · SAME WAR · DESCRIPTIVE EVIDENCE</div>
+      <div class="method-hero prediction-hero page-width">
+        <div>
+          <p class="kicker">Model comparisons</p>
+          <h1>Which calls differ <br class="comparison-hero-break" /><span>on the same round?</span></h1>
+          <p class="sublede">Choose two models. We put their shared-round result first, then keep the technical trail close at hand.</p>
+        </div>
+        <a class="method-back" href={basePath}>← Return to dashboard</a>
+      </div>
+    </header>
+
+    <nav class="section-nav" aria-label="Model comparison navigation">
+      <div class="page-width">
+        <a href={basePath}>Live dashboard</a>
+        <a href={`${basePath}predictions/`}>Round history</a>
+        <a href={`${basePath}history/`}>Summary archive</a>
+      </div>
+    </nav>
+
+    <main class="page-width comparison-page">
+      <section class="section-block comparison-detail" aria-labelledby="comparison-title">
+        <div class="comparison-intro">
+          <p class="kicker">A fairer question</p>
+          <h2 id="comparison-title">What happened when two models saw the same round?</h2>
+          <p>Pick a scope, submission mode, and two models. The result uses matching cutoffs and gives each mature round equal weight.</p>
+        </div>
+
+        <div class="comparison-controls" aria-label="Comparison controls">
+          <label class="select-label">Scope <select id="comparison-scope"><option value="current_war">Current war</option><option value="all_time">All available wars</option></select></label>
+          <label class="select-label">Submission mode <select id="comparison-mode"><option value="live">Live submissions</option><option value="delayed_replay">Delayed replays</option></select></label>
+          <label class="select-label">Performance window <select id="comparison-horizon"><option value="all">All horizons</option><option value="short">Near term (0–6h)</option><option value="long">Next day (6–24h)</option></select></label>
+          <label class="select-label">Model 1 <select id="comparison-model-1" aria-label="Choose model 1"><option value="">Loading models…</option></select></label>
+          <label class="select-label">Model 2 <select id="comparison-model-2" aria-label="Choose model 2"><option value="">Loading models…</option></select></label>
+        </div>
+        <p class="comparison-control-note">The window above changes the performance result. Citation patterns below always use all horizons so their denominators stay clear.</p>
+
+        <div id="comparison-panel"><p class="empty-state">Loading same-round comparisons…</p></div>
+      </section>
+
+      <section class="section-block limitations comparison-caveat" aria-labelledby="comparison-caveat-title">
+        <div class="section-heading">
+          <div><p class="kicker">How to read it</p><h2 id="comparison-caveat-title">A paired lens, not a crown.</h2></div>
+          <p>Each mature shared round gets equal weight. A difference is Model 1 minus Model 2, in percentage points; it is not a probability that one model is better.</p>
+        </div>
+        <div class="limitations-grid">
+          <article><h3>Start with the denominator</h3><p>Candidate, mature, pending, duplicate, and unmatched counts show how much of each model’s history could actually be paired. Dropped, censored, open, and other unscored calls remain visible in the audit view.</p></article>
+          <article><h3>Read success as evidence</h3><p>The named outcome occurring within 3 hours of the predicted time is one descriptive measure. A small set of shared rounds can move the average a lot, and correlated calls are not independent experiments.</p></article>
+          <article><h3>Evidence is not causality</h3><p>Citation frequency and self-rated relevance describe what models cited at the same cutoff. They do not reveal hidden reasoning or prove that evidence caused a prediction.</p></article>
+        </div>
+      </section>
+    </main>
+
+    <footer><div class="page-width"><strong>FOXHOLE FORECAST</strong><span id="generated-at">No dataset generated yet</span></div></footer>
+
+    <script>
+      // @ts-nocheck
+      const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+      const element = (tag, className, text) => { const value = document.createElement(tag); if (className) value.className = className; if (text !== undefined) value.textContent = String(text); return value; };
+      const number = (value) => value == null ? "—" : Number(value).toLocaleString(undefined, { maximumFractionDigits: 1 });
+      const percent = (value) => value == null || !Number.isFinite(Number(value)) ? "—" : `${(100 * Number(value)).toFixed(1)}%`;
+      const percentagePoints = (value) => value == null || !Number.isFinite(Number(value)) ? "—" : `${Number(value) > 0 ? "+" : ""}${(100 * Number(value)).toFixed(1)} pp`;
+      const formatDate = (value) => value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value)) + " UTC" : "—";
+      const reasonLabel = (value) => String(value || "").replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+      const metricLabel = (value) => ({ active_base: "Picked an active base", exact_outcome: "Exact outcome", timely_exact_outcome: "Named outcome within 3 hours" }[value] || reasonLabel(value));
+      const horizonLabel = (value) => ({ all: "All horizons", short: "Near term (0–6h)", long: "Next day (6–24h)" }[value] || reasonLabel(value));
+      const retention = (value) => {
+        if (!value) return "No retention record";
+        return `${number(value.scored_bets ?? 0)} / ${number(value.considered_bets ?? 0)} scored (${percent(value.scored_fraction)}) · ${number(value.published_bets ?? 0)} published · ${number(value.dropped_bets ?? 0)} dropped · ${number(value.censored_bets ?? 0)} censored · ${number(value.open_bets ?? 0)} open · ${number(value.other_unscored_bets ?? 0)} other unscored`;
+      };
+      const frequency = (value) => value ? `${number(value.bets)} / ${number(value.denominator)} (${percent(value.citation_rate)})` : "—";
+      const relevance = (value) => value?.mean_relevance == null ? `— · rated ${number(value?.rated_bets ?? 0)} · missing ${number(value?.missing_rating_bets ?? 0)}` : `${Number(value.mean_relevance).toFixed(1)}/10 · rated ${number(value.rated_bets ?? 0)} · missing ${number(value.missing_rating_bets ?? 0)}`;
+      const pairMatches = (pair, model1, model2) => (pair.left_series_id === model1 && pair.right_series_id === model2) || (pair.left_series_id === model2 && pair.right_series_id === model1);
+
+      let payload = null;
+      let loading = false;
+      let currentScope = "current_war";
+      let currentMode = "live";
+
+      function scopeData() {
+        const root = payload?.comparison_analysis || {};
+        return currentScope.startsWith("war:") ? root.by_war?.[currentScope.slice(4)] : root[currentScope];
+      }
+      function allScopePairs() { return scopeData()?.pairs || []; }
+      function modePairs() { return allScopePairs().filter((pair) => (pair.submission_mode || "live") === currentMode); }
+      function pairedEvaluationCount(pair) {
+        const values = Object.values(pair?.metrics?.all || {}).map((metric) => Number(metric?.evaluated_rounds) || 0);
+        return Math.max(0, ...values);
+      }
+      function collectionQualifier(seriesId) {
+        const match = String(seriesId || "").match(/-event-v(\d+)(?:$|-)/i);
+        return match ? `collection v${match[1]}` : "collection version unavailable";
+      }
+      function modelChoices() {
+        const models = new Map();
+        // Keep every series known in the scope so an intentional selection survives
+        // a mode change, even when the current mode has no pair for it.
+        allScopePairs().forEach((pair) => [
+          [pair.left_series_id, pair.left_label], [pair.right_series_id, pair.right_label],
+        ].forEach(([seriesId, label]) => { if (seriesId) models.set(seriesId, label || seriesId); }));
+        const labels = new Map();
+        [...models.values()].forEach((label) => labels.set(label, (labels.get(label) || 0) + 1));
+        return [...models.entries()]
+          .map(([seriesId, label]) => [seriesId, label, labels.get(label) > 1 ? `${label} · ${collectionQualifier(seriesId)}` : label])
+          .sort((a, b) => `${a[2]} [${a[0]}]`.localeCompare(`${b[2]} [${b[0]}]`));
+      }
+      function selectedIds() { return [document.querySelector("#comparison-model-1")?.value || "", document.querySelector("#comparison-model-2")?.value || ""]; }
+      function defaultPair(pairs = modePairs()) {
+        return pairs
+          .filter((pair) => Number(pair?.mature_shared_rounds) > 0 && pairedEvaluationCount(pair) > 0)
+          .slice()
+          .sort((a, b) => pairedEvaluationCount(b) - pairedEvaluationCount(a)
+            || Number(b.mature_shared_rounds || 0) - Number(a.mature_shared_rounds || 0)
+            || `${a.left_series_id}\u0000${a.right_series_id}`.localeCompare(`${b.left_series_id}\u0000${b.right_series_id}`))[0] || null;
+      }
+
+      // Stored pairs are canonical (sorted series IDs). Reorient every side-dependent field
+      // when the reader chooses the reverse order, including metrics, evidence, and refs.
+      function orientPair(stored, model1, model2) {
+        if (!stored) return null;
+        if (stored.left_series_id === model1 && stored.right_series_id === model2) return stored;
+        if (stored.left_series_id !== model2 || stored.right_series_id !== model1) return null;
+        const pair = { ...stored,
+          left_series_id: stored.right_series_id, right_series_id: stored.left_series_id,
+          left_label: stored.right_label, right_label: stored.left_label,
+          left_duplicate_rounds: stored.right_duplicate_rounds, right_duplicate_rounds: stored.left_duplicate_rounds,
+          left_unmatched_cutoffs: stored.right_unmatched_cutoffs, right_unmatched_cutoffs: stored.left_unmatched_cutoffs,
+          left_retention: stored.right_retention, right_retention: stored.left_retention,
+          left_mature_retention: stored.right_mature_retention, right_mature_retention: stored.left_mature_retention,
+        };
+        pair.metrics = Object.fromEntries(Object.entries(stored.metrics || {}).map(([horizon, metrics]) => [horizon, Object.fromEntries(Object.entries(metrics || {}).map(([key, value]) => [key, value && {
+          ...value, left_mean: value.right_mean, right_mean: value.left_mean, difference: value.difference == null ? null : -Number(value.difference), wins: value.losses, losses: value.wins,
+        }]))]));
+        if (stored.evidence) {
+          pair.evidence = { ...stored.evidence,
+            models: [...(stored.evidence.models || [])].reverse(),
+            round_refs: (stored.evidence.round_refs || []).map((ref) => ({ ...ref, left_run_id: ref.right_run_id, right_run_id: ref.left_run_id })),
+          };
+        }
+        return pair;
+      }
+      function findPair(model1, model2) { return orientPair(modePairs().find((pair) => pairMatches(pair, model1, model2)), model1, model2); }
+      function table(headers, className = "comparison-table") {
+        const result = element("table", className); const head = document.createElement("thead"); const row = document.createElement("tr");
+        headers.forEach((header) => row.append(element("th", "", header))); head.append(row); result.append(head, document.createElement("tbody")); return result;
+      }
+      function tableShell(tableElement, className = "") { const shell = element("div", `table-shell comparison-audit-scroll ${className}`.trim()); shell.append(tableElement); return shell; }
+      function row(tableElement, cells) {
+        const tr = document.createElement("tr"); cells.forEach((value) => { const td = document.createElement("td"); td.textContent = String(value ?? "—"); tr.append(td); }); tableElement.querySelector("tbody")?.append(tr);
+      }
+      function metricHasEvaluations(value) { return Number(value?.evaluated_rounds) > 0; }
+      function comparisonEmptyMessage(pair) {
+        return Number(pair?.mature_shared_rounds) > 0
+          ? "This pair has mature rounds, but no timely-score result is available for this performance window yet; the named outcome must occur within 3 hours of the predicted time."
+          : "A shared candidate cutoff exists, but this pair has no mature rounds yet; a timely score requires a settled named outcome within 3 hours of the predicted time.";
+      }
+      function scopeLabel() { return currentScope === "all_time" ? "all available wars" : currentScope.startsWith("war:") ? "this war" : "the current war"; }
+      function comparisonUnavailableMessage(model1, model2) {
+        const samePairSomewhere = allScopePairs().some((pair) => pairMatches(pair, model1, model2));
+        if (samePairSomewhere) return `These two models are both available in ${scopeLabel()}, but they do not share a pair in ${currentMode === "delayed_replay" ? "delayed replay" : "live submissions"}. Switch submission mode to inspect their recorded comparison.`;
+        return `No shared candidate cutoff is recorded for these two models in ${scopeLabel()}. A model can still appear in the menu because it has data here; choose a different pair to see matching rounds.`;
+      }
+      function refLink(ref, side, pair) {
+        const runId = ref?.[`${side}_run_id`] || "run ID unavailable";
+        const link = element("a", "comparison-ref__link", runId); link.href = `${basePath}predictions/`; link.title = "Open round history; use this recorded run ID to inspect the call";
+        const line = element("div", "comparison-ref"); line.append(element("span", "comparison-ref__side", side === "left" ? pair.left_label : pair.right_label), link); return line;
+      }
+      function auditCards(pair) {
+        const grid = element("div", "comparison-audit-grid");
+        [["Shared candidate cutoffs", pair.shared_candidate_cutoffs], ["Mature shared rounds", pair.mature_shared_rounds], ["Pending excluded", pair.pending_excluded_rounds], ["Model 1 duplicates", pair.left_duplicate_rounds], ["Model 2 duplicates", pair.right_duplicate_rounds], ["Model 1 unmatched", pair.left_unmatched_cutoffs], ["Model 2 unmatched", pair.right_unmatched_cutoffs]].forEach(([label, value]) => { const item = element("div", "comparison-audit-item"); item.append(element("small", "", label), element("strong", "", number(value))); grid.append(item); });
+        return grid;
+      }
+      function successfulMetric(pair, horizon) {
+        const metrics = pair.metrics?.[horizon] || {};
+        return metrics.timely_exact_outcome && metricHasEvaluations(metrics.timely_exact_outcome) ? metrics.timely_exact_outcome : null;
+      }
+      function summaryCard(pair, metric, horizon) {
+        const summary = element("section", "comparison-summary", "");
+        summary.append(element("p", "comparison-summary__eyebrow", "Shared-round result"), element("h3", "comparison-summary__title", `${number(metric.evaluated_rounds)} shared rounds support this result`));
+        summary.append(element("p", "comparison-summary__copy", `${pair.left_label}: in an average round, ${percent(metric.left_mean)} of calls named an outcome that occurred within 3 hours of the predicted time; ${pair.right_label}: ${percent(metric.right_mean)}. Model 1 minus Model 2 is ${percentagePoints(metric.difference)}.`));
+        const stats = element("div", "comparison-stat-grid");
+        [[pair.left_label, percent(metric.left_mean), "average share of calls per round", "comparison-stat--model-1"], [pair.right_label, percent(metric.right_mean), "average share of calls per round", "comparison-stat--model-2"], ["Difference", percentagePoints(metric.difference), "Model 1 − Model 2", "comparison-stat--difference"], ["Round outcomes", `${number(metric.wins ?? 0)} · ${number(metric.ties ?? 0)} · ${number(metric.losses ?? 0)}`, "Model 1 lead · ties · Model 2 lead", "comparison-stat--outcomes"]].forEach(([label, value, note, className]) => { const card = element("div", `comparison-stat ${className}`); card.append(element("small", "", label), element("strong", "", value), element("span", "", note)); stats.append(card); });
+        summary.append(stats);
+        summary.append(element("p", "comparison-summary__method", `Performance window: ${horizonLabel(horizon)}. Rates average each round’s share of calls; they are not pooled-call accuracy or a probability that one model is better. ${number(pair.mature_shared_rounds)} rounds are mature, and ${number(metric.evaluated_rounds)} had scoreable calls for this measure.`));
+        return summary;
+      }
+      function evidenceFamilyTotal(family) { return Number(family?.success?.bets || 0) + Number(family?.other?.bets || 0); }
+      function topEvidenceFamilies(model) { return [...(model?.families || [])].sort((a, b) => evidenceFamilyTotal(b) - evidenceFamilyTotal(a) || String(a.label).localeCompare(String(b.label))).slice(0, 3); }
+      function citationGap(success, other) {
+        const valid = (value) => value?.citation_rate != null && Number.isFinite(Number(value.citation_rate)) && Number(value.denominator) > 0;
+        return valid(success) && valid(other) ? Number(success.citation_rate) - Number(other.citation_rate) : null;
+      }
+      function evidenceFamilyCard(model, family) {
+        const card = element("article", "comparison-evidence-card");
+        card.append(element("h4", "", family.label || "Unnamed evidence family"));
+        card.append(element("p", "comparison-evidence-card__total", `${number(evidenceFamilyTotal(family))} citations across ${number(model.scoreable_bets)} scoreable calls`));
+        const rates = element("div", "comparison-evidence-rates");
+        [["Successful calls", family.success], ["Other calls", family.other]].forEach(([label, value]) => { const item = element("div", "comparison-evidence-rate"); item.append(element("small", "", label), element("strong", "", frequency(value))); rates.append(item); });
+        const gap = citationGap(family.success, family.other);
+        const gapItem = element("div", "comparison-evidence-rate comparison-evidence-rate--gap"); gapItem.append(element("small", "", "Success minus other"), element("strong", "", gap == null ? "—" : percentagePoints(gap))); if (gap == null) gapItem.append(element("span", "comparison-evidence-gap-note", "Not enough calls in one group")); rates.append(gapItem);
+        card.append(rates);
+        return card;
+      }
+      function renderEvidenceSummary(section, evidence) {
+        if (!evidence) return;
+        section.append(element("h3", "comparison-subheading", "What did they cite?"));
+        section.append(element("p", "method-caption", `These readable cards show the three most-cited evidence families for each model across all horizons. Counts use ${number(evidence.mature_shared_rounds)} mature shared rounds; “successful” means the named outcome occurred within 3 hours of the predicted time, and “other” is every other scoreable call.`));
+        const grid = element("div", "comparison-evidence-grid");
+        (evidence.models || []).forEach((model) => {
+          const group = element("div", "comparison-evidence-model"); group.append(element("h4", "comparison-evidence-model__title", model.model_label || model.series_id));
+          group.append(element("p", "comparison-evidence-model__sample", `${number(model.scoreable_bets)} scoreable calls · ${number(model.success_bets)} successful · ${number(model.other_bets)} other · ${number(model.excluded_bets)} excluded`));
+          const families = topEvidenceFamilies(model);
+          if (!families.length) group.append(element("p", "empty-state", "No cited evidence family was recorded."));
+          families.forEach((family) => group.append(evidenceFamilyCard(model, family)));
+          grid.append(group);
+        });
+        section.append(grid);
+        section.append(element("h3", "comparison-subheading", "Did successful calls cite it more often?"));
+        section.append(element("p", "method-caption", "Compare the two rates in each card: a positive gap means that family appeared more often on successful calls in this sample. It is an association in the recorded calls, not proof that the citation caused the result. Relevance ratings are each model’s own 1–10 self-report, not measured usefulness; the full ratings and missing counts are in the audit view."));
+      }
+      function renderMetricAudit(audit, pair) {
+        audit.append(element("h3", "comparison-subheading", "Full paired metrics"));
+        const metricTable = table(["Window", "Measure", "Model 1 average", "Model 2 average", "Difference (Model 1 − Model 2)", "Evaluated rounds", "Round outcomes"]);
+        Object.entries(pair.metrics || {}).forEach(([horizon, metrics]) => Object.entries(metrics || {}).forEach(([metric, value]) => {
+          if (!metricHasEvaluations(value)) return;
+          row(metricTable, [horizonLabel(horizon), metricLabel(metric), percent(value.left_mean), percent(value.right_mean), percentagePoints(value.difference), number(value.evaluated_rounds), `Model 1 ${value.wins ?? 0} · ties ${value.ties ?? 0} · Model 2 ${value.losses ?? 0} · no-score exclusions ${value.excluded_no_scores_rounds ?? 0}`]);
+        }));
+        audit.append(tableShell(metricTable));
+      }
+      function renderEvidenceAudit(audit, evidence, pair) {
+        if (!evidence) return;
+        audit.append(element("h3", "comparison-subheading", "Full evidence table"));
+        const evidenceTable = table(["Model / family", "Scoreable calls", "Missing evidence", "Successful citation frequency", "Other citation frequency", "Successful relevance", "Other relevance"], "comparison-table evidence-pattern-table");
+        (evidence.models || []).forEach((model) => {
+          const base = `${number(model.scoreable_bets)} scoreable · ${number(model.success_bets)} success / ${number(model.other_bets)} other · ${number(model.excluded_bets)} excluded`;
+          const missing = `${number(model.missing_evidence_success_bets)} / ${number(model.success_bets)} success · ${number(model.missing_evidence_other_bets)} / ${number(model.other_bets)} other`;
+          if (!model.families?.length) row(evidenceTable, [`${model.model_label} [${model.series_id}]`, base, missing, "—", "—", "—", "—"]);
+          (model.families || []).forEach((family) => row(evidenceTable, [`${model.model_label} · ${family.label} <${(family.metric_id_examples || []).slice(0, 2).join(", ") || "metric IDs unavailable"}>`, base, missing, frequency(family.success), frequency(family.other), relevance(family.success), relevance(family.other)]));
+        });
+        audit.append(tableShell(evidenceTable));
+        const similarity = evidence.similarity || {};
+        audit.append(element("p", "method-caption", `Mean family Jaccard overlap: ${percent(similarity.family_jaccard_mean)} across ${number(similarity.family_rounds)} contributing rounds / ${number(evidence.mature_shared_rounds)} mature · exact-metric Jaccard overlap: ${percent(similarity.exact_metric_jaccard_mean)} across ${number(similarity.exact_metric_rounds)} contributing rounds / ${number(evidence.mature_shared_rounds)} mature · empty-side rounds: ${number(similarity.empty_side_rounds ?? 0)}. Jaccard compares cited metric sets at the same cutoff, not hidden reasoning.`));
+        const refs = document.createElement("details"); refs.className = "comparison-refs";
+        refs.append(element("summary", "", `Round references (${number(evidence.round_refs?.length ?? 0)} paired cutoffs)`));
+        const refsBody = element("div", "comparison-refs__body"); refsBody.append(element("p", "method-caption", `Exact UTC cutoffs identify the paired calls. Links open round history; Model 1 is ${pair.left_label} and Model 2 is ${pair.right_label}.`));
+        (evidence.round_refs || []).forEach((reference) => { const item = element("div", "comparison-ref-row"); item.append(element("time", "", `${formatDate(reference.cutoff)} · ${reference.war_id || "war unavailable"}`), refLink(reference, "left", pair), refLink(reference, "right", pair)); refsBody.append(item); });
+        refs.append(refsBody);
+        audit.append(refs);
+      }
+      function renderAudit(pair) {
+        const audit = document.createElement("details"); audit.className = "progressive-detail comparison-audit";
+        audit.append(element("summary", "", "Audit view: metrics, retention, evidence, IDs, and round references"));
+        const body = element("div", "comparison-audit__body");
+        body.append(element("h3", "comparison-subheading", "Exact model identities"));
+        const identities = element("div", "comparison-identities");
+        [["Model 1", pair.left_label, pair.left_series_id], ["Model 2", pair.right_label, pair.right_series_id]].forEach(([label, name, id]) => { const item = element("div", "comparison-identity"); item.append(element("small", "", label), element("strong", "", name), element("code", "", id)); identities.append(item); });
+        body.append(identities, auditCards(pair));
+        renderMetricAudit(body, pair);
+        body.append(element("h3", "comparison-subheading", "What stayed in the denominator?"));
+        body.append(element("p", "method-caption", "Retention counts published and recorded dropped bets. Dropped, censored, open, and other unscored calls remain visible; failed provider attempts are outside this published-round denominator."));
+        const retentionTable = table(["Retention", pair.left_label, pair.right_label], "comparison-table comparison-retention-table");
+        row(retentionTable, ["Candidate shared rounds", retention(pair.left_retention), retention(pair.right_retention)]); row(retentionTable, ["Mature shared rounds", retention(pair.left_mature_retention), retention(pair.right_mature_retention)]);
+        body.append(tableShell(retentionTable));
+        renderEvidenceAudit(body, pair.evidence, pair);
+        audit.append(body);
+        return audit;
+      }
+      function renderComparison() {
+        if (!payload) return;
+        const panel = document.querySelector("#comparison-panel"); const [model1, model2] = selectedIds();
+        if (!model1 || !model2) { panel.replaceChildren(element("p", "empty-state", "Choose two model series to see their same-round comparison.")); return; }
+        if (model1 === model2) { panel.replaceChildren(element("p", "empty-state comparison-same-model", "Choose two different model series. A series cannot be compared with itself.")); return; }
+        const pair = findPair(model1, model2);
+        if (!pair) { panel.replaceChildren(element("p", "empty-state comparison-unavailable", comparisonUnavailableMessage(model1, model2))); return; }
+        const section = element("div", "comparison-results");
+        const horizon = document.querySelector("#comparison-horizon")?.value || "all";
+        const metric = successfulMetric(pair, horizon);
+        if (metric) section.append(summaryCard(pair, metric, horizon));
+        else section.append(element("div", "empty-state", comparisonEmptyMessage(pair)));
+        renderEvidenceSummary(section, pair.evidence);
+        section.append(renderAudit(pair));
+        panel.replaceChildren(section);
+      }
+      function populateScopes() {
+        const select = document.querySelector("#comparison-scope"); const wars = payload?.available_wars || [];
+        wars.forEach((war) => { const option = element("option", "", `War ${war.war_number ?? "—"}`); option.value = `war:${war.war_id}`; select.append(option); });
+      }
+      function populateModels() {
+        const [first, second] = selectedIds(); const choices = modelChoices(); const fallback = defaultPair(modePairs());
+        ["#comparison-model-1", "#comparison-model-2"].forEach((selector) => { const select = document.querySelector(selector); select.replaceChildren(); choices.forEach(([seriesId, , label]) => { const option = element("option", "", label); option.value = seriesId; select.append(option); }); });
+        const values = choices.map(([seriesId]) => seriesId);
+        const preferredFirst = values.includes(first) ? first : fallback?.left_series_id || values[0] || "";
+        const preferredSecond = values.includes(second) && second !== preferredFirst ? second : fallback?.right_series_id && fallback.right_series_id !== preferredFirst ? fallback.right_series_id : values.find((value) => value !== preferredFirst) || values[1] || values[0] || "";
+        document.querySelector("#comparison-model-1").value = preferredFirst;
+        document.querySelector("#comparison-model-2").value = preferredSecond;
+      }
+      async function loadComparison() {
+        if (loading) return; loading = true;
+        const panel = document.querySelector("#comparison-panel"); panel.replaceChildren(element("p", "empty-state", "Loading same-round comparisons…"));
+        try {
+          const response = await fetch(`${basePath}data/comparison-analysis.json`); if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const incoming = await response.json(); if (incoming?.schema_version !== 1) throw new Error("unsupported comparison data version");
+          payload = incoming; populateScopes(); populateModels(); renderComparison();
+          document.querySelector("#generated-at").textContent = incoming.generated_at ? `Generated ${formatDate(incoming.generated_at)}` : "No dataset generated yet";
+        } catch (error) {
+          const state = element("div", "empty-state"); state.append(element("p", "", `Same-round comparisons are not available yet: ${error.message}`)); const retry = element("button", "comparison-retry", "Try again"); retry.type = "button"; retry.addEventListener("click", loadComparison); state.append(retry); panel.replaceChildren(state);
+        } finally { loading = false; }
+      }
+      document.querySelector("#comparison-scope")?.addEventListener("change", (event) => { currentScope = event.currentTarget.value; if (payload) { populateModels(); renderComparison(); } });
+      document.querySelector("#comparison-mode")?.addEventListener("change", (event) => { currentMode = event.currentTarget.value; if (payload) { populateModels(); renderComparison(); } });
+      ["#comparison-model-1", "#comparison-model-2", "#comparison-horizon"].forEach((selector) => document.querySelector(selector)?.addEventListener("change", renderComparison));
+      loadComparison();
+    </script>
+  </body>
+</html>

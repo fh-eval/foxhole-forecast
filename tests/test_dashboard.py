@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
 
 from foxhole_forecast.dashboard import (
     build_dashboard_data,
+    _comparison_scope,
     _build_war_api_snapshot,
     _behavior_summary,
     _dashboard_family_rounds,
@@ -25,6 +27,50 @@ from foxhole_forecast.storage import append_jsonl, read_json, read_jsonl
 
 
 class DashboardTests(unittest.TestCase):
+    def test_comparison_scope_uses_real_prediction_selector_and_raw_series(self) -> None:
+        def round_record(series: str, cutoff: str) -> dict:
+            return {
+                "series_id": series,
+                "model_label": series,
+                "run_id": f"{series}-{cutoff}",
+                "war_id": "war-1",
+                "round_slot": "2026-01-01T00:00:00Z",
+                "cutoff": cutoff,
+                "created_at": "2026-01-01T00:01:00Z",
+                "protocol": "event_outcome_v5_crps",
+                "submission_mode": "live",
+                "settlement_updated_at": "2026-01-01T06:00:00Z",
+                "prediction_count": 1,
+                "predictions": [{
+                    "status": "hit",
+                    "eta_utc": "2026-01-01T02:00:00Z",
+                    "crps_minutes": 10,
+                    "selection_capture_observed": True,
+                    "selection_exact_outcome": True,
+                    "eta_error_minutes": 30,
+                    "evidence": [{
+                        "metric_id": "region.TestHex.wardenCasualties.delta_2h",
+                        "relevance": 8,
+                    }],
+                }],
+            }
+
+        output = _comparison_scope(
+            [
+                round_record("raw-a", "2026-01-01T00:00:00Z"),
+                round_record("raw-b", "2026-01-01T00:00:00Z"),
+                round_record("raw-a", "2026-01-01T00:30:00Z"),
+                round_record("raw-b", "2026-01-01T00:30:00Z"),
+            ],
+            datetime(2026, 1, 3, tzinfo=UTC),
+        )
+        pair = output["pairs"][0]
+        self.assertEqual((pair["left_series_id"], pair["right_series_id"]), ("raw-a", "raw-b"))
+        self.assertEqual(pair["shared_candidate_cutoffs"], 2)
+        self.assertEqual(pair["mature_shared_rounds"], 2)
+        self.assertEqual(pair["evidence"]["models"][0]["scoreable_bets"], 2)
+        self.assertEqual(pair["evidence"]["models"][0]["families"][0]["success"]["bets"], 2)
+
     def test_dashboard_sanitizes_malformed_dropped_ids_without_publishing_raw(self) -> None:
         run = {
             "run_id": "run-1",
@@ -131,6 +177,7 @@ class DashboardTests(unittest.TestCase):
                     }
                 ],
                 "base_forecasts": [{"base_id": "unused"}],
+                "comparison_analysis": {"all_time": {"pairs": [{"id": "pair"}]}},
             }
             with patch("foxhole_forecast.dashboard.ROOT", root):
                 _write_dashboard_shards(output, {"model-hidden"})
@@ -140,6 +187,11 @@ class DashboardTests(unittest.TestCase):
             rounds = read_json(data / "round-history.json")
             summaries = read_json(data / "summary-history.json")
             self.assertFalse((data / "dashboard.json").exists())
+            self.assertNotIn("comparison_analysis", main)
+            self.assertEqual(
+                read_json(data / "comparison-analysis.json")["comparison_analysis"]["all_time"]["pairs"],
+                [{"id": "pair"}],
+            )
             self.assertNotIn("history", main["models"][0])
             self.assertNotIn("latest_all_time", main["models"][0])
             self.assertEqual(

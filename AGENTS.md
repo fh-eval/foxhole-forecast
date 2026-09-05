@@ -1,6 +1,6 @@
 # Foxhole Forecast agent roles
 
-The primary agent owns integration, resolves cross-cutting decisions, and keeps the published evaluation internally consistent. Use the following subagent roles when the task matches their scope.
+The root agent owns the design specification and final check. The Luna xhigh manager owns planning, contracts, worker routing, integration, and validation; use the following bounded roles when the task matches their scope.
 
 ## Luna: website UI and reader experience
 
@@ -34,7 +34,7 @@ The primary agent owns integration, resolves cross-cutting decisions, and keeps 
 ## Coordination
 
 - Subagents share the same worktree. Assign non-overlapping files whenever possible and announce overlapping edits before making them.
-- The primary agent reviews metric semantics before UI labels are finalized and reviews UI wording before publication.
+- The manager reviews metric semantics and UI wording during integration; the root agent performs the final check only after the manager's review and validation.
 - UI work may use existing dashboard fields immediately. New derived metrics require evaluation review and tests before Luna presents them as evidence.
 - Keep operational instructions out of the public README unless they are genuinely project documentation for contributors.
 
@@ -46,3 +46,11 @@ The primary agent owns integration, resolves cross-cutting decisions, and keeps 
 - A pause of any duration must leave remote `main`, scheduled data collection, forecasting, and the deployed site on their last known-good code. Record remaining work in the branch commit or handoff notes, not in a partially deployed change.
 - Before integration, rebase the feature branch onto current `origin/main`, run the full Python tests, Ruff undefined-name/import checks, the watchdog tests, and the Astro production build. Open a pull request and wait for every `Validate` job to pass before merging.
 - Do not bypass failed checks. Automated append-only data commits made by the trusted workflows are the only direct-to-`main` exception.
+
+## Multi-agent delivery workflow
+
+- The root agent owns the design specification and final check only. It does not duplicate implementation or review before that final check.
+- The Luna xhigh manager owns task planning, metric/data contracts, worker routing, target tests, integration, and the final full suite. Use exactly one implementation worker, then commission one fresh independent browser reviewer after implementation; do not run parallel implementers for one task.
+- Luna xhigh implementers receive fresh compact briefs, own their bounded files, and run their target tests. They must announce any necessary overlap before editing it.
+- The fresh Luna xhigh reviewer reads the finished diff and tests read-only, and loads the real page in a browser when the task changes the website. Route findings back to the owning implementer for resolution; the root agent does not pre-review or duplicate this review.
+- Use explicit Luna xhigh model/reasoning settings for spawned workers, preserve the repository permission and network fields, and do not silently escalate to a larger model. If the manager cannot invoke collaboration controls, root relays only the requested depth-2 spawn/send calls and does not duplicate planning, coding, or review. The manager integrates only after reviewer findings are resolved, then runs the full validation suite and prepares the pull request. Do not merge or deploy before the root's final check.
