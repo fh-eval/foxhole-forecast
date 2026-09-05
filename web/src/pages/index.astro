@@ -52,6 +52,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         <a href="#briefings">News from the Front</a>
         <a href="#probability">For nerds</a>
         <a href={`${basePath}predictions/`}>Round history</a>
+        <a href={`${basePath}comparisons/`}>Model comparisons</a>
         <a href={`${basePath}history/`}>Archive</a>
         <a href={`${basePath}prompt-flow/`}>Prompt flow</a>
         <a href="#limitations">Caveats</a>
@@ -146,23 +147,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <div><dt>Total pipeline lift</dt><dd>How the complete scout-and-predict process compared with a random map-wide base. Useful for the system as built, but it includes our prompt structure.</dd></div>
         </dl>
         </details>
+        <p class="section-followup"><a class="section-heading__link" href={`${basePath}comparisons/`}>Compare two models on the same rounds →</a></p>
       </section>
-
-      <details id="comparison-analysis" class="progressive-detail comparison-detail">
-        <summary>Audit view: same-round model comparisons</summary>
-        <div class="comparison-intro">
-          <p class="kicker">Exploratory evidence</p>
-          <h2>What changes when models face the same round?</h2>
-          <p>These are descriptive pair comparisons on the same cutoff. A round enters the mature set only when both submissions are present and every deadline is closed with a current settlement. Shared rounds can still be few, correlated, or affected by model setup eras, so pair results do not globally rank models.</p>
-        </div>
-        <div class="comparison-controls">
-          <label class="select-label">Scope <select id="comparison-scope"><option value="current_war">Current war</option><option value="all_time">All available wars</option></select></label>
-          <label class="select-label">Submission mode <select id="comparison-mode"><option value="live">Live submissions</option><option value="delayed_replay">Delayed replays</option></select></label>
-          <label class="select-label">Pair <select id="comparison-pair"><option value="">Loading comparisons…</option></select></label>
-          <label class="select-label">Horizon <select id="comparison-horizon"><option value="all">All horizons</option><option value="short">Near term (0–6h)</option><option value="long">Next day (6–24h)</option></select></label>
-        </div>
-        <div id="comparison-panel"><p class="empty-state">Open this audit view to load same-round comparisons.</p></div>
-      </details>
 
       <section class="section-block evidence-caution" aria-labelledby="evidence-caution-title">
         <div class="section-heading">
@@ -1508,146 +1494,6 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           list.append(roundSection);
         });
       }
-
-      let comparisonPayload = null;
-      let comparisonLoaded = false;
-      let comparisonLoading = false;
-      const comparisonBasePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
-      const comparisonNumber = (value) => value == null ? "—" : Number(value).toLocaleString(undefined, { maximumFractionDigits: 1 });
-      const comparisonPct = (value) => value == null ? "—" : `${(100 * Number(value)).toFixed(1)}%`;
-      const comparisonPp = (value) => value == null ? "—" : `${Number(value) > 0 ? "+" : ""}${(100 * Number(value)).toFixed(1)} percentage points (left − right)`;
-      const comparisonReason = (value) => String(value || "").replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-      const comparisonMetricLabel = (value) => ({
-        active_base: "Picked an active base",
-        exact_outcome: "Exact outcome",
-        timely_exact_outcome: "Exact outcome within ±3h",
-      }[value] || comparisonReason(value));
-      const comparisonRetention = (retention) => {
-        if (!retention) return "No retention record";
-        const scored = retention.scored_bets ?? 0;
-        const considered = retention.considered_bets ?? 0;
-        return `${comparisonNumber(scored)} / ${comparisonNumber(considered)} scored (${comparisonPct(retention.scored_fraction)}) · ${comparisonNumber(retention.published_bets ?? 0)} published · ${comparisonNumber(retention.dropped_bets ?? 0)} dropped · ${comparisonNumber(retention.censored_bets ?? 0)} censored · ${comparisonNumber(retention.open_bets ?? 0)} open`;
-      };
-      const comparisonFrequency = (summary) => summary
-        ? `${comparisonNumber(summary.bets)} / ${comparisonNumber(summary.denominator)} (${comparisonPct(summary.citation_rate)})`
-        : "—";
-      const comparisonRelevance = (summary) => summary?.mean_relevance == null
-        ? `— · rated ${comparisonNumber(summary?.rated_bets ?? 0)} · missing ${comparisonNumber(summary?.missing_rating_bets ?? 0)}`
-        : `${Number(summary.mean_relevance).toFixed(1)}/10 · rated ${comparisonNumber(summary.rated_bets ?? 0)} · missing ${comparisonNumber(summary.missing_rating_bets ?? 0)}`;
-      function comparisonPairs() {
-        const scope = document.querySelector("#comparison-scope")?.value || "current_war";
-        const mode = document.querySelector("#comparison-mode")?.value || "live";
-        const root = comparisonPayload?.comparison_analysis || {};
-        const data = scope.startsWith("war:") ? root.by_war?.[scope.slice(4)] : root[scope];
-        return (data?.pairs || []).filter((pair) => (pair.submission_mode || "live") === mode);
-      }
-      function comparisonTable(headers, className = "comparison-table") {
-        const table = element("table", className);
-        const head = document.createElement("thead");
-        const row = document.createElement("tr");
-        headers.forEach((header) => row.append(element("th", "", header)));
-        head.append(row); table.append(head, document.createElement("tbody"));
-        return table;
-      }
-      function comparisonRow(table, cells) {
-        const row = document.createElement("tr");
-        cells.forEach((cell) => {
-          const td = document.createElement("td");
-          if (cell instanceof Node) td.append(cell); else td.textContent = String(cell ?? "—");
-          row.append(td);
-        });
-        table.querySelector("tbody")?.append(row);
-      }
-      function comparisonRefLink(ref, side, pair) {
-        const runId = ref?.[`${side}_run_id`] || "run ID unavailable";
-        const link = element("a", "comparison-ref__link", runId);
-        link.href = `${comparisonBasePath}predictions/`;
-        link.title = "Open round history; use this recorded run ID to inspect the call";
-        const line = element("div", "comparison-ref");
-        line.append(element("span", "comparison-ref__side", side === "left" ? pair.left_label : pair.right_label), link);
-        return line;
-      }
-      function renderComparison() {
-        const select = document.querySelector("#comparison-pair");
-        const panel = document.querySelector("#comparison-panel");
-        if (!select || !panel) return;
-        const selectedValue = select.value;
-        const pairs = comparisonPairs();
-        select.replaceChildren();
-        pairs.forEach((pair, index) => {
-          const option = element("option", "", `${pair.left_label} [${pair.left_series_id}] vs ${pair.right_label} [${pair.right_series_id}]`);
-          option.value = String(index); select.append(option);
-        });
-        if (!pairs.length) { select.append(element("option", "", "No mature pairs in this scope")); panel.replaceChildren(element("p", "empty-state", "No same-round pair has enough closed, current settlements in this scope and submission mode.")); return; }
-        if (pairs[selectedValue == null ? -1 : Number(selectedValue)]) select.value = selectedValue;
-        const pair = pairs[Number(select.value) || 0];
-        const section = element("div", "comparison-results");
-        section.append(element("p", "method-caption", `${pair.left_label} [${pair.left_series_id}] vs ${pair.right_label} [${pair.right_series_id}] · ${pair.submission_mode === "delayed_replay" ? "delayed replay" : "live submission"}. Cutoffs are matched at the exact UTC instant; each round has equal weight.`));
-        const audit = element("div", "comparison-audit-grid");
-        [["Shared candidate cutoffs", pair.shared_candidate_cutoffs], ["Mature shared rounds", pair.mature_shared_rounds], ["Pending excluded", pair.pending_excluded_rounds], ["Left duplicate cutoffs", pair.left_duplicate_rounds], ["Right duplicate cutoffs", pair.right_duplicate_rounds], ["Left unmatched cutoffs", pair.left_unmatched_cutoffs], ["Right unmatched cutoffs", pair.right_unmatched_cutoffs]].forEach(([label, value]) => {
-          const item = element("div", "comparison-audit-item"); item.append(element("small", "", label), element("strong", "", comparisonNumber(value))); audit.append(item);
-        });
-        section.append(audit);
-        const horizon = document.querySelector("#comparison-horizon")?.value || "all";
-        const metrics = pair.metrics?.[horizon] || {};
-        const table = comparisonTable(["Metric", pair.left_label, pair.right_label, "Difference (left − right, percentage points)", "Evaluated rounds", "Round outcomes"]);
-        let metricRows = 0;
-        ["active_base", "exact_outcome", "timely_exact_outcome"].forEach((metric) => {
-          const value = metrics[metric]; if (!value) return;
-          metricRows += 1;
-          comparisonRow(table, [comparisonMetricLabel(metric), comparisonPct(value.left_mean), comparisonPct(value.right_mean), comparisonPp(value.difference), comparisonNumber(value.evaluated_rounds), `Left ${value.wins ?? 0} · ties ${value.ties ?? 0} · right ${value.losses ?? 0} · no-score exclusions ${value.excluded_no_scores_rounds ?? 0}`]);
-        });
-        section.append(element("h3", "comparison-subheading", `${horizon === "all" ? "All horizons" : horizon === "short" ? "Near term (0–6h)" : "Next day (6–24h)"} · paired rates`), element("p", "method-caption", "Rates are computed within each model’s mature shared rounds. A no-score round is excluded from that metric, not silently treated as a miss."), table);
-        if (!metricRows) section.append(element("p", "empty-state", "No scoreable paired metrics are available for this horizon yet."));
-        const retention = comparisonTable(["Retention", pair.left_label, pair.right_label], "comparison-table comparison-retention-table");
-        comparisonRow(retention, ["Candidate shared rounds", comparisonRetention(pair.left_retention), comparisonRetention(pair.right_retention)]);
-        comparisonRow(retention, ["Mature shared rounds", comparisonRetention(pair.left_mature_retention), comparisonRetention(pair.right_mature_retention)]);
-        section.append(element("h3", "comparison-subheading", "What stayed in the denominator?"), element("p", "method-caption", "Retention counts published and recorded dropped bets. Dropped, censored, open, and other unscored calls remain visible here; failed provider attempts are outside this published-round denominator."), retention);
-        const evidence = pair.evidence;
-        if (evidence) {
-          section.append(element("h3", "comparison-subheading", "Evidence patterns · all horizons"));
-          section.append(element("p", "method-caption", `The horizon selector applies only to the performance metrics above. Evidence stays pooled across all horizons and ${comparisonNumber(evidence.mature_shared_rounds)} mature shared rounds. “Success” means an exact outcome within ±3h; “other” is every other scoreable call. Citation frequency is shown as count / denominator. Relevance is the model’s own self-report (1–10), not measured explanatory importance; these patterns do not establish causality.`));
-          const et = comparisonTable(["Model / family", "Scoreable bets", "Missing evidence", "Success citation frequency", "Other citation frequency", "Success relevance", "Other relevance"], "comparison-table evidence-pattern-table");
-          (evidence.models || []).forEach((model) => {
-            const base = `${comparisonNumber(model.scoreable_bets)} scoreable · ${comparisonNumber(model.success_bets)} success / ${comparisonNumber(model.other_bets)} other · ${comparisonNumber(model.excluded_bets)} excluded`;
-            const missing = `${comparisonNumber(model.missing_evidence_success_bets)} / ${comparisonNumber(model.success_bets)} success · ${comparisonNumber(model.missing_evidence_other_bets)} / ${comparisonNumber(model.other_bets)} other`;
-            if (!model.families?.length) comparisonRow(et, [`${model.model_label} [${model.series_id}]`, base, missing, "—", "—", "—", "—"]);
-            (model.families || []).forEach((family) => comparisonRow(et, [`${model.model_label} · ${family.label} <${(family.metric_id_examples || []).slice(0, 2).join(", ") || "metric IDs unavailable"}>`, base, missing, comparisonFrequency(family.success), comparisonFrequency(family.other), comparisonRelevance(family.success), comparisonRelevance(family.other)]));
-          });
-          section.append(et);
-          const similarity = evidence.similarity || {};
-          section.append(element("p", "method-caption", `Mean family overlap: ${comparisonPct(similarity.family_jaccard_mean)} across ${comparisonNumber(similarity.family_rounds)} contributing rounds / ${comparisonNumber(evidence.mature_shared_rounds)} mature · exact-metric overlap: ${comparisonPct(similarity.exact_metric_jaccard_mean)} across ${comparisonNumber(similarity.exact_metric_rounds)} contributing rounds / ${comparisonNumber(evidence.mature_shared_rounds)} mature · empty-side rounds: ${comparisonNumber(similarity.empty_side_rounds ?? 0)}. Overlap compares cited metric sets at the same cutoff, not hidden reasoning.`));
-          const refs = element("div", "comparison-refs");
-          refs.append(element("h4", "", "Round references"), element("p", "method-caption", "Each link opens the real round-history archive; the recorded run IDs and exact UTC cutoff identify the paired calls."));
-          (evidence.round_refs || []).forEach((ref) => {
-            const item = element("div", "comparison-ref-row");
-            item.append(element("time", "", `${formatDate(ref.cutoff)} · ${ref.war_id || "war unavailable"}`), comparisonRefLink(ref, "left", pair), comparisonRefLink(ref, "right", pair));
-            refs.append(item);
-          });
-          section.append(refs);
-        }
-        panel.replaceChildren(section);
-      }
-      async function loadComparison() {
-        if (comparisonLoaded || comparisonLoading) return;
-        comparisonLoading = true;
-        const panel = document.querySelector("#comparison-panel");
-        try {
-          panel.replaceChildren(element("p", "empty-state", "Loading same-round comparisons…"));
-          const response = await fetch(`${comparisonBasePath}data/comparison-analysis.json`); if (!response.ok) throw new Error(`HTTP ${response.status}`); const payload = await response.json();
-          if (payload?.schema_version !== 1) throw new Error("unsupported comparison data version");
-          comparisonPayload = payload;
-          const scope = document.querySelector("#comparison-scope");
-          (comparisonPayload.available_wars || []).forEach((war) => { const option = element("option", "", `War ${war.war_number ?? "—"}`); option.value = `war:${war.war_id}`; scope.append(option); });
-          comparisonLoaded = true;
-          renderComparison();
-        } catch (error) {
-          const state = element("div", "empty-state"); state.append(element("p", "", `Same-round comparisons are not available yet: ${error.message}`));
-          const retry = element("button", "comparison-retry", "Try again"); retry.type = "button"; retry.addEventListener("click", loadComparison); state.append(retry); panel.replaceChildren(state);
-        } finally { comparisonLoading = false; }
-      }
-      document.querySelector("#comparison-analysis")?.addEventListener("toggle", (event) => { if (event.currentTarget.open) loadComparison(); });
-      ["#comparison-scope", "#comparison-mode", "#comparison-pair", "#comparison-horizon"].forEach((selector) => document.querySelector(selector)?.addEventListener("change", renderComparison));
 
       async function boot() {
         try {

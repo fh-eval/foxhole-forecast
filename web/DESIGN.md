@@ -91,6 +91,33 @@ the paper/card surfaces:
   `prefers-reduced-motion`.
 - Empty and error states use dashed-border cards and plain sentences.
 
+## Model comparison experience
+
+- Start with a useful comparison: select distinct series with scoreable mature
+  shared rounds in the selected scope/mode. Prefer the largest paired sample,
+  with a deterministic identity tie-break, never the highest result. If none
+  qualify, explain that plainly; do not imply that an alphabetical pair is useful.
+- Keep separate Model 1 and Model 2 menus. Use readable names and short version
+  qualifiers where necessary; expose exact series IDs in audit details without
+  combining different collection versions. Explain incompatible/no-overlap
+  choices before presenting empty results. Preserve intentional selections.
+- Lead with what happened on the shared rounds and how many rounds support it.
+  Explain rates as an average of each round's share of calls, not pooled accuracy
+  or a probability that a model is better. Keep Model 1 minus Model 2 direction
+  correct when selections reverse.
+- Present evidence as "What did they cite?" and "Did successful calls cite it
+  more often?" with a few readable summaries and denominators. Relevance is a
+  model's own rating, not proven usefulness or hidden reasoning. Keep the
+  all-horizons evidence distinction visible beside the performance filter.
+- Put full metric tables, retention accounting, raw identities, overlap formulas,
+  and round references in clearly labeled audit disclosures. Nothing is removed
+  from the underlying data or made impossible to inspect.
+- Browser acceptance is part of UI review: load the real page and dataset,
+  exercise initial/default and reversed selections, incompatible/empty states,
+  scope/mode/horizon changes and loading failures, and inspect desktop and narrow
+  screenshots. Record what actually ran; a build or source-string assertion is
+  not a substitute for checking the rendered experience.
+
 ## Housekeeping rules learned the hard way
 
 - If JS emits a class, it must have a CSS rule (`status--complete` once

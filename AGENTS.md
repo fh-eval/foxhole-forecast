@@ -1,6 +1,6 @@
 # Foxhole Forecast agent roles
 
-The root agent owns ideas, the implementation overview, and the final check. The Luna High manager owns planning, contracts, worker routing, integration, and validation; use the following bounded roles when the task matches their scope.
+The root agent owns the design specification and final check. The Luna xhigh manager owns planning, contracts, worker routing, integration, and validation; use the following bounded roles when the task matches their scope.
 
 ## Luna: website UI and reader experience
 
@@ -49,8 +49,8 @@ The root agent owns ideas, the implementation overview, and the final check. The
 
 ## Multi-agent delivery workflow
 
-- The root agent owns ideas, the implementation overview, and the final check. It does not duplicate implementation or review before that final check.
-- The Luna High manager owns task planning, metric/data contracts, worker routing, target tests, integration, and the final full suite. Keep no more than two active implementation workers under the manager.
-- Luna High implementers receive fresh compact briefs, own their bounded files, and run their target tests. They must announce any necessary overlap before editing it.
-- After implementation is complete, a fresh independent Luna High reviewer reads the finished diff and tests read-only. Route findings back to the implementers for resolution; do not have the root agent pre-review or duplicate the reviewer.
-- Use explicit Luna High model/reasoning settings for spawned workers, preserve the repository permission and network fields, and do not silently escalate to a larger model. The manager integrates only after reviewer findings are resolved, then runs the full validation suite and prepares the pull request. Do not merge or deploy before the root's final check.
+- The root agent owns the design specification and final check only. It does not duplicate implementation or review before that final check.
+- The Luna xhigh manager owns task planning, metric/data contracts, worker routing, target tests, integration, and the final full suite. Use exactly one implementation worker, then commission one fresh independent browser reviewer after implementation; do not run parallel implementers for one task.
+- Luna xhigh implementers receive fresh compact briefs, own their bounded files, and run their target tests. They must announce any necessary overlap before editing it.
+- The fresh Luna xhigh reviewer reads the finished diff and tests read-only, and loads the real page in a browser when the task changes the website. Route findings back to the owning implementer for resolution; the root agent does not pre-review or duplicate this review.
+- Use explicit Luna xhigh model/reasoning settings for spawned workers, preserve the repository permission and network fields, and do not silently escalate to a larger model. If the manager cannot invoke collaboration controls, root relays only the requested depth-2 spawn/send calls and does not duplicate planning, coding, or review. The manager integrates only after reviewer findings are resolved, then runs the full validation suite and prepares the pull request. Do not merge or deploy before the root's final check.
