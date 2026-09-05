@@ -44,7 +44,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             <label class="select-label">Model <select id="round-model"><option value="all">All models</option></select></label>
           </div>
         </div>
-        <p class="plain-note"><strong>Why group by round?</strong> Every model in a round worked from the same frozen moment. Comparing them inside that window is fair; comparing random individual calls across days is not. <span class="format-note">Older experiments remain in the archive, marked <em>Legacy format</em>; compare those with care because their prompts and scoring rules were different.</span></p>
+        <p class="plain-note"><strong>Why group by round?</strong> These groups collect calls from the same three-hour slot. Inspect the exact cutoffs, chosen bases, and deadlines when comparing models; grouping alone does not make their tasks identical. A call can be <em>open</em> while waiting for observations, <em>censored</em> when the observations cannot settle it, or <em>dropped</em> when validation rejects that bet. Available reasons remain visible in the round details. <span class="format-note">Older experiments remain in the archive, marked <em>Legacy format</em>; their prompts and scoring rules were different. Delayed replays are labeled separately from live submissions.</span></p>
         <p class="prediction-browser__summary" id="round-summary">Loading round history…</p>
         <div id="round-history" class="round-history-list"></div>
         <p class="archive-more"><button id="round-more" type="button" hidden>Load more rounds ↓</button></p>
@@ -187,8 +187,21 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 
       function predictionStatus(bet) {
         const source = bet.settlement_sources?.includes("foxholestats_gap_recovery") ? " · FoxholeStats recovery" : "";
+        if (bet.status === "open" && bet.settlement_reason === "awaiting_capture_followup") return `Open · awaiting capture follow-up${source}`;
+        if (bet.status === "open") return `Open · ${bet.settlement_reason === "awaiting_deadline" ? "awaiting deadline" : bet.settlement_reason ? eventLabel(bet.settlement_reason) : "reason not recorded"}${source}`;
         if (bet.status === "censored" && bet.settlement_reason === "ambiguous_transition_interval") return `Not scored · transition time ambiguous${source}`;
-        if (bet.status === "censored") return `Not scored · missing observations${source}`;
+        if (bet.status === "censored") {
+          const reason = bet.settlement_reason === "awaiting_capture_followup"
+            ? "awaiting capture follow-up"
+            : bet.settlement_reason === "insufficient_capture_followup_coverage"
+              ? "insufficient capture follow-up coverage"
+              : bet.settlement_reason === "insufficient_observation_coverage"
+                ? "insufficient observation coverage"
+                : bet.settlement_reason === "war_ended_before_scoring_window_closed"
+                  ? "war ended before settlement"
+                  : bet.settlement_reason ? eventLabel(bet.settlement_reason) : "reason not recorded";
+          return `Not scored · ${reason}${source}`;
+        }
         if (bet.crps_minutes != null && bet.settlement_reason === "no_transition_by_deadline") return `Scored · no qualifying transition by deadline${source}`;
         if (bet.crps_minutes != null && bet.settlement_reason === "observed_transition") {
           const observation = Number(bet.state_credit) === 1 ? "named outcome observed" : Number(bet.state_credit) > 0 ? "related outcome observed" : "different outcome observed";
@@ -236,16 +249,16 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         const statusClass = quality || bet.status || "open";
         const status = element("small", `status status--${statusClass}`, predictionStatus(bet));
         if (quality) status.title = quality === "hit"
-          ? "Correct: the named outcome was observed inside the model's timing spread."
+          ? "Exact outcome: the named outcome was observed and the timing landed inside the model's stated spread."
           : quality === "partial"
             ? "Error: the call received partial credit or landed outside the model's timing spread."
-            : "Bad call: the named outcome or timing received no credit.";
+            : "No exact credit: the named outcome or timing received no credit; inspect the settlement details for partial state credit.";
         result.append(status);
         if (bet.crps_minutes != null) {
           const badge = element("span", "prediction-score prediction-score--scored");
-          badge.title = status.title || "Forecast error measured by CRPS.";
+          badge.title = status.title || "Forecast error measured by the existing partial-credit CRPS-style loss.";
           badge.append(
-            element("span", "prediction-score__label", "Whole forecast error · CRPS"),
+            element("span", "prediction-score__label", "Whole forecast error · partial-credit CRPS-style loss"),
             element("strong", `prediction-score__value prediction-score--${quality || "partial"}`, crps(bet.crps_minutes)),
           );
           result.append(badge);

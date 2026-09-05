@@ -2,10 +2,59 @@ from __future__ import annotations
 
 import unittest
 
-from foxhole_forecast.score_metrics import summarize_crps, summarize_selection
+from foxhole_forecast.score_metrics import (
+    summarize_crps,
+    summarize_retention,
+    summarize_selection,
+)
 
 
 class ScoreMetricsTests(unittest.TestCase):
+    def test_retention_reconciles_candidates_and_separates_replays(self) -> None:
+        rounds = [
+            {
+                "predictions": [
+                    {"status": "hit", "crps_minutes": 0},
+                    {"status": "open"},
+                    {"status": "censored", "settlement_reason": "coverage_gap"},
+                    {"status": "unavailable"},
+                ],
+                "dropped_predictions": [{"reason": "invalid outcome"}],
+            },
+            {
+                "submission_mode": "delayed_replay",
+                "predictions": [
+                    {"status": "miss", "crps_minutes": 30},
+                    {"status": "censored"},
+                ],
+                "dropped_predictions": [{"reason": "invalid outcome"}, {}],
+            },
+        ]
+
+        summary = summarize_retention(iter(rounds))
+
+        self.assertEqual(summary["published_rounds"], 2)
+        self.assertEqual(summary["published_bets"], 6)
+        self.assertEqual(summary["considered_bets"], 9)
+        self.assertEqual(summary["scored_bets"], 2)
+        self.assertEqual(summary["open_bets"], 1)
+        self.assertEqual(summary["censored_bets"], 2)
+        self.assertEqual(summary["other_unscored_bets"], 1)
+        self.assertEqual(summary["dropped_bets"], 3)
+        self.assertAlmostEqual(summary["scored_fraction"], 2 / 9)
+        self.assertEqual(summary["censored_reasons"], {"coverage_gap": 1, "unspecified": 1})
+        self.assertEqual(summary["dropped_reasons"], {"invalid outcome": 2, "unspecified": 1})
+        self.assertEqual(summary["by_submission_mode"]["live"]["considered_bets"], 5)
+        self.assertEqual(summary["by_submission_mode"]["delayed_replay"]["considered_bets"], 4)
+        self.assertEqual(rounds[0]["predictions"][0]["crps_minutes"], 0)
+        self.assertNotIn("submission_mode", rounds[0])
+
+    def test_empty_retention_has_no_fraction(self) -> None:
+        summary = summarize_retention([])
+        self.assertIsNone(summary["scored_fraction"])
+        self.assertEqual(summary["considered_bets"], 0)
+        self.assertEqual(summary["by_submission_mode"], {})
+
     def test_forecast_score_weights_short_and_long_crps_equally(self) -> None:
         summary = summarize_crps(
             [

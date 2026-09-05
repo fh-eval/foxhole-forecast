@@ -23,7 +23,7 @@ from .config import (
 )
 from .domain import strategic_base_type
 from .packets import build_scout_packet
-from .score_metrics import summarize_crps, summarize_selection
+from .score_metrics import summarize_crps, summarize_retention, summarize_selection
 from .storage import isoformat, parse_time, read_json, write_json
 from .war_lifecycle import war_ended_at, war_is_active
 
@@ -71,6 +71,7 @@ def _behavior_summary(
     predictions_per_round: int,
 ) -> list[dict[str, Any]]:
     by_series: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    rounds_by_series: dict[str, list[dict[str, Any]]] = defaultdict(list)
     labels: dict[str, str] = {}
     for round_record in rounds:
         if war_id is not None and round_record.get("war_id") != war_id:
@@ -82,6 +83,7 @@ def _behavior_summary(
         ):
             continue
         by_series[round_record["series_id"]].extend(predictions)
+        rounds_by_series[round_record["series_id"]].append(round_record)
         labels[round_record["series_id"]] = round_record["model_label"]
 
     output: list[dict[str, Any]] = []
@@ -103,6 +105,7 @@ def _behavior_summary(
                 "series_id": series,
                 "model_label": labels[series],
                 "published_bets": len(bets),
+                "retention": summarize_retention(rounds_by_series[series]),
                 **crps_summary,
                 **selection_summary,
                 "confidence": _mean(confidences),
@@ -386,6 +389,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
         )
         presented_drops = []
         for dropped in run.get("dropped_predictions", []):
+            dropped = _public_drop(dropped)
             dropped_base = cutoff_bases.get(dropped.get("base_id"), {})
             presented_drops.append(
                 {
@@ -405,6 +409,7 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
             )
         presented_advice_drops = []
         for dropped in run.get("dropped_strategic_advice", []):
+            dropped = _public_drop(dropped)
             dropped_base = cutoff_bases.get(dropped.get("base_id"), {})
             presented_advice_drops.append(
                 {
@@ -750,6 +755,14 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
             },
             "scoring_window_after_eta_minutes": 180,
             "crps_integration_step_minutes": 1,
+            "crps_interpretation": "Finite-window, partial-credit event-time loss; the observation target includes 0.75 credit for specified alternative outcomes, so this is not a strictly proper score for the exact named event alone",
+            "crps_window": "From cutoff to each model-chosen ETA plus 180 minutes; fixed tranche normalization does not make those windows identical",
+            "forecast_score_interpretation": "Normalized partial-credit loss, not percent accuracy or benchmark-relative skill",
+            "retention": {
+                "scope": "Published current-protocol rounds; excludes failed provider attempts and discarded correction attempts",
+                "denominator": "Published bets plus recorded dropped predictions in those rounds",
+                "interpretation": "Scored fraction describes data availability, not forecast accuracy; open calls have not finished observation",
+            },
             "actionable_exact_outcome": {
                 "definition": "The named outcome occurred within 180 minutes of the model ETA",
                 "denominator": "Every scoreable bet; false alarms, wrong outcomes, and badly timed outcomes are misses",
@@ -787,6 +800,15 @@ def build_dashboard_data(settings: Settings | None = None) -> dict[str, Any]:
     )
     _write_dashboard_shards(output, load_dashboard_hidden_series())
     return output
+
+
+def _public_drop(dropped: dict[str, Any]) -> dict[str, Any]:
+    """Keep audit payloads in stored runs and make malformed IDs safe to display."""
+    return {
+        key: value if key != "base_id" or isinstance(value, str) else None
+        for key, value in dropped.items()
+        if key not in {"raw_prediction", "raw_recommendation"}
+    }
 
 
 def _predicted_outcome(

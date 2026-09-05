@@ -23,6 +23,8 @@ def _canonical_region_name(name: Any, allowed: set[str]) -> Any:
 def validate_scout(
     value: dict[str, Any], packet: dict[str, Any], settings: Settings
 ) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValidationError("scout must be an object")
     summary = value.get("war_summary")
     if not isinstance(summary, str) or not summary.strip() or len(summary.split()) > 350:
         raise ValidationError("war_summary must contain 1-350 words")
@@ -34,10 +36,10 @@ def validate_scout(
         raise ValidationError("selected_regions must be a non-empty array")
     allowed = {region["map_name"] for region in packet["regions"]}
     selected = [_canonical_region_name(name, allowed) for name in selected]
-    if len(selected) > settings.scout_region_limit or len(selected) != len(set(selected)):
-        raise ValidationError("selected_regions exceeds limit or contains duplicates")
     if any(not isinstance(name, str) or name not in allowed for name in selected):
         raise ValidationError("selected_regions contains an unknown region")
+    if len(selected) > settings.scout_region_limit or len(selected) != len(set(selected)):
+        raise ValidationError("selected_regions exceeds limit or contains duplicates")
     return {
         "headline": headline.strip(),
         "war_summary": summary.strip(),
@@ -60,6 +62,8 @@ def validate_forecast(
     *,
     allow_partial_strategic_advice: bool = False,
 ) -> None:
+    if not isinstance(value, dict):
+        raise ValidationError("forecast must be an object")
     rows = value.get("predictions")
     if not isinstance(rows, list):
         raise ValidationError("predictions must be an array")
@@ -75,6 +79,8 @@ def validate_forecast(
     cutoff = parse_time(packet["cutoff"])
     deadline = cutoff + timedelta(hours=24)
     for row in rows:
+        if not isinstance(row, dict):
+            raise ValidationError("prediction must be an object")
         rank = row.get("rank")
         if (
             not isinstance(rank, int)
@@ -87,11 +93,11 @@ def validate_forecast(
             )
         seen_ranks.add(rank)
         identifier = row.get("base_id")
-        if identifier not in bases or identifier in seen:
+        if not isinstance(identifier, str) or identifier not in bases or identifier in seen:
             raise ValidationError(f"Unknown or duplicate base_id: {identifier}")
         seen.add(identifier)
         outcome = row.get("outcome")
-        if outcome not in {
+        if not isinstance(outcome, str) or outcome not in {
             "CAPTURED",
             "CAPTURED_BY_WARDENS",
             "CAPTURED_BY_COLONIALS",
@@ -136,16 +142,22 @@ def validate_forecast(
                 f"sigma_minutes for {identifier} must be an integer from 15 to 180"
             )
         try:
+            if not isinstance(row.get("eta_utc"), str):
+                raise ValidationError("eta_utc must be an ISO-8601 timestamp")
             eta = parse_time(row["eta_utc"])
         except (KeyError, TypeError, ValueError) as error:
             raise ValidationError("eta_utc must be an ISO-8601 timestamp") from error
+        if eta.utcoffset() is None:
+            raise ValidationError("eta_utc must include a timezone")
         if not cutoff < eta <= deadline:
             raise ValidationError("eta_utc must fall after cutoff and within 24 hours")
         evidence = row.get("evidence")
         if not isinstance(evidence, list) or not 1 <= len(evidence) <= 5:
             raise ValidationError("Each prediction requires 1-5 evidence references")
         for item in evidence:
-            if item.get("metric_id") not in metrics:
+            if not isinstance(item, dict):
+                raise ValidationError("Evidence reference must be an object")
+            if not isinstance(item.get("metric_id"), str) or item.get("metric_id") not in metrics:
                 raise ValidationError(f"Unknown evidence metric: {item.get('metric_id')}")
             relevance = item.get("relevance")
             if not isinstance(relevance, int) or isinstance(relevance, bool) or not 1 <= relevance <= 10:
@@ -186,7 +198,7 @@ def validate_strategic_recommendation(
     if not isinstance(recommendation, dict):
         raise ValidationError(f"strategic_advice.{key} must be an object")
     identifier = recommendation.get("base_id")
-    if identifier not in bases:
+    if not isinstance(identifier, str) or identifier not in bases:
         raise ValidationError(f"strategic_advice.{key} contains an unknown base_id")
     owner = bases[identifier].get(
         "current_owner", bases[identifier].get("team")
@@ -210,7 +222,9 @@ def validate_strategic_recommendation(
             f"strategic_advice.{key} requires 1-3 evidence references"
         )
     for item in cited:
-        if item.get("metric_id") not in metrics:
+        if not isinstance(item, dict):
+            raise ValidationError("Strategic advice evidence reference must be an object")
+        if not isinstance(item.get("metric_id"), str) or item.get("metric_id") not in metrics:
             raise ValidationError(
                 f"Unknown strategic advice evidence metric: {item.get('metric_id')}"
             )
