@@ -1515,6 +1515,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       const comparisonBasePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       const comparisonNumber = (value) => value == null ? "—" : Number(value).toLocaleString(undefined, { maximumFractionDigits: 1 });
       const comparisonPct = (value) => value == null ? "—" : `${(100 * Number(value)).toFixed(1)}%`;
+      const comparisonPp = (value) => value == null ? "—" : `${Number(value) > 0 ? "+" : ""}${(100 * Number(value)).toFixed(1)} percentage points (left − right)`;
       const comparisonReason = (value) => String(value || "").replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
       const comparisonMetricLabel = (value) => ({
         active_base: "Picked an active base",
@@ -1589,12 +1590,12 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         section.append(audit);
         const horizon = document.querySelector("#comparison-horizon")?.value || "all";
         const metrics = pair.metrics?.[horizon] || {};
-        const table = comparisonTable(["Metric", pair.left_label, pair.right_label, "Difference", "Evaluated rounds", "Round outcomes"]);
+        const table = comparisonTable(["Metric", pair.left_label, pair.right_label, "Difference (left − right, percentage points)", "Evaluated rounds", "Round outcomes"]);
         let metricRows = 0;
         ["active_base", "exact_outcome", "timely_exact_outcome"].forEach((metric) => {
           const value = metrics[metric]; if (!value) return;
           metricRows += 1;
-          comparisonRow(table, [comparisonMetricLabel(metric), comparisonPct(value.left_mean), comparisonPct(value.right_mean), comparisonPct(value.difference), comparisonNumber(value.evaluated_rounds), `Left ${value.wins ?? 0} · ties ${value.ties ?? 0} · right ${value.losses ?? 0} · no-score exclusions ${value.excluded_no_scores_rounds ?? 0}`]);
+          comparisonRow(table, [comparisonMetricLabel(metric), comparisonPct(value.left_mean), comparisonPct(value.right_mean), comparisonPp(value.difference), comparisonNumber(value.evaluated_rounds), `Left ${value.wins ?? 0} · ties ${value.ties ?? 0} · right ${value.losses ?? 0} · no-score exclusions ${value.excluded_no_scores_rounds ?? 0}`]);
         });
         section.append(element("h3", "comparison-subheading", `${horizon === "all" ? "All horizons" : horizon === "short" ? "Near term (0–6h)" : "Next day (6–24h)"} · paired rates`), element("p", "method-caption", "Rates are computed within each model’s mature shared rounds. A no-score round is excluded from that metric, not silently treated as a miss."), table);
         if (!metricRows) section.append(element("p", "empty-state", "No scoreable paired metrics are available for this horizon yet."));
@@ -1604,8 +1605,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         section.append(element("h3", "comparison-subheading", "What stayed in the denominator?"), element("p", "method-caption", "Retention counts published and recorded dropped bets. Dropped, censored, open, and other unscored calls remain visible here; failed provider attempts are outside this published-round denominator."), retention);
         const evidence = pair.evidence;
         if (evidence) {
-          section.append(element("h3", "comparison-subheading", "Evidence patterns in mature shared rounds"));
-          section.append(element("p", "method-caption", `Evidence is pooled across ${comparisonNumber(evidence.mature_shared_rounds)} mature shared rounds. “Success” means an exact outcome within ±3h; “other” is every other scoreable call. Citation frequency is shown as count / denominator. Relevance is the model’s own self-report (1–10), not measured explanatory importance; these patterns do not establish causality.`));
+          section.append(element("h3", "comparison-subheading", "Evidence patterns · all horizons"));
+          section.append(element("p", "method-caption", `The horizon selector applies only to the performance metrics above. Evidence stays pooled across all horizons and ${comparisonNumber(evidence.mature_shared_rounds)} mature shared rounds. “Success” means an exact outcome within ±3h; “other” is every other scoreable call. Citation frequency is shown as count / denominator. Relevance is the model’s own self-report (1–10), not measured explanatory importance; these patterns do not establish causality.`));
           const et = comparisonTable(["Model / family", "Scoreable bets", "Missing evidence", "Success citation frequency", "Other citation frequency", "Success relevance", "Other relevance"], "comparison-table evidence-pattern-table");
           (evidence.models || []).forEach((model) => {
             const base = `${comparisonNumber(model.scoreable_bets)} scoreable · ${comparisonNumber(model.success_bets)} success / ${comparisonNumber(model.other_bets)} other · ${comparisonNumber(model.excluded_bets)} excluded`;
