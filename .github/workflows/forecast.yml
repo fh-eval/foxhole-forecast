@@ -69,7 +69,7 @@ jobs:
           run-id: ${{ inputs.retry_source_workflow_run }}
       - name: Authorize the requested replay against its incident
         if: ${{ inputs.retry_run_id != '' }}
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           ISSUE_NUMBER: ${{ inputs.recovery_issue_number }}
           RETRY_RUN_ID: ${{ inputs.retry_run_id }}
@@ -245,7 +245,7 @@ jobs:
               --cohort-id "$cohort_id" > /tmp/model-run-audit.json
           fi
       - name: Record and dispatch missing-model incidents
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const fs = require('fs');
@@ -385,7 +385,7 @@ jobs:
           path: .
       - name: Report the exact recovered run
         if: ${{ needs.persist.result == 'success' }}
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           ISSUE_NUMBER: ${{ inputs.recovery_issue_number }}
           RETRY_RUN_ID: ${{ inputs.retry_run_id }}
@@ -491,7 +491,7 @@ jobs:
             }
       - name: Report recovery workflow failure
         if: ${{ needs.persist.result != 'success' }}
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           ISSUE_NUMBER: ${{ inputs.recovery_issue_number }}
           RETRY_RUN_ID: ${{ inputs.retry_run_id }}
