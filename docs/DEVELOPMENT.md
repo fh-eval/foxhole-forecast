@@ -49,18 +49,10 @@ Trusted collection and forecast workflows are the sole exception: they may conti
 
 ## Managed multi-agent workflow
 
-The root agent owns the design specification and final check only. It does not duplicate implementation or pre-review work. A Luna xhigh manager coordinates the work. The desired workflow depth is 2: one manager, exactly one implementation worker, then one fresh browser reviewer. If the manager harness cannot invoke collaboration controls, the manager prepares the complete bounded assignment and decision brief while root relays only the depth-2 spawn/send call; root does not duplicate the manager's planning, coding, or review:
+[`AGENTS.md`](../AGENTS.md) is the canonical workflow policy. Root owns product intent, architecture, prose, presentation, and final UI/UX judgment; Luna does most routine code-heavy engineering and coordination.
 
-- Spawn exactly one implementation worker with `model = "gpt-5.6-luna"` and `reasoning_effort = "xhigh"`; give it a fresh compact brief, bounded file ownership, and target tests. When it finishes, commission one fresh independent Luna xhigh browser reviewer read-only against the finished diff, boundary tests, and UI runtime when feasible. Send findings back to the owning implementer.
-- Keep contracts and overlapping edits with the manager; implementers change only their assigned files. Browser review must exercise the real page and dataset, not only source-string assertions or a production build.
-- The manager runs one final full suite after review findings are resolved, then commits, rebases, pushes, and prepares the PR. Do not merge or deploy before the root's final check.
-- At every interruption checkpoint, leave `main` and production unchanged; keep the feature branch usable with either a local uncommitted diff or a clearly marked checkpoint commit.
+Root/Astra writes a durable spec sheet with ordered tasks, acceptance examples, and non-goals. The Luna manager runs implementation → independent review → fixes/recheck → next task for each assigned task, then returns one integrated handoff to Astra. Routine progress tracking and handoffs stay inside the Luna loop. Escalate genuine blockers or spec ambiguity rather than inventing requirements. If nested tools are unavailable, root may relay calls while Luna retains management decisions; disclose the limitation. Choose Luna reasoning effort by task difficulty rather than always using xhigh, and reuse existing workers for small follow-ups.
 
-The ignored project-local `.codex/config.toml` should preserve the existing permission and network blocks and include:
+Website review must exercise the real page and dataset. After the loop completes, root judges the whole result against the intended experience and may directly make small editorial/visual touchups to solid work, with appropriate revalidation. Implementation defects, substantial changes, or a spec that did not capture the user's intent return to the Luna loop with revised instructions. Existing design conventions may be improved; accessibility, truthful metrics, and data integrity remain constraints.
 
-```toml
-[agents]
-default_subagent_model = "gpt-5.6-luna"
-default_subagent_reasoning_effort = "xhigh"
-max_concurrent_threads_per_session = 2
-```
+Use targeted checks while iterating and the required full suite before integration. Before long operations, record a durable checkpoint with the branch/worktree, evidence, and next action. Keep `main` and production unchanged until the release gates above pass. This policy does not itself change local model settings, permissions, or network configuration.
