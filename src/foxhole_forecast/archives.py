@@ -39,13 +39,16 @@ def create_war_archive(data_dir: Path, war_number: int) -> dict[str, Any]:
 
     def rows_for_war(name: str) -> list[dict[str, Any]]:
         path = data_dir / name
-        source_paths.add(path)
+        if path.exists():
+            source_paths.add(path)
         return [row for row in read_jsonl(path) if row.get("war_id") == war_id]
 
     collector_runs = rows_for_war("collector_runs.jsonl")
     legacy_observations = rows_for_war("observations.jsonl")
     events = rows_for_war("events.jsonl")
     historical_events = rows_for_war("historical_events.jsonl")
+    recovered_coverage = rows_for_war("recovered_coverage.jsonl")
+    recovery_audit = rows_for_war("recovery_audit.jsonl")
     cohorts = rows_for_war("cohorts.jsonl")
     model_runs = rows_for_war("model_runs.jsonl")
 
@@ -70,6 +73,18 @@ def create_war_archive(data_dir: Path, war_number: int) -> dict[str, Any]:
     if import_path.exists():
         source_paths.add(import_path)
         foxholestats_import = read_json(import_path)
+
+    recovery_status_path = data_dir / "recovery_status.json"
+    recovery_status = read_json(recovery_status_path, default={})
+    if recovery_status_path.exists():
+        source_paths.add(recovery_status_path)
+    if isinstance(recovery_status, dict):
+        recovery_status = {
+            "schema_version": recovery_status.get("schema_version", 1),
+            "wars": {
+                war_id: (recovery_status.get("wars") or {}).get(war_id, {})
+            },
+        }
 
     cohort_ids = {cohort["cohort_id"] for cohort in cohorts}
     frozen_packets: dict[str, Any] = {}
@@ -98,6 +113,9 @@ def create_war_archive(data_dir: Path, war_number: int) -> dict[str, Any]:
         "observations-detailed.json.gz": detailed_observations,
         "events.json.gz": events,
         "historical-events.json.gz": historical_events,
+        "recovered-coverage.json.gz": recovered_coverage,
+        "recovery-audit.json.gz": recovery_audit,
+        "recovery-status.json.gz": recovery_status,
         "cohorts.json.gz": cohorts,
         "model-runs.json.gz": model_runs,
         "settlements.json.gz": settlements,
@@ -275,6 +293,8 @@ def prune_archived_war(
         data_dir / "observations.jsonl",
         data_dir / "events.jsonl",
         data_dir / "historical_events.jsonl",
+        data_dir / "recovered_coverage.jsonl",
+        data_dir / "recovery_audit.jsonl",
         data_dir / "cohorts.jsonl",
         data_dir / "model_runs.jsonl",
         *sorted((data_dir / "observations").glob("*.jsonl")),
@@ -334,9 +354,16 @@ def prune_archived_war(
         else None
     )
 
+    recovery_status_path = data_dir / "recovery_status.json"
+    recovery_status = read_json(recovery_status_path, default={})
+    recovery_state = (recovery_status.get("wars") or {}).get(war_id)
+    status_delete = recovery_status_path if recovery_state is not None else None
+
     touched_paths = {path for path, _rows in rewrites}
     if removed_settlements:
         touched_paths.add(settlements_path)
+    if status_delete:
+        touched_paths.add(status_delete)
     deleted_files = [*packet_deletes, *object_deletes]
     if import_delete:
         deleted_files.append(import_delete)
@@ -347,8 +374,18 @@ def prune_archived_war(
             write_jsonl(path, rows)
         if removed_settlements:
             write_json(settlements_path, kept_settlements)
+        if status_delete:
+            remaining_status = dict(recovery_status)
+            remaining_wars = dict(remaining_status.get("wars") or {})
+            remaining_wars.pop(war_id, None)
+            remaining_status["wars"] = remaining_wars
+            if remaining_wars:
+                write_json(status_delete, remaining_status)
+            else:
+                status_delete.unlink()
         for path in deleted_files:
-            path.unlink()
+            if path.exists():
+                path.unlink()
         for cohort_id in sorted(cohort_ids):
             cohort_dir = data_dir / "raw" / "cohorts" / cohort_id
             for directory in sorted(
@@ -373,6 +410,7 @@ def prune_archived_war(
         "removed_frozen_packets": len(packet_deletes),
         "removed_provider_objects": len(object_deletes),
         "removed_import_manifest": bool(import_delete),
+        "removed_recovery_status": bool(status_delete),
         "bytes_reclaimed": bytes_before - bytes_after if bytes_after is not None else None,
         "archive_verified": True,
     }
@@ -382,6 +420,8 @@ def verify_war_archive_parity(data_dir: Path, war_number: int) -> dict[str, Any]
     """Confirm that an archive is a semantic copy of any remaining live data."""
     verification = verify_war_archive(data_dir, war_number)
     archive_dir = data_dir / "archives" / f"war-{war_number}"
+    archive_manifest = read_json(archive_dir / "manifest.json")
+    archived_artifacts = set((archive_manifest.get("artifacts") or {}).keys())
     archived_war = _read_verified_artifact(archive_dir, "war.json.gz")
     war_id = archived_war["war_id"]
     row_specs = {
@@ -389,19 +429,37 @@ def verify_war_archive_parity(data_dir: Path, war_number: int) -> dict[str, Any]
         "observations-legacy.json.gz": data_dir / "observations.jsonl",
         "events.json.gz": data_dir / "events.jsonl",
         "historical-events.json.gz": data_dir / "historical_events.jsonl",
+        "recovered-coverage.json.gz": data_dir / "recovered_coverage.jsonl",
+        "recovery-audit.json.gz": data_dir / "recovery_audit.jsonl",
         "cohorts.json.gz": data_dir / "cohorts.jsonl",
         "model-runs.json.gz": data_dir / "model_runs.jsonl",
     }
     live_payloads = {
         artifact: [row for row in read_jsonl(path) if row.get("war_id") == war_id]
         for artifact, path in row_specs.items()
+        if artifact in archived_artifacts
     }
     detailed: list[dict[str, Any]] = []
     for path in sorted((data_dir / "observations").glob("*.jsonl")):
         detailed.extend(
             row for row in read_jsonl(path) if row.get("war_id") == war_id
         )
-    live_payloads["observations-detailed.json.gz"] = detailed
+    if "observations-detailed.json.gz" in archived_artifacts:
+        live_payloads["observations-detailed.json.gz"] = detailed
+
+    recovery_status_path = data_dir / "recovery_status.json"
+    live_recovery_status = read_json(recovery_status_path, default={})
+    if (
+        "recovery-status.json.gz" in archived_artifacts
+        and recovery_status_path.is_file()
+        and isinstance(live_recovery_status, dict)
+    ):
+        live_payloads["recovery-status.json.gz"] = {
+            "schema_version": live_recovery_status.get("schema_version", 1),
+            "wars": {
+                war_id: (live_recovery_status.get("wars") or {}).get(war_id, {})
+            },
+        }
 
     archived_runs = _read_verified_artifact(archive_dir, "model-runs.json.gz")
     run_ids = {run["run_id"] for run in archived_runs}

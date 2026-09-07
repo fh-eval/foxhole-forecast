@@ -8,6 +8,7 @@ from foxhole_forecast.scoring import (
     _event_time_crps_minutes,
     _outcome_credit,
     _prediction_sigma_minutes,
+    _physical_transitions,
     _recovered_transition,
     _settlement_sources,
     _timing_credit,
@@ -60,6 +61,121 @@ class ScoringTests(unittest.TestCase):
 
         self.assertEqual(recovered["from_team"], "NONE")
         self.assertEqual(recovered["to_team"], "COLONIALS")
+
+    def test_cadence_recovery_preserves_reconstructed_ownership(self) -> None:
+        recovered = _recovered_transition(
+            {
+                "source": "foxholestats_gap_recovery",
+                "reconstruction_mode": "cadence_state_v1",
+                "strategic": True,
+                "base_id": "base-1",
+                "event_type": "CAPTURED_BY_COLONIALS",
+                "actor": "COLONIALS",
+                "from_team": "WARDENS",
+                "to_team": "COLONIALS",
+            }
+        )
+        self.assertEqual((recovered["from_team"], recovered["to_team"]), ("WARDENS", "COLONIALS"))
+
+    def test_legacy_exact_transition_precedes_overlapping_cadence_duplicate(self) -> None:
+        cutoff = datetime(2026, 1, 1, tzinfo=UTC)
+        legacy = {
+            "source": "foxholestats_gap_recovery",
+            "base_id": "base-1",
+            "from_team": "NONE",
+            "to_team": "COLONIALS",
+            "observed_from": isoformat(cutoff + timedelta(minutes=30)),
+            "observed_to": isoformat(cutoff + timedelta(minutes=30)),
+            "reconstruction_mode": "legacy_exact_event",
+        }
+        cadence = {
+            **legacy,
+            "observed_from": isoformat(cutoff + timedelta(minutes=15)),
+            "observed_to": isoformat(cutoff + timedelta(minutes=45)),
+            "reconstruction_mode": "cadence_state_v1",
+        }
+        self.assertEqual(_physical_transitions([cadence, legacy]), [legacy])
+        official = {**legacy, "source": "official_war_api"}
+        official.pop("reconstruction_mode")
+        self.assertEqual(_physical_transitions([cadence, official]), [official, cadence])
+
+    def test_legacy_explicit_ownership_keeps_original_adapter_semantics(self) -> None:
+        event = {
+            "source": "foxholestats_gap_recovery",
+            "strategic": True,
+            "base_id": "base-1",
+            "event_type": "CAPTURED_BY_COLONIALS",
+            "actor": "COLONIALS",
+            "from_team": "WARDENS",
+            "to_team": "COLONIALS",
+        }
+        self.assertEqual(_recovered_transition(event)["from_team"], "NONE")
+
+    def test_unsupported_base_recovery_coverage_stays_censored(self) -> None:
+        settings = Settings.load()
+        cutoff = datetime(2026, 1, 1, tzinfo=UTC)
+        eta = cutoff + timedelta(hours=2)
+        run = self._single_timed_run(cutoff, eta)
+        collectors = [
+            {"war_id": "war-1", "observed_at": isoformat(cutoff)},
+            *[
+                {
+                    "war_id": "war-1",
+                    "observed_at": isoformat(cutoff + timedelta(minutes=15 * i)),
+                    "source": "foxholestats_gap_recovery",
+                    "reconstruction_mode": "cadence_state_v1",
+                    "supported_base_ids": ["base-2"],
+                }
+                for i in range(1, 21)
+            ],
+        ]
+        settlement = settle_run(
+            run,
+            {"strategic_base_ids": ["base-1", "base-2"]},
+            [],
+            collectors,
+            settings,
+            cutoff + timedelta(hours=6),
+        )
+        bet = settlement["timed_predictions"][0]
+        self.assertEqual(bet["status"], "censored")
+        self.assertEqual(bet["settlement_reason"], "insufficient_observation_coverage")
+
+    def test_recovered_ownership_transition_scores_through_settle_run(self) -> None:
+        settings = Settings.load()
+        cutoff = datetime(2026, 1, 1, tzinfo=UTC)
+        eta = cutoff + timedelta(hours=2)
+        run = self._single_timed_run(cutoff, eta)
+        event = _recovered_transition(
+            {
+                "war_id": "war-1",
+                "source": "foxholestats_gap_recovery",
+                "reconstruction_mode": "cadence_state_v1",
+                "strategic": True,
+                "base_id": "base-1",
+                "event_type": "CAPTURED_BY_COLONIALS",
+                "actor": "COLONIALS",
+                "from_team": "WARDENS",
+                "to_team": "COLONIALS",
+                "observed_from": isoformat(eta - timedelta(minutes=15)),
+                "observed_to": isoformat(eta),
+            }
+        )
+        collectors = [
+            {"war_id": "war-1", "observed_at": isoformat(cutoff + timedelta(minutes=15 * i))}
+            for i in range(25)
+        ]
+        settlement = settle_run(
+            run,
+            {"strategic_base_ids": ["base-1"]},
+            [event],
+            collectors,
+            settings,
+            cutoff + timedelta(hours=6),
+        )
+        bet = settlement["timed_predictions"][0]
+        self.assertEqual(bet["status"], "hit")
+        self.assertEqual(bet["state_credit"], 1)
 
     def test_settlement_provenance_includes_synthetic_recovery_coverage(self) -> None:
         cutoff = datetime(2026, 8, 26, 17, 0, tzinfo=UTC)
