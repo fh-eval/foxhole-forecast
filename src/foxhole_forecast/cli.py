@@ -22,7 +22,11 @@ from .forecasting import (
     run_forecast_cohort,
     salvage_invalid_run,
 )
-from .foxholestats import SOURCE_URL, import_foxholestats_html
+from .foxholestats import (
+    SOURCE_URL,
+    import_foxholestats_html,
+    recover_observation_gaps,
+)
 from .health import audit_model_runs
 from .storage import parse_time
 from .scoring import settle_and_score
@@ -128,6 +132,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Recover every official polling gap longer than 30 minutes in the saved page",
     )
+    recovery = subcommands.add_parser(
+        "recover-gaps",
+        help="Recover supported completed polling gaps in the current war",
+    )
+    recovery.add_argument("--source-url", default=SOURCE_URL)
     run = subcommands.add_parser("run", help="Collect, forecast if due, score, and build dashboard")
     run.add_argument("--force-forecast", action="store_true")
     run.add_argument("--series", help="Run only one configured model series")
@@ -190,9 +199,14 @@ def main(argv: list[str] | None = None) -> int:
                 import_to=parse_time(args.to_time) if args.to_time else None,
                 recover_gaps=args.recover_gaps,
             )
+        elif args.command == "recover-gaps":
+            result = recover_observation_gaps(settings, source_url=args.source_url)
         elif args.command == "run":
+            collection = collect_once(settings)
+            recovery = recover_observation_gaps(settings)
             result = {
-                "collection": collect_once(settings),
+                "collection": collection,
+                "recovery": recovery,
                 "forecast": run_forecast_cohort(
                     settings,
                     force=args.force_forecast,

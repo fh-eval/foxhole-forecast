@@ -32,6 +32,7 @@ jobs:
       - name: Collect official data, settle bets, and publish
         run: |
           PYTHONPATH=src python -m foxhole_forecast collect >/dev/null
+          PYTHONPATH=src python -m foxhole_forecast recover-gaps >/dev/null
           PYTHONPATH=src python -m foxhole_forecast score >/dev/null
           PYTHONPATH=src python -m foxhole_forecast build-dashboard >/dev/null
       - name: Pass generated data to the persistence job
@@ -46,6 +47,11 @@ jobs:
             data/raw/latest.json
             data/state.json
             data/wars.json
+            data/historical_events.jsonl
+            data/recovered_coverage.jsonl
+            data/recovery_status.json
+            data/recovery_audit.jsonl
+            data/imports/foxholestats-war-*.json
           if-no-files-found: error
           retention-days: 1
 
@@ -88,13 +94,7 @@ jobs:
         run: |
           test -f /tmp/foxhole-collection-data/collector_runs.jsonl
           test -f /tmp/foxhole-collection-data/raw/latest.json
-          cp /tmp/foxhole-collection-data/collector_runs.jsonl data/collector_runs.jsonl
-          cp /tmp/foxhole-collection-data/events.jsonl data/events.jsonl
-          cp /tmp/foxhole-collection-data/observations.jsonl data/observations.jsonl
-          cp -a /tmp/foxhole-collection-data/observations/. data/observations/
-          cp /tmp/foxhole-collection-data/raw/latest.json data/raw/latest.json
-          cp /tmp/foxhole-collection-data/state.json data/state.json
-          cp /tmp/foxhole-collection-data/wars.json data/wars.json
+          python3 .github/scripts/merge-generated-data.py /tmp/foxhole-collection-data data
       - name: Rebuild scores and dashboard with the checked-out source
         run: |
           PYTHONPATH=src python3 -m foxhole_forecast score >/dev/null

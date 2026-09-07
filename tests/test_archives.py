@@ -113,6 +113,24 @@ class WarArchiveTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "failed verification"):
                 verify_war_archive(data_dir, 139)
 
+    def test_old_archive_without_recovery_artifacts_remains_verifiable(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            data_dir = Path(temporary)
+            self._fixture(data_dir)
+            create_war_archive(data_dir, 139)
+            archive_dir = data_dir / "archives/war-139"
+            manifest = read_json(archive_dir / "manifest.json")
+            for artifact in (
+                "recovered-coverage.json.gz",
+                "recovery-audit.json.gz",
+                "recovery-status.json.gz",
+            ):
+                (archive_dir / artifact).unlink()
+                manifest["artifacts"].pop(artifact, None)
+            write_json(archive_dir / "manifest.json", manifest)
+            self.assertTrue(verify_war_archive(data_dir, 139)["verified"])
+            self.assertEqual(verify_war_archive_parity(data_dir, 139)["parity"], "live_match")
+
     def test_archive_loaders_restore_pruned_history_and_prefer_live_rows(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)

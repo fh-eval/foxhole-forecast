@@ -100,15 +100,15 @@ def settle_run(
     for hours in settings.forecast_horizons_hours:
         deadline = cutoff + timedelta(hours=hours)
         crosses_war_end = war_end is not None and deadline > war_end
-        coverage = not crosses_war_end and _coverage_status(
-            collector_runs, war_id, cutoff, deadline, settings
-        )
         brier_sum = 0.0
         baseline_sum = 0.0
         positives = 0
         count = 0
         censored = 0
         for identifier in universe:
+            coverage = not crosses_war_end and _coverage_status(
+                collector_runs, war_id, cutoff, deadline, settings, identifier
+            )
             outcome = _change_outcome(identifier, relevant_events, cutoff, deadline)
             if crosses_war_end or now < deadline or not coverage or outcome is None:
                 base_outcomes[identifier][str(hours)] = None
@@ -330,6 +330,7 @@ def _settle_timed_run(
                     cutoff,
                     bet_deadline,
                     settings,
+                    prediction["base_id"],
                 ):
                     state_credit = 0.75
                 else:
@@ -407,7 +408,12 @@ def _settle_timed_run(
             outcome = None
             settlement_reason = "awaiting_deadline"
         elif _coverage_status(
-            collector_runs, run["war_id"], cutoff, bet_deadline, settings
+            collector_runs,
+            run["war_id"],
+            cutoff,
+            bet_deadline,
+            settings,
+            prediction["base_id"],
         ):
             status = "miss"
             outcome = 0.0
@@ -569,7 +575,38 @@ def _physical_transitions(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
             event.get("observed_to"),
         )
         unique.setdefault(key, event)
-    return sorted(unique.values(), key=lambda row: row["observed_to"])
+    candidates = sorted(unique.values(), key=lambda row: row["observed_to"])
+    # A legacy exact row and a cadence reconstruction can describe the same
+    # physical transition.  Automatic recovery skips legacy-covered windows,
+    # but retain this defensive precedence for mixed persisted ledgers: the
+    # old exact interpretation remains authoritative and is not double-scored.
+    selected: list[dict[str, Any]] = []
+    for event in candidates:
+        if event.get("reconstruction_mode") == "cadence_state_v1":
+            overlaps_legacy = any(
+                prior.get("source") == "foxholestats_gap_recovery"
+                and prior.get("reconstruction_mode") != "cadence_state_v1"
+                and prior.get("base_id") == event.get("base_id")
+                and prior.get("from_team") == event.get("from_team")
+                and prior.get("to_team") == event.get("to_team")
+                and _intervals_overlap(prior, event)
+                for prior in selected
+            )
+            if overlaps_legacy:
+                continue
+        selected.append(event)
+    return selected
+
+
+def _intervals_overlap(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    try:
+        left_start = parse_time(left["observed_from"])
+        left_end = parse_time(left["observed_to"])
+        right_start = parse_time(right["observed_from"])
+        right_end = parse_time(right["observed_to"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    return left_start <= right_end and right_start <= left_end
 
 
 def _recovered_transition(event: dict[str, Any]) -> dict[str, Any] | None:
@@ -587,7 +624,17 @@ def _recovered_transition(event: dict[str, Any]) -> dict[str, Any] | None:
         from_team, to_team = "NONE", actor
     else:
         return None
-    return {**event, "from_team": from_team, "to_team": to_team}
+    # Cadence rows already carry the states reconstructed at both polling
+    # ticks.  Preserve those ownership transitions; only legacy exact rows
+    # lacking explicit state fields receive the historical compatibility
+    # derivation above.
+    if event.get("reconstruction_mode") != "cadence_state_v1":
+        return {**event, "from_team": from_team, "to_team": to_team}
+    return {
+        **event,
+        "from_team": event.get("from_team", from_team),
+        "to_team": event.get("to_team", to_team),
+    }
 
 
 def _settlement_sources(
@@ -619,7 +666,9 @@ def _transition_is_covered(
     end = parse_time(event["observed_to"])
     if start < cutoff or end - start > timedelta(minutes=settings.poll_minutes * 2):
         return False
-    return _coverage_status(collector_runs, war_id, cutoff, end, settings)
+    return _coverage_status(
+        collector_runs, war_id, cutoff, end, settings, event.get("base_id")
+    )
 
 
 def _timing_credit(distance_minutes: float) -> float:
@@ -806,17 +855,35 @@ def _coverage_status(
     cutoff: datetime,
     deadline: datetime,
     settings: Settings,
+    base_id: str | None = None,
 ) -> bool:
     times = sorted(
         parse_time(row["observed_at"])
         for row in collector_runs
-        if row.get("war_id") == war_id and cutoff <= parse_time(row["observed_at"]) <= deadline + timedelta(minutes=settings.poll_minutes * 2)
+        if row.get("war_id") == war_id
+        and cutoff <= parse_time(row["observed_at"])
+        <= deadline + timedelta(minutes=settings.poll_minutes * 2)
+        and _coverage_row_supports_base(row, base_id)
     )
     if not times or times[-1] < deadline:
         return False
     points = sorted([cutoff, *times, deadline])
     maximum_gap = max((b - a).total_seconds() for a, b in zip(points, points[1:]))
     return maximum_gap <= settings.poll_minutes * 2 * 60
+
+
+def _coverage_row_supports_base(
+    row: dict[str, Any], base_id: str | None
+) -> bool:
+    """Apply per-base support for cadence recovery without changing legacy rows."""
+    supported = row.get("supported_base_ids")
+    if (
+        base_id is not None
+        and row.get("source") == "foxholestats_gap_recovery"
+        and row.get("reconstruction_mode") == "cadence_state_v1"
+    ):
+        return isinstance(supported, list) and base_id in supported
+    return True
 
 
 def _change_outcome(
