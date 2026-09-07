@@ -32,6 +32,7 @@ from foxhole_forecast.forecasting import (
     run_forecast_cohort,
     salvage_invalid_run,
 )
+from foxhole_forecast.packets import cohort_evidence_path
 from foxhole_forecast.schemas import forecast_schema
 from foxhole_forecast.storage import read_jsonl, write_json, write_jsonl
 from foxhole_forecast.validation import ValidationError
@@ -96,11 +97,14 @@ class ForecastBudgetTests(unittest.TestCase):
                 "recent_events": [],
                 "limits": {},
             }
-            write_json(cohort / "model-1-scout-packet.json", scout)
-            write_json(cohort / "replay-detail-source.json", source)
-            write_json(cohort / "model-1-detail-packet.json", detail)
+            scout_path = cohort_evidence_path(cohort, "model-1-scout-packet")
+            source_path = cohort_evidence_path(cohort, "replay-detail-source")
+            detail_path = cohort_evidence_path(cohort, "model-1-detail-packet")
+            write_json(scout_path, scout)
+            write_json(source_path, source)
+            write_json(detail_path, detail)
             write_json(
-                cohort / "model-1-replay-bundle.json",
+                cohort_evidence_path(cohort, "model-1-replay-bundle"),
                 {
                     "schema_version": 1,
                     "bundle_type": "forecast_replay",
@@ -136,11 +140,11 @@ class ForecastBudgetTests(unittest.TestCase):
                         "selected_regions": [],
                     },
                     "inputs": {
-                        "scout_packet": "model-1-scout-packet.json",
+                        "scout_packet": scout_path.name,
                         "scout_packet_sha256": _canonical_hash(scout),
-                        "detail_source": "replay-detail-source.json",
+                        "detail_source": source_path.name,
                         "detail_source_sha256": _canonical_hash(source),
-                        "detail_packet": "model-1-detail-packet.json",
+                        "detail_packet": detail_path.name,
                         "detail_packet_sha256": _canonical_hash(detail),
                     },
                     "stage": "forecast",
@@ -273,11 +277,9 @@ class ForecastBudgetTests(unittest.TestCase):
                 "war": {"warId": "war-1"},
             }
             write_json(
-                data
-                / "raw"
-                / "cohorts"
-                / "cohort-1"
-                / "model-1-scout-packet.json",
+                cohort_evidence_path(
+                    data / "raw" / "cohorts" / "cohort-1", "model-1-scout-packet"
+                ),
                 scout,
             )
             snapshot = data / "frozen-latest.json"
@@ -336,11 +338,9 @@ class ForecastBudgetTests(unittest.TestCase):
                 "war": {"warId": "war-1"},
             }
             write_json(
-                data
-                / "raw"
-                / "cohorts"
-                / "cohort-1"
-                / "model-1-scout-packet.json",
+                cohort_evidence_path(
+                    data / "raw" / "cohorts" / "cohort-1", "model-1-scout-packet"
+                ),
                 scout,
             )
             snapshot = data / "snapshot.json"
@@ -390,7 +390,9 @@ class ForecastBudgetTests(unittest.TestCase):
                 "war": {"warId": "war-1"},
             }
             write_json(
-                data / "raw" / "cohorts" / "cohort-1" / "model-1-scout-packet.json",
+                cohort_evidence_path(
+                    data / "raw" / "cohorts" / "cohort-1", "model-1-scout-packet"
+                ),
                 scout,
             )
             snapshot = data / "frozen-latest.json"
@@ -851,7 +853,10 @@ class ForecastBudgetTests(unittest.TestCase):
                 ],
             )
             write_json(
-                data / "raw" / "cohorts" / cohort_id / f"{series_id}-detail-packet.json",
+                cohort_evidence_path(
+                    data / "raw" / "cohorts" / cohort_id,
+                    f"{series_id}-detail-packet",
+                ),
                 packet,
             )
 
