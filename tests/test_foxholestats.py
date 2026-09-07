@@ -131,7 +131,7 @@ class FoxholeStatsTests(unittest.TestCase):
     def test_automatic_recovery_deduplicates_windows_and_round_trips_artifacts(self) -> None:
         temporary, root = self._recovery_fixture()
         try:
-            with patch("foxhole_forecast.foxholestats.DATA_DIR", root):
+            with patch("foxhole_forecast.foxholestats.paths.DATA_DIR", root):
                 first = recover_closed_war_gaps(
                     Settings.load(),
                     now=datetime(2026, 1, 2, tzinfo=UTC),
@@ -164,7 +164,7 @@ class FoxholeStatsTests(unittest.TestCase):
                 calls += 1
                 raise TimeoutError("bounded timeout")
 
-            with patch("foxhole_forecast.foxholestats.DATA_DIR", root):
+            with patch("foxhole_forecast.foxholestats.paths.DATA_DIR", root):
                 failed = recover_closed_war_gaps(
                     Settings.load(), now=datetime(2026, 1, 2, tzinfo=UTC), fetcher=fail
                 )
@@ -193,7 +193,7 @@ class FoxholeStatsTests(unittest.TestCase):
                 calls += 1
                 raise http.client.IncompleteRead(b"partial")
 
-            with patch("foxhole_forecast.foxholestats.DATA_DIR", root):
+            with patch("foxhole_forecast.foxholestats.paths.DATA_DIR", root):
                 failed = recover_closed_war_gaps(
                     Settings.load(), now=datetime(2026, 1, 2, tzinfo=UTC), fetcher=truncated
                 )
@@ -211,15 +211,15 @@ class FoxholeStatsTests(unittest.TestCase):
             html_path.write_bytes(self._source(1767227400))
             original_history = b"{\"source\":\"official\",\"observed_to\":\"2026-01-01T00:00:00Z\"}\n"
             (root / "historical_events.jsonl").write_bytes(original_history)
-            original_write_json = __import__("foxhole_forecast.foxholestats", fromlist=["write_json"]).write_json
+            original_write_json = __import__("foxhole_forecast.foxholestats.persistence", fromlist=["write_json"]).write_json
 
             def fail_manifest(path: Path, value: object) -> None:
                 if path.name.startswith("foxholestats-war-"):
                     raise OSError("injected manifest failure")
                 original_write_json(path, value)
 
-            with patch("foxhole_forecast.foxholestats.DATA_DIR", root), patch(
-                "foxhole_forecast.foxholestats.write_json", side_effect=fail_manifest
+            with patch("foxhole_forecast.foxholestats.paths.DATA_DIR", root), patch(
+                "foxhole_forecast.foxholestats.persistence.write_json", side_effect=fail_manifest
             ):
                 with self.assertRaisesRegex(OSError, "injected manifest failure"):
                     import_foxholestats_html(
@@ -244,7 +244,7 @@ class FoxholeStatsTests(unittest.TestCase):
                 root / "collector_runs.jsonl",
                 [{"status": "ok", "war_id": "war-1", "observed_at": "2026-01-01T00:00:00Z"}],
             )
-            with patch("foxhole_forecast.foxholestats.DATA_DIR", root):
+            with patch("foxhole_forecast.foxholestats.paths.DATA_DIR", root):
                 trailing = recover_closed_war_gaps(
                     Settings.load(),
                     fetcher=lambda _: (_ for _ in ()).throw(AssertionError("must not fetch")),
@@ -258,7 +258,7 @@ class FoxholeStatsTests(unittest.TestCase):
                     {"status": "ok", "war_id": "war-1", "observed_at": "2026-01-01T00:15:00Z"},
                 ],
             )
-            with patch("foxhole_forecast.foxholestats.DATA_DIR", root):
+            with patch("foxhole_forecast.foxholestats.paths.DATA_DIR", root):
                 short = recover_closed_war_gaps(
                     Settings.load(),
                     fetcher=lambda _: (_ for _ in ()).throw(AssertionError("must not fetch")),
@@ -274,7 +274,7 @@ class FoxholeStatsTests(unittest.TestCase):
             latest["war"]["winner"] = "NONE"
             latest["war"]["conquestEndTime"] = None
             write_json(root / "raw/latest.json", latest)
-            with patch("foxhole_forecast.foxholestats.DATA_DIR", root):
+            with patch("foxhole_forecast.foxholestats.paths.DATA_DIR", root):
                 result = recover_closed_war_gaps(
                     Settings.load(),
                     now=datetime(2026, 1, 2, tzinfo=UTC),
@@ -295,7 +295,7 @@ class FoxholeStatsTests(unittest.TestCase):
         for source, reason in cases:
             temporary, root = self._recovery_fixture()
             try:
-                with patch("foxhole_forecast.foxholestats.DATA_DIR", root):
+                with patch("foxhole_forecast.foxholestats.paths.DATA_DIR", root):
                     result = recover_closed_war_gaps(
                         Settings.load(),
                         now=datetime(2026, 1, 2, tzinfo=UTC),
@@ -352,7 +352,7 @@ class FoxholeStatsTests(unittest.TestCase):
                 ],
             )
             write_jsonl(root / "events.jsonl", [])
-            with patch("foxhole_forecast.foxholestats.DATA_DIR", root):
+            with patch("foxhole_forecast.foxholestats.paths.DATA_DIR", root):
                 first = _reconstruct_cadence_events(
                     source(1767226820), {}, latest, Settings.load(), window,
                     {"warId": "war-1", "warNumber": 1}, "cached://source",
@@ -389,7 +389,7 @@ class FoxholeStatsTests(unittest.TestCase):
                 ],
             )
             write_jsonl(root / "events.jsonl", [])
-            with patch("foxhole_forecast.foxholestats.DATA_DIR", root):
+            with patch("foxhole_forecast.foxholestats.paths.DATA_DIR", root):
                 rows = _reconstruct_cadence_events(
                     source, {}, latest, Settings.load(),
                     [(datetime(2026, 1, 1, tzinfo=UTC), datetime(2026, 1, 1, 0, 45, tzinfo=UTC))],
@@ -424,7 +424,7 @@ class FoxholeStatsTests(unittest.TestCase):
                 ],
             )
             write_jsonl(root / "events.jsonl", [])
-            with patch("foxhole_forecast.foxholestats.DATA_DIR", root):
+            with patch("foxhole_forecast.foxholestats.paths.DATA_DIR", root):
                 rows = _reconstruct_cadence_events(
                     source, {}, latest, Settings.load(),
                     [(datetime(2026, 1, 1, tzinfo=UTC), datetime(2026, 1, 1, 0, 45, tzinfo=UTC))],
