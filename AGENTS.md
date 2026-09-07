@@ -18,7 +18,11 @@ name as an example of its tier, not a requirement.
   roles. Never substitute the frontier model for routine implementation or
   review, and never spawn frontier-tier subagents for worker-tier tasks.
 
-## Orchestrator (frontier tier)
+## Orchestrator (tier-agnostic)
+
+The orchestrator is the agent that talks to the user, writes specs, and does
+final acceptance. It may run on either tier; nothing in this document
+requires the orchestrator to be a frontier model.
 
 - Translate the user's request into a durable spec sheet: overall outcome,
   ordered tasks and dependencies, explicit non-goals, and observable
@@ -38,10 +42,27 @@ name as an example of its tier, not a requirement.
   trivial implementation cycle. Run the relevant checks afterward. Route
   substantial rewrites, behavioral changes, and data/scoring logic back to
   the worker loop with a revised spec.
+- When the orchestrator runs on the frontier model, bound its spend to spec
+  writing, final acceptance, and small touchups. Final acceptance is bounded:
+  review the diff, the rendered result, and targeted verification — not a
+  re-run of the full battery at frontier effort.
 - Keep worker briefs compact: spec/design paths, bounded file ownership,
   acceptance examples, non-goals, target tests. Reuse the same implementer
   for fixes and the same reviewer for rechecks; do not forward full chat
   logs or spawn a fresh agent for every small correction.
+
+## Coordinator (worker tier; only when the orchestrator is frontier-tier)
+
+- A worker-tier coordinator sits between a frontier-tier orchestrator and the
+  worker loop, absorbing the routine token cost of coordination: progress
+  checks, handoff relays, fix cycles, and integration validation.
+- It runs the sequential loop (implementer → fresh reviewer → fixes/recheck →
+  next task), validates integration, and returns one consolidated handoff.
+- It escalates to the orchestrator only genuine intent questions, changed
+  requirements, or blockers — not routine status.
+- When the orchestrator itself is worker-tier, it coordinates directly and
+  this role is skipped: a worker-tier coordinator under a worker-tier
+  orchestrator only adds a relay hop.
 
 ## Implementer (worker tier)
 
@@ -103,8 +124,13 @@ name as an example of its tier, not a requirement.
 
 - The delivery loop is sequential by default: spec sheet → implementer →
   fresh reviewer → fixes/recheck → next task → integrated handoff →
-  orchestrator acceptance. Escalate genuine ambiguity, a changed requirement,
-  or a blocker promptly rather than silently changing the spec.
+  orchestrator acceptance. With a frontier-tier orchestrator, a worker-tier
+  coordinator runs this loop and sign-offs flow back up: coordinator →
+  orchestrator. Escalate genuine ambiguity, a changed requirement, or a
+  blocker promptly rather than silently changing the spec.
+- Frontier spend stays bounded to two points — spec writing and final
+  acceptance — plus small touchups on solid work. Everything else in the
+  loop is worker tier.
 - Subagent tooling differs by harness; use whatever delegation mechanism the
   harness provides, and disclose the limitation honestly if nested
   delegation is unavailable rather than claiming autonomous orchestration.
