@@ -259,6 +259,78 @@ h1 span { color: var(--accent); }
 .section-nav a { padding: 13px 2px; color: var(--soft); font-size: 12.5px; font-weight: 600; text-decoration: none; text-transform: uppercase; letter-spacing: .09em; white-space: nowrap; border-bottom: 3px solid transparent; }
 .section-nav a:hover { color: var(--accent-ink); border-bottom-color: var(--accent); }
 
+/* Dashboard navigation is grouped by destination instead of making one long
+   mixed row. Keep this modifier local: section-nav is also used by the
+   archive, comparison, prompt-flow, pitch, and prediction pages. */
+.dashboard-nav .dashboard-nav__inner {
+  display: grid;
+  gap: 0;
+  overflow: visible;
+  padding-block: 8px;
+}
+.dashboard-nav .dashboard-nav__group {
+  min-width: 0;
+  display: block;
+  overflow: visible;
+  text-align: center;
+}
+.dashboard-nav__group--dashboard {
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.dashboard-nav__group--site {
+  padding-bottom: 4px;
+}
+.dashboard-nav .dashboard-nav__links {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 18px;
+  align-items: center;
+  overflow: visible;
+}
+.dashboard-nav__group--site .dashboard-nav__links,
+.dashboard-nav__group--dashboard .dashboard-nav__links {
+  justify-content: center;
+  text-align: center;
+}
+.dashboard-nav .dashboard-nav__links a {
+  padding: 3px 1px;
+  white-space: nowrap;
+}
+.dashboard-nav__group--site .dashboard-nav__links {
+  gap: 5px 24px;
+}
+.dashboard-nav .dashboard-nav__group--site .dashboard-nav__links a {
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.dashboard-nav .dashboard-nav__links a:focus-visible,
+.dashboard-nav__top:focus-visible {
+  position: relative;
+  z-index: 1;
+}
+.dashboard-nav .dashboard-nav__top {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  place-items: center;
+  color: var(--accent-ink);
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 17px;
+  line-height: 1;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.dashboard-page { --dashboard-nav-offset: 136px; }
+.dashboard-page .section-block { scroll-margin-top: var(--dashboard-nav-offset); }
+
 /* ---------- Status strip ---------- */
 
 .status-strip { margin-top: 28px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; border: 2px solid var(--inkline); background: var(--inkline); box-shadow: var(--hard); }
@@ -1234,6 +1306,7 @@ footer strong { color: var(--accent-ink); letter-spacing: .12em; }
 /* ---------- Responsive ---------- */
 
 @media (max-width: 900px) {
+  .dashboard-page { --dashboard-nav-offset: 160px; }
   .human-note__inner { padding-block: 28px; grid-template-columns: 1fr; gap: 14px; }
   .masthead__body { min-height: 300px; align-items: flex-start; flex-direction: column; justify-content: center; }
   .war-stamp { width: 100%; transform: rotate(0deg); }
@@ -1273,6 +1346,13 @@ footer strong { color: var(--accent-ink); letter-spacing: .12em; }
   .pitch-article > blockquote:first-of-type { transform: none; }
 }
 @media (max-width: 580px) {
+  .dashboard-nav { position: static; }
+  .dashboard-nav .dashboard-nav__inner { padding-block: 7px; }
+  .dashboard-nav__group--dashboard { padding-top: 7px; }
+  .dashboard-nav__group--site .dashboard-nav__links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 18px; }
+  .dashboard-nav__group--site .dashboard-nav__links a { white-space: normal; text-align: center; }
+  .dashboard-nav__group--dashboard .dashboard-nav__links a { text-align: center; }
+  .dashboard-page { --dashboard-nav-offset: 16px; }
   .page-width { width: min(100% - 24px, 1180px); }
   h1 { font-size: 56px; }
   .comparison-masthead .method-hero { padding-block: 28px 23px; gap: 24px; }

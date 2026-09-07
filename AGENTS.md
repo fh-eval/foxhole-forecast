@@ -1,12 +1,20 @@
 # Foxhole Forecast agent roles
 
-The root agent owns the design specification and final check. The Luna xhigh manager owns planning, contracts, worker routing, integration, and validation; use the following bounded roles when the task matches their scope.
+The root/frontier agent (Astra/Sol) owns product intent, architecture, presentation, prose, and UI/UX. Astra/Sol assigns a spec sheet to a Luna-managed delivery loop. Luna owns routine implementation, investigation, coordination, correctness review, and progression through the assigned tasks; Astra/Sol accepts the completed result or revises its direction.
 
-## Luna: website UI and reader experience
+## Root: product and presentation ownership
+
+- Translate the user's casual request into a durable spec sheet with the overall outcome, ordered tasks/dependencies, explicit non-goals, and observable acceptance examples. Give Luna the spec/design paths as the shared source of truth. Distinguish intent from implementation suggestions; passing tests is not proof that the intended problem was solved.
+- Act as the independent human-facing second set of eyes. Inspect actual desktop/mobile screenshots and important interactions, not just DOM text or an implementer's report. Judge hierarchy, readability, usefulness, density, and unnecessary interaction.
+- Existing design rules are a starting point, not a substitute for judgment. Propose and make better presentation choices within the user's scope; update `web/DESIGN.md` when the design changes. Preserve accessibility, honest metric descriptions, and data-integrity constraints.
+- Prefer removing clutter to adding controls or explanation. Every label, panel, disclosure, and interaction needs a reader benefit. For example, site navigation should remain visible; making it collapsible merely because a disclosure is available adds work without solving a reader problem.
+- After correctness review, directly fix small prose, spacing, typography, and visual-hierarchy issues instead of routing another trivial implementation cycle. Run the relevant checks afterward. Route substantial rewrites, behavioral changes, and data/scoring logic back to Luna with a revised spec and targeted review.
+
+## Luna: website implementation and functional review
 
 - Prefer `gpt-5.6-luna` for this role when it is available.
-- Own beginner-facing work in `web/src/pages/` and `web/src/styles/`.
-- Follow the recorded design guidelines in `web/DESIGN.md` (type scale, contrast floor, voice rules) and update them when the design language changes.
+- Implement the agreed reader-facing design in `web/src/pages/` and `web/src/styles/`; do not add speculative controls, explanatory sections, or interactions beyond the brief.
+- Use `web/DESIGN.md` for shared context and accessibility requirements. Surface conflicts with the spec rather than silently preserving an unhelpful convention or inventing a different behavior.
 - Design for a Foxhole reader who may know nothing about probabilistic forecasting.
 - Lead with plain-language questions and conclusions, then progressively disclose technical definitions and equations.
 - Preserve auditability: exact predictions, cutoffs, evidence, settlement details, and technical scoring must remain reachable.
@@ -34,7 +42,7 @@ The root agent owns the design specification and final check. The Luna xhigh man
 ## Coordination
 
 - Subagents share the same worktree. Assign non-overlapping files whenever possible and announce overlapping edits before making them.
-- The manager reviews metric semantics and UI wording during integration; the root agent performs the final check only after the manager's review and validation.
+- The Luna manager owns the delivery loop: assignments, progress checks, implement/review/fix cycles, advancing to the next specified task, integration, and validation. Root oversees intent and final product/presentation acceptance rather than coordinating every handoff or duplicating line-by-line correctness review.
 - UI work may use existing dashboard fields immediately. New derived metrics require evaluation review and tests before Luna presents them as evidence.
 - Keep operational instructions out of the public README unless they are genuinely project documentation for contributors.
 
@@ -49,8 +57,11 @@ The root agent owns the design specification and final check. The Luna xhigh man
 
 ## Multi-agent delivery workflow
 
-- The root agent owns the design specification and final check only. It does not duplicate implementation or review before that final check.
-- The Luna xhigh manager owns task planning, metric/data contracts, worker routing, target tests, integration, and the final full suite. Use exactly one implementation worker, then commission one fresh independent browser reviewer after implementation; do not run parallel implementers for one task.
-- Luna xhigh implementers receive fresh compact briefs, own their bounded files, and run their target tests. They must announce any necessary overlap before editing it.
-- The fresh Luna xhigh reviewer reads the finished diff and tests read-only, and loads the real page in a browser when the task changes the website. Route findings back to the owning implementer for resolution; the root agent does not pre-review or duplicate this review.
-- Use explicit Luna xhigh model/reasoning settings for spawned workers, preserve the repository permission and network fields, and do not silently escalate to a larger model. If the manager cannot invoke collaboration controls, root relays only the requested depth-2 spawn/send calls and does not duplicate planning, coding, or review. The manager integrates only after reviewer findings are resolved, then runs the full validation suite and prepares the pull request. Do not merge or deploy before the root's final check.
+- Astra/Sol writes the spec sheet, then hands it to the Luna manager. For each task, the manager assigns implementation, obtains independent Luna correctness review, routes findings back for fixes and rechecks, and advances to the next task only when that task is accepted. Keep this loop sequential by default; do not return routine handoff decisions to Astra/Sol.
+- After all assigned tasks pass review, the manager checks integration and returns one consolidated handoff: spec coverage, validation evidence, known limitations, and any remaining decisions. Astra/Sol then evaluates the whole result for intended behavior, usefulness, visual coherence, and prose. Astra/Sol may directly touch up solid work with appropriate checks; implementation defects or a mismatch between spec and intent go back to the Luna loop with a corrected spec or bounded follow-up tasks.
+- Escalate genuine ambiguity, a changed requirement, missing authority, or a blocker to Astra/Sol promptly rather than silently changing the spec. If nested delegation tools are unavailable, disclose that limitation: root may relay the manager's tool calls, but task tracking and implement/review/next-task decisions remain with Luna. Do not claim autonomous nested orchestration when the runtime cannot provide it.
+- Use `gpt-5.6-luna` for routine engineering and management. Choose effort by difficulty: medium for routine coordination/mechanical work, high for complex implementation or review, xhigh for unusually difficult reasoning. Set it explicitly when spawning; do not silently switch to a larger model. Do not change runtime permissions or configuration merely to follow this document.
+- Give each worker a compact brief with the canonical spec/design paths, bounded file ownership, acceptance examples, non-goals, and target tests. Reuse the implementer for fixes and the independent reviewer for targeted rechecks; avoid forwarding the full chat or spawning a new agent for every small correction.
+- Review behavior against the user's goal, not only the implementation's own tests. For website changes, the Luna reviewer must exercise the real rendered page, keyboard interaction, and relevant screen widths. Report evidence, limitations, and actionable findings; root then judges whether the result is useful and visually coherent.
+- Use focused tests during iteration and the full required suite at integration. Recheck changes made after review in proportion to their risk; a previous review does not cover new logic. Do not merge or deploy before root acceptance and passing CI.
+- Before a long operation or usage-sensitive task, write a durable checkpoint with branch/worktree, intended behavior, completed evidence, blockers, and exact next action. Update it at milestones. Benchmark a small sample before a full-data operation; use bounded commands and surface a concrete bottleneck instead of repeating an expensive attempt.

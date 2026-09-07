@@ -15,7 +15,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
     <meta name="description" content="A live, prospective evaluation of LLM forecasts on the Foxhole war." />
     <title>Foxhole Forecast</title>
   </head>
-  <body>
+  <body id="top">
     <aside class="human-note" aria-labelledby="human-note-title">
       <div class="page-width human-note__inner">
         <div class="human-note__label">
@@ -44,23 +44,32 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
       </div>
     </header>
 
-    <nav class="section-nav" aria-label="Page sections">
-      <div class="page-width">
-        <a href="#scoreboard">The scoreboard</a>
-        <a href="#war-data">War data</a>
-        <a href="#rounds">The calls</a>
-        <a href="#briefings">News from the Front</a>
-        <a href="#probability">For nerds</a>
-        <a href={`${basePath}predictions/`}>Round history</a>
-        <a href={`${basePath}comparisons/`}>Model comparisons</a>
-        <a href={`${basePath}history/`}>Archive</a>
-        <a href={`${basePath}prompt-flow/`}>Prompt flow</a>
-        <a href="#limitations">Caveats</a>
-        <a href="#method">Method</a>
+    <nav class="section-nav dashboard-nav" aria-label="Dashboard navigation">
+      <div class="page-width dashboard-nav__inner">
+        <div class="dashboard-nav__group dashboard-nav__group--site" role="group" aria-label="Site navigation">
+          <div class="dashboard-nav__links">
+            <a href={`${basePath}predictions/`}>Round history</a>
+            <a href={`${basePath}comparisons/`}>Model comparisons</a>
+            <a href={`${basePath}history/`}>Archive</a>
+            <a href={`${basePath}prompt-flow/`}>Prompt flow</a>
+          </div>
+        </div>
+        <div class="dashboard-nav__group dashboard-nav__group--dashboard" role="group" aria-label="On this dashboard">
+          <div class="dashboard-nav__links">
+            <a href="#scoreboard">The scoreboard</a>
+            <a href="#war-data">War data</a>
+            <a href="#rounds">The calls</a>
+            <a href="#briefings">News from the Front</a>
+            <a href="#probability">For nerds</a>
+            <a href="#limitations">Caveats</a>
+            <a href="#method">Method</a>
+            <a class="dashboard-nav__top" href="#top" title="Back to top" aria-label="Back to top"><span aria-hidden="true">↑</span></a>
+          </div>
+        </div>
       </div>
     </nav>
 
-    <main class="page-width">
+    <main class="page-width dashboard-page">
       <section class="status-strip" aria-label="Collection status">
         <div><small>LAST OBSERVATION</small><strong id="last-observation">—</strong></div>
         <div><small>STRATEGIC BASES</small><strong id="base-count">—</strong></div>
@@ -1045,6 +1054,16 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         });
       }
 
+      function settleDashboardHash() {
+        if (!window.location.hash) return;
+        const id = decodeURIComponent(window.location.hash.slice(1));
+        const target = document.getElementById(id);
+        if (!target) return;
+        const nav = document.querySelector(".dashboard-nav");
+        const stickyOffset = nav && getComputedStyle(nav).position === "sticky" ? nav.getBoundingClientRect().height + 12 : 12;
+        window.scrollTo(0, Math.max(0, target.getBoundingClientRect().top + window.scrollY - stickyOffset));
+      }
+
       function factionName(team) {
         return element("span", `faction-name faction-name--${String(team || "none").toLowerCase()}`, teamLabel(team));
       }
@@ -1521,10 +1540,12 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           renderScoreboard();
           renderRounds(currentRounds, true);
           renderBriefings(currentModels);
+          settleDashboardHash();
         } catch (error) {
           const empty = document.querySelector("#score-empty");
           empty.textContent = `Dashboard data could not be loaded: ${error.message}`;
           empty.hidden = false;
+          settleDashboardHash();
         }
       }
 

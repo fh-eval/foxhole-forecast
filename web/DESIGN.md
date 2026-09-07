@@ -86,6 +86,19 @@ the paper/card surfaces:
   personal prose into the site's explanatory voice.
 - Wide audit tables may scroll horizontally; `.table-shell` shows
   scroll-shadow affordances so they never look truncated.
+- The dashboard's `.dashboard-nav` separates destinations from section jumps.
+  The upper row uses title-case serif page links without a visible group label,
+  keeping the sticky bar short. Center both link rows within the content
+  width. A compact up-arrow link returns to the top of the document and has an
+  accessible "Back to top" name and a clear focus state. Give the page links stronger type and generous
+  spacing, not individual cards, button borders, icons, or disclosure controls.
+  A fine rule separates the quieter lower row of compact mono same-page links;
+  that row has an accessible name but no second visible heading. All links stay
+  visible and wrap without horizontal discovery scrolling. On phones, arrange
+  the four page links in two columns and let section links wrap below; the nav
+  stays in ordinary document flow. On larger screens it may remain compact and
+  sticky if clicked and directly loaded hash targets are unobscured. Scope these
+  rules to the dashboard; other pages keep their existing navigation.
 - `:focus-visible` gets a 3px `--accent` outline. Motion (the status pulse,
   smooth scroll) is decorative and fully disabled under
   `prefers-reduced-motion`.
