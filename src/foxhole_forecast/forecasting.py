@@ -16,6 +16,7 @@ from .packets import (
     build_detail_packet,
     build_detail_source,
     build_scout_packet,
+    cohort_evidence_path,
     current_strategic_base_ids,
 )
 from .providers import MissingApiKey, ModelProvider, ProviderResponse, _parse_json_content
@@ -75,13 +76,11 @@ def _settings_from_payload(value: dict[str, Any]) -> Settings:
 
 
 def _replay_bundle_path(cohort_dir: Path, series_id: str) -> Path:
-    return cohort_dir / f"{series_id}-replay-bundle.json"
+    return cohort_evidence_path(cohort_dir, f"{series_id}-replay-bundle")
 
 
 def _replay_detail_source_path(cohort_dir: Path) -> Path:
-    compressed = cohort_dir / "replay-detail-source.json.gz"
-    legacy = cohort_dir / "replay-detail-source.json"
-    return compressed if compressed.exists() or not legacy.exists() else legacy
+    return cohort_evidence_path(cohort_dir, "replay-detail-source")
 
 
 def _write_replay_bundle(
@@ -110,7 +109,9 @@ def _write_replay_bundle(
         },
         "schemas": {"scout": scout_contract},
         "inputs": {
-            "scout_packet": f"{config['series_id']}-scout-packet.json",
+            "scout_packet": cohort_evidence_path(
+                cohort_dir, f"{config['series_id']}-scout-packet"
+            ).name,
             "scout_packet_sha256": _canonical_hash(model_scout_packet),
             "detail_source": detail_source_path.name,
             "detail_source_sha256": _canonical_hash(detail_source),
@@ -166,7 +167,9 @@ def run_forecast_cohort(
         }
     cohort_id = _identifier(scout_packet["war"]["warId"], cutoff)
     cohort_dir = DATA_DIR / "raw" / "cohorts" / cohort_id
-    write_json(cohort_dir / "scout-packet.json", scout_packet)
+    write_json(
+        cohort_evidence_path(cohort_dir, "scout-packet"), scout_packet
+    )
     write_json(
         cohort_dir / "replay-detail-source.json.gz",
         build_detail_source(settings),
@@ -216,11 +219,10 @@ def salvage_invalid_run(settings: Settings, run_id: str) -> dict[str, Any]:
     if run.get("status") != "invalid":
         raise ValueError(f"Run {run_id} is not invalid")
     detail_packet = read_json(
-        DATA_DIR
-        / "raw"
-        / "cohorts"
-        / run["cohort_id"]
-        / f"{run['series_id']}-detail-packet.json",
+        cohort_evidence_path(
+            DATA_DIR / "raw" / "cohorts" / run["cohort_id"],
+            f"{run['series_id']}-detail-packet",
+        ),
         default=None,
     )
     if not isinstance(detail_packet, dict):
@@ -344,8 +346,12 @@ def retry_invalid_run(
 
     cohort_dir = DATA_DIR / "raw" / "cohorts" / original["cohort_id"]
     scout_packet = read_json(
-        cohort_dir / f"{original['series_id']}-scout-packet.json",
-        default=read_json(cohort_dir / "scout-packet.json", default=None),
+        cohort_evidence_path(
+            cohort_dir, f"{original['series_id']}-scout-packet"
+        ),
+        default=read_json(
+            cohort_evidence_path(cohort_dir, "scout-packet"), default=None
+        ),
     )
     snapshot = read_json(snapshot_path, default=None)
     if not isinstance(scout_packet, dict) or not isinstance(snapshot, dict):
@@ -859,7 +865,9 @@ def _run_model(
         if previous_summary:
             model_scout_packet["previous_model_summary"] = previous_summary
         write_json(
-            cohort_dir / f"{config['series_id']}-scout-packet.json",
+            cohort_evidence_path(
+                cohort_dir, f"{config['series_id']}-scout-packet"
+            ),
             model_scout_packet,
         )
         replay_bundle = _write_replay_bundle(
@@ -902,12 +910,13 @@ def _run_model(
             latest_snapshot=detail_snapshot,
             frozen_source=frozen_detail_source,
         )
-        write_json(cohort_dir / f"{config['series_id']}-detail-packet.json", detail_packet)
+        detail_packet_path = cohort_evidence_path(
+            cohort_dir, f"{config['series_id']}-detail-packet"
+        )
+        write_json(detail_packet_path, detail_packet)
         forecast_contract = forecast_schema(settings)
         replay_bundle["schemas"]["forecast"] = forecast_contract
-        replay_bundle["inputs"]["detail_packet"] = (
-            f"{config['series_id']}-detail-packet.json"
-        )
+        replay_bundle["inputs"]["detail_packet"] = detail_packet_path.name
         replay_bundle["inputs"]["detail_packet_sha256"] = _canonical_hash(
             detail_packet
         )

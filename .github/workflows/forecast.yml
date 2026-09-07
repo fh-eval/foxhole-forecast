@@ -110,7 +110,8 @@ jobs:
             cohort_id="${RETRY_RUN_ID%%:*}"
             series_id="${RETRY_RUN_ID#*:}"
             bundle="data/raw/cohorts/${cohort_id}/${series_id}-replay-bundle.json"
-            if [[ -f "$bundle" ]]; then
+            bundle_gz="${bundle}.gz"
+            if [[ -f "$bundle" || -f "$bundle_gz" ]]; then
               replay_args=(--run-id "$RETRY_RUN_ID" --allow-paid)
               if [[ "${{ inputs.allow_manual_replay }}" == "true" ]]; then
                 replay_args+=(--allow-manual-replay)

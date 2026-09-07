@@ -19,6 +19,8 @@ from foxhole_forecast.archives import (
 )
 from foxhole_forecast.artifacts import externalize_run_responses
 from foxhole_forecast.config import Settings
+from foxhole_forecast.dashboard import _base_lookup, _metric_lookup
+from foxhole_forecast.packets import cohort_evidence_path
 from foxhole_forecast.scoring import settle_and_score
 from foxhole_forecast.storage import read_json, read_jsonl, write_json, write_jsonl
 
@@ -318,3 +320,78 @@ class WarArchiveTests(unittest.TestCase):
                 verify_war_archive_parity(data_dir, 139)["parity"],
                 "already_pruned",
             )
+
+    def test_mixed_format_cohort_packets_compress_deterministically_and_archive(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            data_dir = Path(temporary)
+            self._fixture(data_dir)
+            cohort_dir = data_dir / "raw" / "cohorts" / "cohort-139"
+            detail = {"war_id": "ended-war", "selected_metrics": [{"metric_id": "m1"}]}
+
+            # (a) New writes target deterministic gzip and round-trip through read_json,
+            # while the legacy .json packet in the same cohort still resolves.
+            path = cohort_evidence_path(cohort_dir, "model-1-detail-packet")
+            self.assertEqual(path.name, "model-1-detail-packet.json.gz")
+            write_json(path, detail)
+            self.assertEqual(read_json(path), detail)
+            self.assertEqual(
+                read_json(cohort_evidence_path(cohort_dir, "model-1-detail-packet")),
+                detail,
+            )
+            self.assertEqual(
+                cohort_evidence_path(cohort_dir, "scout-packet").name,
+                "scout-packet.json",
+            )
+
+            # (b) Two writes of identical content produce byte-identical files.
+            first_bytes = path.read_bytes()
+            write_json(path, detail)
+            self.assertEqual(path.read_bytes(), first_bytes)
+
+            # (c) Archive create/prune parity works for the mixed-format cohort.
+            created = create_war_archive(data_dir, 139)
+            self.assertTrue(created["verified"])
+            packets = read_json(data_dir / "archives/war-139/frozen-packets.json.gz")
+            self.assertEqual(
+                packets["raw/cohorts/cohort-139/model-1-detail-packet.json.gz"],
+                detail,
+            )
+            self.assertEqual(
+                packets["raw/cohorts/cohort-139/scout-packet.json"],
+                {"war_id": "ended-war"},
+            )
+            self.assertEqual(
+                verify_war_archive_parity(data_dir, 139)["parity"],
+                "live_match",
+            )
+            dry_run = prune_archived_war(data_dir, 139)
+            self.assertEqual(dry_run["mode"], "dry_run")
+            self.assertEqual(dry_run["removed_frozen_packets"], 2)
+            self.assertTrue(
+                (cohort_dir / "model-1-detail-packet.json.gz").exists()
+            )
+            self.assertTrue((cohort_dir / "scout-packet.json").exists())
+
+    def test_pruned_legacy_packets_resolve_through_archived_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            data_dir = Path(temporary)
+            self._fixture(data_dir)
+            cohort_dir = data_dir / "raw" / "cohorts" / "cohort-139"
+            write_json(
+                cohort_dir / "model-9-detail-packet.json",
+                {
+                    "cutoff": "2026-01-01T00:00:00Z",
+                    "selected_metrics": [{"metric_id": "legacy-metric", "value": 7}],
+                    "strategic_bases": [{"base_id": "legacy-base"}],
+                },
+            )
+            create_war_archive(data_dir, 139)
+            applied = prune_archived_war(data_dir, 139, apply=True)
+            self.assertEqual(applied["mode"], "applied")
+            self.assertFalse(cohort_dir.exists())
+
+            archived_packets = read_archived_mapping(data_dir, "frozen-packets.json.gz")
+            run = {"cohort_id": "cohort-139", "series_id": "model-9"}
+            with patch("foxhole_forecast.dashboard.DATA_DIR", data_dir):
+                self.assertIn("legacy-metric", _metric_lookup(run, archived_packets))
+                self.assertIn("legacy-base", _base_lookup(run, archived_packets))

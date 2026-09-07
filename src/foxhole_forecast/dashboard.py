@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 import re
 import statistics
 from typing import Any
@@ -24,7 +25,7 @@ from .config import (
 from .comparisons import eligible_pair_rounds, summarize_comparisons
 from .domain import strategic_base_type
 from .evidence_analysis import summarize_pair_evidence
-from .packets import build_scout_packet
+from .packets import build_scout_packet, cohort_evidence_path
 from .score_metrics import summarize_crps, summarize_retention, summarize_selection
 from .storage import isoformat, parse_time, read_json, write_json
 from .war_lifecycle import war_ended_at, war_is_active
@@ -1023,19 +1024,35 @@ def _build_war_api_snapshot(
     }
 
 
+def _archived_packet(
+    archived_packets: dict[str, Any] | None, path: Path
+) -> dict[str, Any]:
+    """Extension-agnostic archived packet lookup.
+
+    Archive manifests record the real live relative paths, so a resolved
+    `.json.gz` path can miss a legacy `.json` archive key (and vice versa)
+    once live files are pruned; retry the alternate extension.
+    """
+    packets = archived_packets or {}
+    relative = str(path.relative_to(DATA_DIR))
+    if relative in packets:
+        return packets[relative]
+    alternate = (
+        relative[: -len(".gz")] if relative.endswith(".gz") else f"{relative}.gz"
+    )
+    return packets.get(alternate, {})
+
+
 def _metric_lookup(
     run: dict[str, Any], archived_packets: dict[str, Any] | None = None
 ) -> dict[str, dict[str, Any]]:
-    path = (
-        DATA_DIR
-        / "raw"
-        / "cohorts"
-        / run["cohort_id"]
-        / f"{run['series_id']}-detail-packet.json"
+    path = cohort_evidence_path(
+        DATA_DIR / "raw" / "cohorts" / run["cohort_id"],
+        f"{run['series_id']}-detail-packet",
     )
     packet = read_json(path, default=None)
     if packet is None:
-        packet = (archived_packets or {}).get(str(path.relative_to(DATA_DIR)), {})
+        packet = _archived_packet(archived_packets, path)
     return {
         metric["metric_id"]: metric
         for metric in packet.get("selected_metrics", [])
@@ -1045,16 +1062,13 @@ def _metric_lookup(
 def _base_lookup(
     run: dict[str, Any], archived_packets: dict[str, Any] | None = None
 ) -> dict[str, dict[str, Any]]:
-    path = (
-        DATA_DIR
-        / "raw"
-        / "cohorts"
-        / run["cohort_id"]
-        / f"{run['series_id']}-detail-packet.json"
+    path = cohort_evidence_path(
+        DATA_DIR / "raw" / "cohorts" / run["cohort_id"],
+        f"{run['series_id']}-detail-packet",
     )
     packet = read_json(path, default=None)
     if packet is None:
-        packet = (archived_packets or {}).get(str(path.relative_to(DATA_DIR)), {})
+        packet = _archived_packet(archived_packets, path)
     return {
         base["base_id"]: base
         for base in packet.get("strategic_bases", [])

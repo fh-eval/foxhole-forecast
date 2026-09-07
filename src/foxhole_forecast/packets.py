@@ -2,11 +2,29 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from .config import DATA_DIR, Settings
 from .domain import strategic_base_type
 from .storage import parse_time, read_json, read_jsonl
+
+
+def cohort_evidence_path(cohort_dir: Path, filename_base: str) -> Path:
+    """Resolve a cohort evidence packet path for both read and write targets.
+
+    Prefers the compressed `.json.gz` form, falls back to a legacy `.json`
+    file when only that exists, and defaults to the compressed name so new
+    writes are deterministic gzip. Packet hashes recorded in bundles are
+    canonical content hashes, so this resolution is compression-agnostic.
+    """
+    compressed = cohort_dir / f"{filename_base}.json.gz"
+    legacy = cohort_dir / f"{filename_base}.json"
+    if compressed.exists():
+        return compressed
+    if legacy.exists():
+        return legacy
+    return compressed
 
 
 DATA_DICTIONARY = {
