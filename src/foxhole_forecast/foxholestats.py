@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
 import re
 import tempfile
 import unicodedata
@@ -517,7 +518,14 @@ def recover_observation_gaps(
         return _save_recovery_result(result, war_id)
 
 
-    except (OSError, UnicodeError, RecoverySourceError, ValueError, RuntimeError) as error:
+    except (
+        OSError,
+        UnicodeError,
+        RecoverySourceError,
+        ValueError,
+        RuntimeError,
+        http.client.HTTPException,
+    ) as error:
         failures = int(prior.get("failure_count", 0)) + 1
         backoff_minutes = min(
             RECOVERY_MAX_BACKOFF_HOURS * 60,

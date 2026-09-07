@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -174,6 +175,29 @@ class FoxholeStatsTests(unittest.TestCase):
                 )
             self.assertEqual(failed["status"], "failed")
             self.assertEqual(cooldown["status"], "cooldown")
+            self.assertEqual(calls, 1)
+            self.assertEqual((root / "historical_events.jsonl").read_bytes(), original)
+            self.assertEqual(read_json(root / "recovery_status.json")["wars"]["war-1"]["failure_count"], 1)
+        finally:
+            temporary.cleanup()
+
+    def test_truncated_http_download_enters_cooldown(self) -> None:
+        temporary, root = self._recovery_fixture()
+        try:
+            write_jsonl(root / "historical_events.jsonl", [{"source": "official"}])
+            original = (root / "historical_events.jsonl").read_bytes()
+            calls = 0
+
+            def truncated(_: str) -> bytes:
+                nonlocal calls
+                calls += 1
+                raise http.client.IncompleteRead(b"partial")
+
+            with patch("foxhole_forecast.foxholestats.DATA_DIR", root):
+                failed = recover_closed_war_gaps(
+                    Settings.load(), now=datetime(2026, 1, 2, tzinfo=UTC), fetcher=truncated
+                )
+            self.assertEqual(failed["status"], "failed")
             self.assertEqual(calls, 1)
             self.assertEqual((root / "historical_events.jsonl").read_bytes(), original)
             self.assertEqual(read_json(root / "recovery_status.json")["wars"]["war-1"]["failure_count"], 1)
