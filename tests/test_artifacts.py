@@ -11,6 +11,7 @@ from foxhole_forecast.artifacts import (
     put_json_object,
     read_json_object,
 )
+from foxhole_forecast.ledger import append_ledger, read_ledger
 from foxhole_forecast.storage import read_json, read_jsonl, write_json, write_jsonl
 
 
@@ -131,6 +132,58 @@ class ProviderResponseArtifactTests(unittest.TestCase):
                 read_json(data_dir / "migrations" / "provider-response-objects-v1.json"),
                 first,
             )
+
+    def test_compaction_after_migration_reads_and_rewrites_ledger_shards(self) -> None:
+        """Post-migration (monolith deleted, shards present) compaction works on
+        the model_runs ledger instead of crashing, and the report states the
+        data source.  Only the day shard owning a changed row is rewritten."""
+        with tempfile.TemporaryDirectory() as temporary:
+            data_dir = Path(temporary)
+            day1 = append_ledger(
+                "model_runs",
+                140,
+                {
+                    "run_id": "run-1",
+                    "created_at": "2026-09-01T05:00:00Z",
+                    "calls": [{"raw_response": {"value": 1}}],
+                },
+                data_dir=data_dir,
+            )
+            day2 = append_ledger(
+                "model_runs",
+                140,
+                {
+                    "run_id": "run-2",
+                    "created_at": "2026-09-02T05:00:00Z",
+                    "calls": [{"raw_response_ref": {"sha256": "a" * 64, "index": 0}}],
+                },
+                data_dir=data_dir,
+            )
+            day2_before = day2.read_bytes()
+
+            report = compact_model_runs(data_dir)
+            compacted = read_ledger("model_runs", data_dir=data_dir)[0]
+
+            self.assertEqual(report["runs"], 2)
+            self.assertEqual(report["changed_runs"], 1)
+            self.assertEqual(report["source"], "model_runs ledger shards (2 files)")
+            self.assertNotEqual(report["model_runs_sha256_before"], report["model_runs_sha256_after"])
+            self.assertNotIn("raw_response", compacted["calls"][0])
+            self.assertEqual(attempt_raw_response(compacted["calls"][0], data_dir), {"value": 1})
+            self.assertEqual(day2.read_bytes(), day2_before)
+
+            second = compact_model_runs(data_dir)
+            self.assertEqual(second["changed_runs"], 0)
+            self.assertEqual(second["source"], report["source"])
+
+    def test_compaction_without_monolith_or_shards_reports_cleanly(self) -> None:
+        """An empty data dir reports zero rows from an honest source; no crash."""
+        with tempfile.TemporaryDirectory() as temporary:
+            report = compact_model_runs(Path(temporary))
+
+            self.assertEqual(report["runs"], 0)
+            self.assertEqual(report["changed_runs"], 0)
+            self.assertEqual(report["source"], "model_runs ledger shards (0 files)")
 
 
 if __name__ == "__main__":
