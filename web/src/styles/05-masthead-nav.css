@@ -1,0 +1,106 @@
+/* ---------- Masthead & nav ---------- */
+
+.masthead { border-bottom: 3px solid var(--inkline); background: linear-gradient(rgba(var(--paper-rgb),0), rgba(var(--line-rgb),.45)), var(--paper); }
+.masthead__eyebrow { padding: 9px 20px; color: var(--paper); background: var(--ink); font-size: 11px; font-weight: 600; letter-spacing: .16em; text-align: center; }
+.masthead__body { min-height: 280px; display: flex; align-items: center; justify-content: space-between; gap: 32px; }
+h1 { margin-bottom: 10px; font: 650 clamp(56px, 9vw, 110px)/.9 var(--serif); letter-spacing: -.03em; }
+h1 span { color: var(--accent); }
+.lede { margin-bottom: 12px; color: var(--accent-ink); font: 650 26px/1.2 var(--serif); }
+.sublede { max-width: 660px; margin: 0; color: var(--soft); font-family: var(--serif); font-size: 18px; line-height: 1.55; }
+
+.war-stamp {
+  position: relative;
+  min-width: 240px;
+  padding: 18px 20px;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  border: 3px double var(--accent-ink);
+  border-radius: 8px;
+  color: var(--accent-ink);
+  background: rgba(var(--card-rgb),.7);
+  transform: rotate(2.5deg);
+  text-transform: uppercase;
+}
+.war-stamp small { display: block; color: var(--accent-ink); font-size: 11px; letter-spacing: .18em; }
+.war-stamp strong { display: block; max-width: 150px; font-size: 17px; letter-spacing: .08em; }
+.pulse { width: 11px; height: 11px; flex: 0 0 auto; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 6px rgba(var(--accent-rgb),.16); animation: pulse 2s infinite; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 11px rgba(var(--accent-rgb),0); } }
+
+.section-nav { position: sticky; top: 0; z-index: 5; border-bottom: 2px solid var(--inkline); background: rgba(var(--paper-rgb),.94); backdrop-filter: blur(10px); }
+.section-nav div { display: flex; gap: 6px 24px; overflow-x: auto; scrollbar-width: none; }
+.section-nav div::-webkit-scrollbar { display: none; }
+.section-nav a { padding: 13px 2px; color: var(--soft); font-size: 12.5px; font-weight: 600; text-decoration: none; text-transform: uppercase; letter-spacing: .09em; white-space: nowrap; border-bottom: 3px solid transparent; }
+.section-nav a:hover { color: var(--accent-ink); border-bottom-color: var(--accent); }
+
+/* Dashboard navigation is grouped by destination instead of making one long
+   mixed row. Keep this modifier local: section-nav is also used by the
+   archive, comparison, prompt-flow, pitch, and prediction pages. */
+.dashboard-nav .dashboard-nav__inner {
+  display: grid;
+  gap: 0;
+  overflow: visible;
+  padding-block: 8px;
+}
+.dashboard-nav .dashboard-nav__group {
+  min-width: 0;
+  display: block;
+  overflow: visible;
+  text-align: center;
+}
+.dashboard-nav__group--dashboard {
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.dashboard-nav__group--site {
+  padding-bottom: 4px;
+}
+.dashboard-nav .dashboard-nav__links {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 18px;
+  align-items: center;
+  overflow: visible;
+}
+.dashboard-nav__group--site .dashboard-nav__links,
+.dashboard-nav__group--dashboard .dashboard-nav__links {
+  justify-content: center;
+  text-align: center;
+}
+.dashboard-nav .dashboard-nav__links a {
+  padding: 3px 1px;
+  white-space: nowrap;
+}
+.dashboard-nav__group--site .dashboard-nav__links {
+  gap: 5px 24px;
+}
+.dashboard-nav .dashboard-nav__group--site .dashboard-nav__links a {
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.dashboard-nav .dashboard-nav__links a:focus-visible,
+.dashboard-nav__top:focus-visible {
+  position: relative;
+  z-index: 1;
+}
+.dashboard-nav .dashboard-nav__top {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  place-items: center;
+  color: var(--accent-ink);
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 17px;
+  line-height: 1;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.dashboard-page { --dashboard-nav-offset: 136px; }
+.dashboard-page .section-block { scroll-margin-top: var(--dashboard-nav-offset); }
