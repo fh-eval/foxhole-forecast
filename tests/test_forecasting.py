@@ -32,6 +32,7 @@ from foxhole_forecast.forecasting import (
     run_forecast_cohort,
     salvage_invalid_run,
 )
+from foxhole_forecast.ledger import read_ledger
 from foxhole_forecast.packets import cohort_evidence_path
 from foxhole_forecast.schemas import forecast_schema
 from foxhole_forecast.storage import read_jsonl, write_json, write_jsonl
@@ -58,6 +59,10 @@ class ForecastBudgetTests(unittest.TestCase):
                 "error": "RuntimeError: Provider returned HTTP 404:",
             }
             write_jsonl(data / "model_runs.jsonl", [original])
+            write_json(
+                data / "wars.json",
+                {"wars": {"war-1": {"war_id": "war-1", "war_number": 1}}},
+            )
             write_jsonl(
                 data / "cohorts.jsonl",
                 [
@@ -202,7 +207,7 @@ class ForecastBudgetTests(unittest.TestCase):
                     allow_manual_replay=True,
                 )
 
-            rows = read_jsonl(data / "model_runs.jsonl")
+            rows = read_ledger("model_runs", data_dir=data)
             self.assertEqual(first["status"], "invalid")
             self.assertTrue(existing["already_existed"])
             self.assertEqual(second["status"], "invalid")
@@ -870,11 +875,11 @@ class ForecastBudgetTests(unittest.TestCase):
             self.assertEqual(saved["salvage_forecast_attempts_considered"], 2)
             self.assertEqual(len(saved["forecast"]["predictions"]), 2)
 
-    @patch("foxhole_forecast.forecasting.read_jsonl")
+    @patch("foxhole_forecast.forecasting.read_ledger")
     def test_previous_summary_is_latest_valid_same_model_and_war(
-        self, read_jsonl_mock
+        self, read_ledger_mock
     ) -> None:
-        read_jsonl_mock.return_value = [
+        read_ledger_mock.return_value = [
             {
                 "status": "valid",
                 "series_id": "nemotron",
@@ -919,8 +924,8 @@ class ForecastBudgetTests(unittest.TestCase):
             {"cutoff": "2026-08-22T09:00:00Z", "war_summary": "Latest summary."},
         )
 
-    @patch("foxhole_forecast.forecasting.read_jsonl", return_value=[])
-    def test_previous_summary_is_optional(self, _read_jsonl_mock) -> None:
+    @patch("foxhole_forecast.forecasting.read_ledger", return_value=[])
+    def test_previous_summary_is_optional(self, _read_ledger_mock) -> None:
         self.assertIsNone(
             _previous_model_summary("nemotron", "war-1", "2026-08-22T12:00:00Z")
         )
