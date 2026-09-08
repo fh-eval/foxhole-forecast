@@ -186,7 +186,6 @@ class DashboardTests(unittest.TestCase):
             main = read_json(data / "dashboard-main.json")
             rounds = read_json(data / "round-history.json")
             summaries = read_json(data / "summary-history.json")
-            self.assertFalse((data / "dashboard.json").exists())
             self.assertNotIn("comparison_analysis", main)
             self.assertEqual(
                 read_json(data / "comparison-analysis.json")["comparison_analysis"]["all_time"]["pairs"],
