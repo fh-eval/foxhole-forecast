@@ -31,9 +31,11 @@ This module rebuilds the lost rows deterministically from that evidence:
   content, validation outcomes, correction-round structure, and usage/cost
   figures ARE run-time faithful: they come from replaying the same
   validators over the same frozen data.
-- The tool refuses to repair a cohort twice (idempotence guard): if any of
-  the cohort's run ids already exists in the ``model_runs`` ledger, the
-  cohort is skipped with an error.
+- The tool refuses to repair a cohort twice (idempotence guard).  The one
+  resumable exception is an interrupted append: existing rows and audit
+  entries for the cohort must be an exact, ordered prefix of the
+  deterministic repair, after which only missing rows and audit entries are
+  appended.
 
 Monkeypatch surface (same pattern as ledger.py/forecasting.py): tests can
 patch ``foxhole_forecast.repair.DATA_DIR`` and the re-exported storage and
@@ -698,6 +700,131 @@ def _cross_check_forecast_result(
         )
 
 
+def _matching_prefix(
+    existing: list[dict[str, Any]],
+    expected: list[dict[str, Any]],
+    *,
+    kind: str,
+    cohort_id: str,
+) -> int:
+    """Validate an interrupted append and return its matching prefix length."""
+    if len(existing) > len(expected):
+        raise RepairRefused(
+            f"Cohort {cohort_id} has too many existing {kind} entries; "
+            "refusing to guess how to resume"
+        )
+    for index, actual in enumerate(existing):
+        if not isinstance(actual, dict) or actual != expected[index]:
+            raise RepairRefused(
+                f"Existing {kind} entry {index + 1} for cohort {cohort_id} "
+                "does not exactly match the deterministic repair; refusing "
+                "to append around incompatible state"
+            )
+    return len(existing)
+
+
+def _existing_repair_state(
+    cohort_id: str,
+    run_ids: set[str],
+    expected_rows: list[dict[str, Any]],
+    expected_audits: list[dict[str, Any]],
+    *,
+    data_dir: Path,
+) -> tuple[int, int]:
+    """Validate and describe a possibly interrupted repair append.
+
+    A repair may resume only from the exact prefix produced by this tool.
+    Rows or audits with the cohort's identifiers but different content,
+    duplicates, unexpected identifiers, or audits without their ledger row
+    are refused.  Unrelated cohorts remain untouched.
+    """
+    ledger_rows = _pkg.read_ledger(_LEDGER, data_dir=data_dir)
+    expected_by_run = {row["run_id"]: row for row in expected_rows}
+    matching_rows: list[dict[str, Any]] = []
+    seen_run_ids: set[str] = set()
+    for row in ledger_rows:
+        if not isinstance(row, dict):
+            raise RepairRefused(
+                f"Malformed existing {_LEDGER} entry; refusing to resume cohort "
+                f"{cohort_id}"
+            )
+        run_id = row.get("run_id")
+        if run_id in run_ids:
+            if run_id in seen_run_ids:
+                raise RepairRefused(
+                    f"Duplicate existing {_LEDGER} row for {run_id}; refusing "
+                    "to resume"
+                )
+            seen_run_ids.add(run_id)
+            matching_rows.append(row)
+        elif row.get("cohort_id") == cohort_id:
+            raise RepairRefused(
+                f"Unexpected existing {_LEDGER} row for cohort {cohort_id}; "
+                "refusing to resume"
+            )
+    # Keep the physical order of this cohort's rows.  A prefix is required so
+    # appending the missing rows converges to a fresh repair's byte order.
+    row_count = _matching_prefix(
+        matching_rows,
+        expected_rows,
+        kind=_LEDGER,
+        cohort_id=cohort_id,
+    )
+    audits = _pkg.read_jsonl(data_dir / "recovery_audit.jsonl")
+    matching_audits: list[dict[str, Any]] = []
+    seen_audit_ids: set[str] = set()
+    for audit in audits:
+        if not isinstance(audit, dict):
+            raise RepairRefused(
+                f"Malformed recovery audit entry; refusing to resume cohort "
+                f"{cohort_id}"
+            )
+        if audit.get("cohort_id") != cohort_id:
+            if audit.get("run_id") in run_ids:
+                raise RepairRefused(
+                    f"Existing recovery audit for {audit.get('run_id')} has "
+                    "the wrong cohort; refusing to resume"
+                )
+            continue
+        run_id = audit.get("run_id")
+        if run_id not in run_ids:
+            raise RepairRefused(
+                f"Unexpected recovery audit entry for cohort {cohort_id}; "
+                "refusing to resume"
+            )
+        if run_id in seen_audit_ids:
+            raise RepairRefused(
+                f"Duplicate recovery audit entry for {run_id}; refusing to resume"
+            )
+        seen_audit_ids.add(run_id)
+        matching_audits.append(audit)
+    audit_count = _matching_prefix(
+        matching_audits,
+        expected_audits,
+        kind="recovery audit",
+        cohort_id=cohort_id,
+    )
+    if audit_count > row_count:
+        raise RepairRefused(
+            f"Recovery audit for cohort {cohort_id} contains entries without "
+            "the corresponding ledger rows; refusing to resume"
+        )
+    # The mapping is deliberately checked here even though the prefix check
+    # normally catches it, making a mismatched run identifier explicit.
+    for row in matching_rows:
+        if row.get("run_id") not in expected_by_run:
+            raise RepairRefused(
+                f"Unexpected existing {_LEDGER} row for cohort {cohort_id}; "
+                "refusing to resume"
+            )
+    if row_count == len(expected_rows) and audit_count == len(expected_audits):
+        raise RepairRefused(
+            f"Cohort {cohort_id} already has the complete repair and audit; "
+            "refusing to repair a cohort twice"
+        )
+    return row_count, audit_count
+
+
 def repair_cohort(
     cohort_id: str,
     *,
@@ -710,8 +837,9 @@ def repair_cohort(
 
     Refuses (``RepairRefused``) when attribution is ambiguous, when any
     reconstructed status disagrees with the committed cohort record, or when
-    any of the cohort's run ids already exists in the ledger (idempotence
-    guard: a cohort is never repaired twice).
+    existing rows/audits are not an exact ordered prefix of the deterministic
+    repair.  A complete prior repair remains an idempotence refusal; only an
+    interrupted append can resume.
     """
     cohort = _load_cohort_record(cohort_id, data_dir)
     entries = [
@@ -723,16 +851,6 @@ def repair_cohort(
         raise RepairRefused(f"Cohort record for {cohort_id} has no model entries")
     if forecast_result is not None:
         _cross_check_forecast_result(cohort, forecast_result)
-
-    existing = {
-        row.get("run_id") for row in _pkg.read_ledger(_LEDGER, data_dir=data_dir)
-    }
-    already = [entry["run_id"] for entry in entries if entry["run_id"] in existing]
-    if already:
-        raise RepairRefused(
-            f"Cohort {cohort_id} already has run rows in the {_LEDGER} ledger "
-            f"({', '.join(already)}); refusing to repair a cohort twice"
-        )
 
     window_end = _next_cutoff(cohort, data_dir)
     window_start = parse_time(cohort["cutoff"])
@@ -795,35 +913,42 @@ def repair_cohort(
             }
         )
 
+    audit_entries = [
+        {
+            "schema_version": 1,
+            "record_type": "cohort_run_repair",
+            "cohort_id": cohort_id,
+            "war_id": cohort["war_id"],
+            "war_number": cohort["war_number"],
+            "run_id": run["run_id"],
+            "series_id": run["series_id"],
+            "status": run["status"],
+            "created_at": run["created_at"],
+            "cost_usd": run["cost_usd"],
+            "predictions": run["predictions"],
+            "response_object": run["response_object"],
+            "repaired_at": repaired_at,
+        }
+        for run in runs
+    ]
     if not dry_run:
-        for run in runs:
+        row_count, audit_count = _existing_repair_state(
+            cohort_id,
+            {entry["run_id"] for entry in entries},
+            [run["row"] for run in runs],
+            audit_entries,
+            data_dir=data_dir,
+        )
+        for run in runs[row_count:]:
             _pkg.append_ledger(
                 _LEDGER,
                 cohort["war_number"],
                 run["row"],
                 data_dir=data_dir,
             )
-        audit_entries = [
-            {
-                "schema_version": 1,
-                "record_type": "cohort_run_repair",
-                "cohort_id": cohort_id,
-                "war_id": cohort["war_id"],
-                "war_number": cohort["war_number"],
-                "run_id": run["run_id"],
-                "series_id": run["series_id"],
-                "status": run["status"],
-                "created_at": run["created_at"],
-                "cost_usd": run["cost_usd"],
-                "predictions": run["predictions"],
-                "response_object": run["response_object"],
-                "repaired_at": repaired_at,
-            }
-            for run in runs
-        ]
         _pkg.append_jsonl(
             data_dir / "recovery_audit.jsonl",
-            audit_entries,
+            audit_entries[audit_count:],
         )
     return {
         "cohort_id": cohort_id,
