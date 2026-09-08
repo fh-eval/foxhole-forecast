@@ -1,0 +1,16 @@
+---
+interface Props {
+  basePath: string;
+}
+
+const { basePath } = Astro.props;
+---
+
+      <section id="rounds" class="section-block">
+        <div class="section-heading">
+          <div><p class="kicker">Receipts</p><h2>Latest calls</h2></div>
+          <p>Here are the three newest shared three-hour windows: every model’s compact briefing, ranked calls, and settlement status.</p>
+        </div>
+        <div id="round-list" class="round-list"></div>
+        <p class="section-followup"><a class="section-heading__link" href={`${basePath}predictions/`}>Browse the full round history →</a></p>
+      </section>

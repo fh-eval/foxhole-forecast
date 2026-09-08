@@ -1,0 +1,27 @@
+---
+interface Props {
+  basePath: string;
+}
+
+const { basePath } = Astro.props;
+---
+
+      <section id="method" class="section-block methodology">
+        <div><p class="kicker">How it works</p><h2>Frozen evidence, recorded calls</h2></div>
+        <div class="method-grid">
+          <article><span>01</span><h3>Snapshot</h3><p>We collect public war data on a nominal fifteen-minute cadence. Models in a cohort share the same data cutoff; the regions they select determine which detailed evidence they receive.</p></article>
+          <article><span>02</span><h3>Predict</h3><p>Each model selects up to six regions and is asked for eight ranked calls: four about the next six hours, four about the following day. Valid bets survive even when other bets in the answer fail validation.</p></article>
+          <article><span>03</span><h3>Check</h3><p>Observations after the cutoff settle each bet separately. Invalid bets are dropped with a reason; unresolved observations are censored; unfinished calls stay open. Delayed replays use frozen inputs but can be generated after an outcome, so they are labeled separately.</p></article>
+        </div>
+        <details class="progressive-detail method-detail">
+          <summary>The fine print: settlement rules and edge cases</summary>
+          <div class="rule-grid rule-grid--two">
+            <article class="rule-card"><h3>When a call closes</h3><p>Each prediction stays open until three hours after its stated ETA. If nothing qualifying happened by then and our observation coverage was solid, it scores as a miss.</p></article>
+            <article class="rule-card"><h3>Partial credit exists</h3><p>An exact outcome earns full state credit. Certain capture/destruction near-matches can earn 0.75 — for example, a predicted capture when the base becomes neutral but the capture does not complete. The exact-outcome count still treats that as non-exact.</p></article>
+            <article class="rule-card"><h3>Why timing is fuzzy</h3><p>Our nominal polling cadence is fifteen minutes, but coverage can vary. We know an event happened <em>between</em> observations when both are available, not the exact second; scoring averages over that interval rather than pretending we have stopwatch precision.</p></article>
+            <article class="rule-card"><h3>When we cannot settle a call</h3><p>Coverage gaps, ambiguous transition intervals, or the war ending can leave an individual bet censored. The other bets remain eligible. The existing rules can keep a coarse interval when every possible event time gives the same timing credit; we do not automatically discard every bet touched by a gap.</p></article>
+          </div>
+        </details>
+        <a class="method-link" href={`${basePath}prompt-flow/`}>See the exact prompts and data flow →</a>
+        <p class="fine-print">Foxhole Forecast is an independent, non-commercial experiment. Foxhole is developed by Siege Camp. Model briefings are predictions, not gameplay advice.</p>
+      </section>

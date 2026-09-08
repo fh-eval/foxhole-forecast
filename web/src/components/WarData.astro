@@ -1,0 +1,33 @@
+      <section id="war-data" class="section-block">
+        <div class="section-heading">
+          <div><p class="kicker">The raw material</p><h2>What the models were shown</h2></div>
+          <p>Every model gets exactly the same snapshot of the war: who owns what, where the fighting is, casualty pace, and fresh enlistment activity. Nothing secret, nothing after the cutoff. This is that snapshot, straight from the official game API.</p>
+        </div>
+        <div id="telemetry-summary" class="telemetry-grid"></div>
+        <div class="telemetry-layout">
+          <div class="event-feed">
+            <div class="subheading">
+              <div class="event-feed__title"><h3>Base Control Wire</h3><small>Recent events on the front</small></div>
+              <span>Official control reports · newest first</span>
+            </div>
+            <div class="event-feed__viewport">
+              <button id="telemetry-events-prev" class="event-feed__nav event-feed__nav--newer" type="button" aria-label="Show the next newer bulletin"><b aria-hidden="true">←</b><small>Newer</small></button>
+              <ol id="telemetry-events" aria-label="Recent base-control bulletins, newest first"></ol>
+              <button id="telemetry-events-next" class="event-feed__nav event-feed__nav--older" type="button" aria-label="Show the next older bulletin"><b aria-hidden="true">→</b><small>Older</small></button>
+              <div class="event-feed__docket">
+                <span id="telemetry-events-page" class="event-feed__page" aria-live="polite">1 / 1</span>
+                <button id="telemetry-events-latest" class="event-feed__latest" type="button">Return to latest</button>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="subheading"><h3>Regions, ranked by recent activity</h3><span id="telemetry-cutoff">—</span></div>
+            <div class="table-shell telemetry-scroll">
+              <table class="telemetry-table">
+                <thead><tr><th>Region</th><th>Events<small>2h / 6h / 24h</small></th><th>Bases<small>W / C / neutral</small></th><th>Warden casualties<small>1h pace · total · 2h change</small></th><th>Colonial casualties<small>1h pace · total · 2h change</small></th><th>Enlistments<small>1h new-region pace · total · 2h change</small></th><th>Latest event</th></tr></thead>
+                <tbody id="telemetry-regions"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>

@@ -1,6 +1,20 @@
 ---
 import "../styles/global.css";
-import { Content as HumanNote } from "../content/human-note.md";
+import Briefings from "../components/Briefings.astro";
+import DashboardNav from "../components/DashboardNav.astro";
+import EvidenceCaution from "../components/EvidenceCaution.astro";
+import Footer from "../components/Footer.astro";
+import HumanNote from "../components/HumanNote.astro";
+import InvestigationIntro from "../components/InvestigationIntro.astro";
+import Limitations from "../components/Limitations.astro";
+import Masthead from "../components/Masthead.astro";
+import Method from "../components/Method.astro";
+import Probability from "../components/Probability.astro";
+import RetentionDetail from "../components/RetentionDetail.astro";
+import Rounds from "../components/Rounds.astro";
+import Scoreboard from "../components/Scoreboard.astro";
+import StatusStrip from "../components/StatusStrip.astro";
+import WarData from "../components/WarData.astro";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 ---
@@ -16,292 +30,35 @@ const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
     <title>Foxhole Forecast</title>
   </head>
   <body id="top">
-    <aside class="human-note" aria-labelledby="human-note-title">
-      <div class="page-width human-note__inner">
-        <div class="human-note__label">
-          <p class="kicker">A word before the numbers</p>
-          <h2 id="human-note-title">Note from the human</h2>
-        </div>
-        <div class="human-note__copy">
-          <HumanNote />
-          <p class="human-note__pitch"><a href={`${basePath}pitch/`}>Read the full pitch: why Foxhole might make a useful LLM evaluation →</a></p>
-          <p class="human-note__credit">Built collaboratively with OpenAI Codex, GPT-5.6 Luna, and Kimi K3: Codex handled engineering and integration, Luna shaped the ongoing reader-facing UI, and Kimi K3 contributed the visual redesign and design guidelines. The human project owner sets direction and decides what to publish.</p>
-        </div>
-      </div>
-    </aside>
-    <header class="masthead">
-      <div class="masthead__eyebrow">A SMALL LIVE EXPERIMENT · RUN ENTIRELY ON PUBLIC GAME DATA</div>
-      <div class="masthead__body page-width">
-        <div>
-          <h1>Foxhole <span>Forecast</span></h1>
-          <p class="lede">Can an AI read a battlefield?</p>
-          <p class="sublede">We hand several AI models the same public war reports from the game Foxhole and ask them to call what happens next — which base falls, who takes it, and when. Live submissions and labeled frozen-input replays are kept distinct, so you can see what each kind of run contributes. Then we check.</p>
-        </div>
-        <div class="war-stamp" aria-live="polite">
-          <span class="pulse"></span>
-          <div><small id="war-status">OBSERVING</small><strong id="war-number">Waiting for data</strong></div>
-        </div>
-      </div>
-    </header>
-
-    <nav class="section-nav dashboard-nav" aria-label="Dashboard navigation">
-      <div class="page-width dashboard-nav__inner">
-        <div class="dashboard-nav__group dashboard-nav__group--site" role="group" aria-label="Site navigation">
-          <div class="dashboard-nav__links">
-            <a href={`${basePath}predictions/`}>Round history</a>
-            <a href={`${basePath}comparisons/`}>Model comparisons</a>
-            <a href={`${basePath}history/`}>Archive</a>
-            <a href={`${basePath}prompt-flow/`}>Prompt flow</a>
-          </div>
-        </div>
-        <div class="dashboard-nav__group dashboard-nav__group--dashboard" role="group" aria-label="On this dashboard">
-          <div class="dashboard-nav__links">
-            <a href="#scoreboard">The scoreboard</a>
-            <a href="#war-data">War data</a>
-            <a href="#rounds">The calls</a>
-            <a href="#briefings">News from the Front</a>
-            <a href="#probability">For nerds</a>
-            <a href="#limitations">Caveats</a>
-            <a href="#method">Method</a>
-            <a class="dashboard-nav__top" href="#top" title="Back to top" aria-label="Back to top"><span aria-hidden="true">↑</span></a>
-          </div>
-        </div>
-      </div>
-    </nav>
+    <HumanNote basePath={basePath} />
+    <Masthead />
+    <DashboardNav basePath={basePath} />
 
     <main class="page-width dashboard-page">
-      <section class="status-strip" aria-label="Collection status">
-        <div><small>LAST OBSERVATION</small><strong id="last-observation">—</strong></div>
-        <div><small>STRATEGIC BASES</small><strong id="base-count">—</strong></div>
-        <div><small>COLLECTOR POLLS</small><strong id="poll-count">—</strong></div>
-        <div><small>NOMINAL OBSERVATION CADENCE</small><strong>~15 min</strong></div>
-      </section>
+      <StatusStrip />
 
-      <section class="investigation-intro" aria-labelledby="investigation-title">
-        <div>
-          <p class="kicker">The bet</p>
-          <h2 id="investigation-title">Say which base falls, who takes it, when — and how sure you are.</h2>
-        </div>
-        <div class="investigation-intro__copy">
-          <p>Each model must point at a real base on the map, name the exact outcome, give a time, and attach a probability. We compare base selection, outcomes, and timing to see where models differ and where they struggle. It’s a small experiment on a limited budget, so the patterns are starting points for investigation.</p>
-          <p class="plain-note"><strong>How to read this page</strong> Start with the scoreboard, then open the actual calls and the evidence behind them. Every technical detail stays on the page for anyone who wants to check our math.</p>
-        </div>
-      </section>
+      <InvestigationIntro />
 
-      <section id="scoreboard" class="section-block">
-        <div class="section-heading">
-          <div><p class="kicker">First look</p><h2>Did anyone call it?</h2></div>
-          <div class="score-heading-controls">
-            <p>The scoreboard in one sentence: did the model point at bases where something actually happened, name the right outcome, and land within three hours of its own ETA?</p>
-            <label class="select-label score-war-filter" for="score-war-select">
-              <span>Score history</span>
-              <select id="score-war-select" aria-label="Choose which war to include in the scoreboard">
-                <option value="current">Current war</option>
-                <option value="all">All wars</option>
-              </select>
-            </label>
-          </div>
-        </div>
-        <div class="adviser-guide">
-          <div><strong>Picked active bases</strong><span>Ignore the predicted outcome and exact ETA: did any ownership transition happen at the selected base between publication and that call’s deadline?</span></div>
-          <div><strong>Called the time</strong><span>The exact thing it predicted happened within three hours either side of its stated ETA.</span></div>
-          <div><strong>Called the outcome</strong><span>Of its picked bases that moved, how often did it correctly say destroyed or captured — and, if captured, by whom?</span></div>
-        </div>
-        <div class="compact-leaderboard">
-          <div class="subheading"><h3>The scoreboard</h3><span>Evidence profiles from a small sample — not a final ranking</span></div>
-          <div class="table-caption table-caption--equation">
-            <p class="kicker">The headline number</p>
-            <p><strong>Bullseye rate = exact outcome within ±3 hours of the model’s own ETA, out of every call we could fairly score.</strong></p>
-            <span>A model can pick only bases that later see action and still score zero bullseyes if it names the wrong result or misses the timing. False alarms, wrong outcomes, and correct-but-early-or-late calls all count as bullseye misses. The detailed score is a partial-credit CRPS-style loss over the cutoff-to-ETA-plus-three-hours window: certain capture/destruction near-matches receive 0.75, while exact-outcome counts remain separate. Dropped invalid bets, censored calls we could not fairly judge, and open calls are kept separate. Small samples: read the counts, not just the percentages.</span>
-          </div>
-          <div class="table-shell">
-            <table class="adviser-table" aria-label="Compact adviser comparison">
-              <thead><tr><th>Model</th><th>Bullseyes<small>exact call, ±3h of ETA</small></th><th>Picked active bases<small>any transition by deadline; outcome and ETA ignored</small></th><th>Outcome right<small>destroyed or captor, among active picks</small></th><th>Capture-pick lift<small>capture frequency vs. eligible scouted bases</small></th><th>Evidence<small>how much data</small></th></tr></thead>
-              <tbody id="adviser-rows" aria-live="polite"></tbody>
-            </table>
-          </div>
-          <p id="adviser-empty" class="empty-state" hidden>No model has completed a full round under the current protocol yet.</p>
-        </div>
-        <details class="progressive-detail">
-          <summary>Audit view: base-picking vs. the field</summary>
-        <div class="table-caption table-caption--equation">
-          <p class="kicker">The comparison with the field</p>
-          <p><strong>Total pipeline lift = scout lift × base-pick lift.</strong></p>
-          <span>Scout lift asks whether the model narrowed the map to active regions. Capture-pick lift compares how often its final selected bases were captured with the eligible bases inside those same six regions and scoring windows. Total lift compares the whole prompted process with blindly choosing across the map. These are capture-frequency ratios, not accuracy percentages or claims that the model caused anything.</span>
-        </div>
-        <div class="table-shell">
-          <table class="score-table selection-table" aria-describedby="selection-guide">
-            <thead>
-              <tr>
-                <th>Model</th>
-                <th>Near-term captures<small>Selected 0–6h bases</small></th>
-                <th>Next-day captures<small>Selected 6–24h bases</small></th>
-                <th>Any movement<small>Ownership transition by deadline</small></th>
-                <th>Exact outcome<small>Named result matched</small></th>
-                <th>Scout lift<small>Chosen regions vs. whole map</small></th>
-                <th>Capture-pick lift<small>Selected-base capture rate vs. chosen-region pool</small></th>
-                <th>Total pipeline lift<small>Calls vs. whole map</small></th>
-                <th>Strongest picks<small>Ranks #1 and #5</small></th>
-              </tr>
-            </thead>
-            <tbody id="selection-rows" aria-live="polite"></tbody>
-          </table>
-        </div>
-        <dl id="selection-guide" class="score-guide">
-          <div><dt>Captured selection</dt><dd>The selected base reached faction ownership by its deadline. This asks whether the model pointed toward a completed change of control.</dd></div>
-          <div><dt>Any movement</dt><dd>The selected base had any ownership transition after publication and by that prediction’s ETA plus three hours. The predicted outcome and distance from the ETA are ignored, so this measures location selection rather than forecast correctness.</dd></div>
-          <div><dt>Exact outcome</dt><dd>The selected base did exactly what the model named. This is stricter than finding a base where anything happened.</dd></div>
-          <div><dt>Scout lift</dt><dd>Did the six regions selected during the overview contain more captures than the map as a whole? This includes help from our activity data and scout prompt.</dd></div>
-          <div><dt>Capture-pick lift</dt><dd>Inside those same six regions and scoring windows, how often were the model’s final bases captured compared with all eligible bases? A 4× lift means four times the baseline capture frequency, not four times the prediction accuracy.</dd></div>
-          <div><dt>Total pipeline lift</dt><dd>How the complete scout-and-predict process compared with a random map-wide base. Useful for the system as built, but it includes our prompt structure.</dd></div>
-        </dl>
-        </details>
-        <p class="section-followup"><a class="section-heading__link" href={`${basePath}comparisons/`}>Compare two models on the same rounds →</a></p>
-      </section>
+      <Scoreboard basePath={basePath} />
 
-      <section class="section-block evidence-caution" aria-labelledby="evidence-caution-title">
-        <div class="section-heading">
-          <div><p class="kicker">Read before believing</p><h2 id="evidence-caution-title">Don’t crown a winner yet.</h2></div>
-          <p>These numbers describe the calls we’ve seen so far. They are clues, not a verdict on which model is “the best”.</p>
-        </div>
-        <div class="limitations-grid">
-          <article><h3>Read the sample size</h3><p>Models can have different numbers of scored calls. A 60% rate on five calls is a very different claim from 60% on fifty — always read the counts next to the percentages.</p></article>
-          <article><h3>Same war, same rounds</h3><p>Models often bet on the same front in the same hours. Twenty calls from one war are not twenty independent experiments — one weird week can flatter or sink anyone. The aggregate uses each model’s available rounds descriptively; it is not a paired comparison on shared, mature cases.</p></article>
-          <article><h3>Timing has a catch</h3><p>Average timing error can only be computed when something actually happened, so it quietly ignores false alarms. The bullseye rate keeps those misses in view; the custom CRPS-style table below combines timing, outcome, and stated probability.</p></article>
-        </div>
-      </section>
+      <EvidenceCaution />
 
-      <section id="probability" class="section-block">
-        <div class="section-heading">
-          <div><p class="kicker">Confidence and timing</p><h2>How do the whole forecasts compare?</h2></div>
-          <p>A model can sound humble and still be useless, or nail every call while claiming it was never sure. Read this beside the practical scoreboard: the partial-credit CRPS-style loss combines outcome, timing, and stated probability as an exploratory diagnostic. It does not establish calibration or a best model.</p>
-        </div>
-        <div class="table-caption table-caption--equation">
-          <p class="kicker">Whole-forecast error</p>
-          <p><strong>Partial-credit CRPS-style loss = ∫ E[(F(t) − credit × I(T≤t))²] dt</strong></p>
-          <span>In plain words: across the window from the data cutoff through three hours after the model’s ETA, how far is its probability curve from the observed event state and timing? The window varies with each ETA, and event intervals are averaged when the exact time is unknown. Certain near-matches receive 0.75 credit; exact-outcome counts are reported separately. Lower loss is an exploratory signal, not a calibration verdict.</span>
-        </div>
-        <div class="table-shell">
-          <table class="score-table probability-table" aria-describedby="score-guide">
-            <thead>
-              <tr>
-                <th>Model</th>
-                <th>Near-term forecast error<small>Partial-credit CRPS-style loss · 0–6h calls · lower ↓</small></th>
-                <th>Next-day forecast error<small>Partial-credit CRPS-style loss · 6–24h calls · lower ↓</small></th>
-                <th>Claimed chance<small>Mean confidence</small></th>
-                <th>Claimed timing spread<small>Mean sigma</small></th>
-                <th>Inside stated spread<small>Exact calls · model sigma only</small></th>
-                <th>Typical near-term target<small>Median after cutoff</small></th>
-                <th>Typical next-day target<small>Median after cutoff</small></th>
-                <th>Matched timing error<small>Matched events only · lower ↓</small></th>
-                <th>Call status<small>Scored / dropped / not scored / open</small></th>
-              </tr>
-            </thead>
-            <tbody id="score-rows" aria-live="polite"></tbody>
-          </table>
-          <p id="score-empty" class="empty-state" hidden>No model has scoreable probability forecasts under the current protocol yet.</p>
-        </div>
-        <dl id="score-guide" class="score-guide">
-          <div><dt>Near-term / next-day error <span>(partial-credit CRPS-style loss)</span></dt><dd>Integrated loss over each call’s cutoff-to-ETA-plus-three-hours window, combining outcome credit, timing, and stated probability. Lower is better as an exploratory diagnostic; it does not establish calibration or model superiority.</dd></div>
-          <div><dt>Stated chance <span>(confidence)</span></dt><dd>How likely the model said its named outcome was. A low-confidence call can score reasonably when nothing happens while offering little actionable advice — read this beside the bullseye rate.</dd></div>
-          <div><dt>Timing window <span>(sigma)</span></dt><dd>How spread out the model’s own timing estimate is. A narrow window is a bold, risky claim; a wide one hedges.</dd></div>
-          <div><dt>Inside stated spread</dt><dd>Among exact outcomes with a model-supplied sigma, how often did timing land inside that claimed spread? Read coverage beside average sigma: wider spreads are easier to cover. Legacy calls with inferred sigma are excluded.</dd></div>
-          <div><dt>Matched timing error <span>(ETA error)</span></dt><dd>How far the event landed from the ETA — but only for calls where something actually happened. False alarms don’t appear here, so never read this number alone.</dd></div>
-          <div><dt>Not scored <span>(censored)</span></dt><dd>Our observation coverage had gaps or the war ended before a fair judgment was possible. Excluded, not counted as misses.</dd></div>
-        </dl>
-      </section>
+      <Probability />
 
-      <details class="progressive-detail">
-        <summary>Audit view: retention and submission modes</summary>
-        <p class="method-caption">The denominator is published bets plus recorded dropped bets in the rounds shown. Failed runs with no usable forecast, missing slots, and discarded correction attempts are outside these counts; failures remain in the underlying run records. The scored fraction describes how much data can be evaluated, not how often a model was right. Live and delayed-replay breakdowns use each model’s available rounds.</p>
-        <div id="retention-summary"></div>
-      </details>
+      <RetentionDetail />
 
-      <section id="war-data" class="section-block">
-        <div class="section-heading">
-          <div><p class="kicker">The raw material</p><h2>What the models were shown</h2></div>
-          <p>Every model gets exactly the same snapshot of the war: who owns what, where the fighting is, casualty pace, and fresh enlistment activity. Nothing secret, nothing after the cutoff. This is that snapshot, straight from the official game API.</p>
-        </div>
-        <div id="telemetry-summary" class="telemetry-grid"></div>
-        <div class="telemetry-layout">
-          <div class="event-feed">
-            <div class="subheading">
-              <div class="event-feed__title"><h3>Base Control Wire</h3><small>Recent events on the front</small></div>
-              <span>Official control reports · newest first</span>
-            </div>
-            <div class="event-feed__viewport">
-              <button id="telemetry-events-prev" class="event-feed__nav event-feed__nav--newer" type="button" aria-label="Show the next newer bulletin"><b aria-hidden="true">←</b><small>Newer</small></button>
-              <ol id="telemetry-events" aria-label="Recent base-control bulletins, newest first"></ol>
-              <button id="telemetry-events-next" class="event-feed__nav event-feed__nav--older" type="button" aria-label="Show the next older bulletin"><b aria-hidden="true">→</b><small>Older</small></button>
-              <div class="event-feed__docket">
-                <span id="telemetry-events-page" class="event-feed__page" aria-live="polite">1 / 1</span>
-                <button id="telemetry-events-latest" class="event-feed__latest" type="button">Return to latest</button>
-              </div>
-            </div>
-          </div>
-          <div>
-            <div class="subheading"><h3>Regions, ranked by recent activity</h3><span id="telemetry-cutoff">—</span></div>
-            <div class="table-shell telemetry-scroll">
-              <table class="telemetry-table">
-                <thead><tr><th>Region</th><th>Events<small>2h / 6h / 24h</small></th><th>Bases<small>W / C / neutral</small></th><th>Warden casualties<small>1h pace · total · 2h change</small></th><th>Colonial casualties<small>1h pace · total · 2h change</small></th><th>Enlistments<small>1h new-region pace · total · 2h change</small></th><th>Latest event</th></tr></thead>
-                <tbody id="telemetry-regions"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </section>
+      <WarData />
 
-      <section id="rounds" class="section-block">
-        <div class="section-heading">
-          <div><p class="kicker">Receipts</p><h2>Latest calls</h2></div>
-          <p>Here are the three newest shared three-hour windows: every model’s compact briefing, ranked calls, and settlement status.</p>
-        </div>
-        <div id="round-list" class="round-list"></div>
-        <p class="section-followup"><a class="section-heading__link" href={`${basePath}predictions/`}>Browse the full round history →</a></p>
-      </section>
+      <Rounds basePath={basePath} />
 
-      <section id="briefings" class="section-block news-front">
-        <div class="section-heading">
-          <div><p class="kicker">The daily edition</p><h2>News from the Front</h2></div>
-          <p>One latest field report per model, presented as a dispatch from that model’s most recent valid cutoff. Cutoffs can differ when a model misses a cohort; these are summaries of what each model saw — not extra scored predictions.</p>
-        </div>
-        <div id="briefing-list" class="briefing-list"></div>
-      </section>
+      <Briefings />
 
-      <section id="limitations" class="section-block limitations">
-        <div class="section-heading">
-          <div><p class="kicker">Honest limits</p><h2>What this can’t tell you</h2></div>
-          <p>A good score means a model read public data well. It does not mean an AI understands the whole battlefield.</p>
-        </div>
-        <div class="limitations-grid">
-          <article><h3>Public data only</h3><p>We poll the official Foxhole War API on a nominal fifteen-minute cadence, with coverage gaps possible. That keeps the playing field level and the whole experiment auditable — anyone can pull the same numbers.</p></article>
-          <article><h3>No logistics intel</h3><p>Real Foxhole players would ask about shell stockpiles and supply lines. The public API doesn’t expose that, and we don’t scrape the game or run an in-game agent — so the models are forecasting with one hand tied behind their backs, on purpose.</p></article>
-          <article><h3>Small on purpose</h3><p>Model calls cost money, so the experiment stays compact: a handful of models, eight calls per round. Treat everything here as an ongoing study, not a finished leaderboard.</p></article>
-        </div>
-      </section>
+      <Limitations />
 
-      <section id="method" class="section-block methodology">
-        <div><p class="kicker">How it works</p><h2>Frozen evidence, recorded calls</h2></div>
-        <div class="method-grid">
-          <article><span>01</span><h3>Snapshot</h3><p>We collect public war data on a nominal fifteen-minute cadence. Models in a cohort share the same data cutoff; the regions they select determine which detailed evidence they receive.</p></article>
-          <article><span>02</span><h3>Predict</h3><p>Each model selects up to six regions and is asked for eight ranked calls: four about the next six hours, four about the following day. Valid bets survive even when other bets in the answer fail validation.</p></article>
-          <article><span>03</span><h3>Check</h3><p>Observations after the cutoff settle each bet separately. Invalid bets are dropped with a reason; unresolved observations are censored; unfinished calls stay open. Delayed replays use frozen inputs but can be generated after an outcome, so they are labeled separately.</p></article>
-        </div>
-        <details class="progressive-detail method-detail">
-          <summary>The fine print: settlement rules and edge cases</summary>
-          <div class="rule-grid rule-grid--two">
-            <article class="rule-card"><h3>When a call closes</h3><p>Each prediction stays open until three hours after its stated ETA. If nothing qualifying happened by then and our observation coverage was solid, it scores as a miss.</p></article>
-            <article class="rule-card"><h3>Partial credit exists</h3><p>An exact outcome earns full state credit. Certain capture/destruction near-matches can earn 0.75 — for example, a predicted capture when the base becomes neutral but the capture does not complete. The exact-outcome count still treats that as non-exact.</p></article>
-            <article class="rule-card"><h3>Why timing is fuzzy</h3><p>Our nominal polling cadence is fifteen minutes, but coverage can vary. We know an event happened <em>between</em> observations when both are available, not the exact second; scoring averages over that interval rather than pretending we have stopwatch precision.</p></article>
-            <article class="rule-card"><h3>When we cannot settle a call</h3><p>Coverage gaps, ambiguous transition intervals, or the war ending can leave an individual bet censored. The other bets remain eligible. The existing rules can keep a coarse interval when every possible event time gives the same timing credit; we do not automatically discard every bet touched by a gap.</p></article>
-          </div>
-        </details>
-        <a class="method-link" href={`${basePath}prompt-flow/`}>See the exact prompts and data flow →</a>
-        <p class="fine-print">Foxhole Forecast is an independent, non-commercial experiment. Foxhole is developed by Siege Camp. Model briefings are predictions, not gameplay advice.</p>
-      </section>
+      <Method basePath={basePath} />
     </main>
 
-    <footer><div class="page-width"><strong>FOXHOLE FORECAST</strong><span id="generated-at">No dataset generated yet</span></div></footer>
+    <Footer />
 
     <script>
       // @ts-nocheck

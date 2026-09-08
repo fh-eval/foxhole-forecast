@@ -1,0 +1,78 @@
+---
+interface Props {
+  basePath: string;
+}
+
+const { basePath } = Astro.props;
+---
+
+      <section id="scoreboard" class="section-block">
+        <div class="section-heading">
+          <div><p class="kicker">First look</p><h2>Did anyone call it?</h2></div>
+          <div class="score-heading-controls">
+            <p>The scoreboard in one sentence: did the model point at bases where something actually happened, name the right outcome, and land within three hours of its own ETA?</p>
+            <label class="select-label score-war-filter" for="score-war-select">
+              <span>Score history</span>
+              <select id="score-war-select" aria-label="Choose which war to include in the scoreboard">
+                <option value="current">Current war</option>
+                <option value="all">All wars</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="adviser-guide">
+          <div><strong>Picked active bases</strong><span>Ignore the predicted outcome and exact ETA: did any ownership transition happen at the selected base between publication and that call’s deadline?</span></div>
+          <div><strong>Called the time</strong><span>The exact thing it predicted happened within three hours either side of its stated ETA.</span></div>
+          <div><strong>Called the outcome</strong><span>Of its picked bases that moved, how often did it correctly say destroyed or captured — and, if captured, by whom?</span></div>
+        </div>
+        <div class="compact-leaderboard">
+          <div class="subheading"><h3>The scoreboard</h3><span>Evidence profiles from a small sample — not a final ranking</span></div>
+          <div class="table-caption table-caption--equation">
+            <p class="kicker">The headline number</p>
+            <p><strong>Bullseye rate = exact outcome within ±3 hours of the model’s own ETA, out of every call we could fairly score.</strong></p>
+            <span>A model can pick only bases that later see action and still score zero bullseyes if it names the wrong result or misses the timing. False alarms, wrong outcomes, and correct-but-early-or-late calls all count as bullseye misses. The detailed score is a partial-credit CRPS-style loss over the cutoff-to-ETA-plus-three-hours window: certain capture/destruction near-matches receive 0.75, while exact-outcome counts remain separate. Dropped invalid bets, censored calls we could not fairly judge, and open calls are kept separate. Small samples: read the counts, not just the percentages.</span>
+          </div>
+          <div class="table-shell">
+            <table class="adviser-table" aria-label="Compact adviser comparison">
+              <thead><tr><th>Model</th><th>Bullseyes<small>exact call, ±3h of ETA</small></th><th>Picked active bases<small>any transition by deadline; outcome and ETA ignored</small></th><th>Outcome right<small>destroyed or captor, among active picks</small></th><th>Capture-pick lift<small>capture frequency vs. eligible scouted bases</small></th><th>Evidence<small>how much data</small></th></tr></thead>
+              <tbody id="adviser-rows" aria-live="polite"></tbody>
+            </table>
+          </div>
+          <p id="adviser-empty" class="empty-state" hidden>No model has completed a full round under the current protocol yet.</p>
+        </div>
+        <details class="progressive-detail">
+          <summary>Audit view: base-picking vs. the field</summary>
+        <div class="table-caption table-caption--equation">
+          <p class="kicker">The comparison with the field</p>
+          <p><strong>Total pipeline lift = scout lift × base-pick lift.</strong></p>
+          <span>Scout lift asks whether the model narrowed the map to active regions. Capture-pick lift compares how often its final selected bases were captured with the eligible bases inside those same six regions and scoring windows. Total lift compares the whole prompted process with blindly choosing across the map. These are capture-frequency ratios, not accuracy percentages or claims that the model caused anything.</span>
+        </div>
+        <div class="table-shell">
+          <table class="score-table selection-table" aria-describedby="selection-guide">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Near-term captures<small>Selected 0–6h bases</small></th>
+                <th>Next-day captures<small>Selected 6–24h bases</small></th>
+                <th>Any movement<small>Ownership transition by deadline</small></th>
+                <th>Exact outcome<small>Named result matched</small></th>
+                <th>Scout lift<small>Chosen regions vs. whole map</small></th>
+                <th>Capture-pick lift<small>Selected-base capture rate vs. chosen-region pool</small></th>
+                <th>Total pipeline lift<small>Calls vs. whole map</small></th>
+                <th>Strongest picks<small>Ranks #1 and #5</small></th>
+              </tr>
+            </thead>
+            <tbody id="selection-rows" aria-live="polite"></tbody>
+          </table>
+        </div>
+        <dl id="selection-guide" class="score-guide">
+          <div><dt>Captured selection</dt><dd>The selected base reached faction ownership by its deadline. This asks whether the model pointed toward a completed change of control.</dd></div>
+          <div><dt>Any movement</dt><dd>The selected base had any ownership transition after publication and by that prediction’s ETA plus three hours. The predicted outcome and distance from the ETA are ignored, so this measures location selection rather than forecast correctness.</dd></div>
+          <div><dt>Exact outcome</dt><dd>The selected base did exactly what the model named. This is stricter than finding a base where anything happened.</dd></div>
+          <div><dt>Scout lift</dt><dd>Did the six regions selected during the overview contain more captures than the map as a whole? This includes help from our activity data and scout prompt.</dd></div>
+          <div><dt>Capture-pick lift</dt><dd>Inside those same six regions and scoring windows, how often were the model’s final bases captured compared with all eligible bases? A 4× lift means four times the baseline capture frequency, not four times the prediction accuracy.</dd></div>
+          <div><dt>Total pipeline lift</dt><dd>How the complete scout-and-predict process compared with a random map-wide base. Useful for the system as built, but it includes our prompt structure.</dd></div>
+        </dl>
+        </details>
+        <p class="section-followup"><a class="section-heading__link" href={`${basePath}comparisons/`}>Compare two models on the same rounds →</a></p>
+      </section>
