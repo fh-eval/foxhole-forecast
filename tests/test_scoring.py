@@ -659,20 +659,71 @@ class ScoringTests(unittest.TestCase):
     def test_gap_censors_horizon(self) -> None:
         settings = Settings.load()
         cutoff = datetime(2026, 1, 1, tzinfo=UTC)
+        deadline = cutoff + timedelta(hours=24)
         run = {
             "run_id": "run-1",
             "cohort_id": "cohort-1",
             "series_id": "model-1",
             "cutoff": isoformat(cutoff),
             "war_id": "war-1",
-            "forecast": {"base_forecasts": []},
+            "forecast": {
+                "base_forecasts": [
+                    {
+                        "base_id": "base-1",
+                        "p_change_1h": 0.1,
+                        "p_change_6h": 0.4,
+                        "p_change_24h": 0.8,
+                        "events": [],
+                    }
+                ]
+            },
         }
-        collectors = [
+        event = {
+            "war_id": "war-1",
+            "base_id": "base-1",
+            "event_type": "CAPTURED_BY_COLONIALS",
+            "actor": "COLONIALS",
+            "observed_from": isoformat(cutoff + timedelta(hours=12)),
+            "observed_to": isoformat(cutoff + timedelta(hours=12)),
+        }
+        gap_collectors = [
             {"war_id": "war-1", "observed_at": isoformat(cutoff)},
-            {"war_id": "war-1", "observed_at": isoformat(cutoff + timedelta(hours=25))},
+            {"war_id": "war-1", "observed_at": isoformat(deadline)},
         ]
-        settlement = settle_run(run, {"strategic_base_ids": ["base-1"]}, [], collectors, settings, cutoff + timedelta(hours=25))
-        self.assertEqual(settlement["horizons"]["24"]["evaluated"], 0)
+        gap_settlement = settle_run(
+            run,
+            {"strategic_base_ids": ["base-1"]},
+            [event],
+            gap_collectors,
+            settings,
+            cutoff + timedelta(hours=25),
+        )
+        gap_horizon = gap_settlement["horizons"]["24"]
+        self.assertEqual(gap_horizon["status"], "open_or_censored")
+        self.assertEqual(gap_horizon["evaluated"], 0)
+        self.assertEqual(gap_horizon["censored"], 1)
+        self.assertIsNone(gap_settlement["base_outcomes"]["base-1"]["24"])
+
+        complete_collectors = [
+            {
+                "war_id": "war-1",
+                "observed_at": isoformat(cutoff + timedelta(minutes=15 * index)),
+            }
+            for index in range(101)
+        ]
+        complete_settlement = settle_run(
+            run,
+            {"strategic_base_ids": ["base-1"]},
+            [event],
+            complete_collectors,
+            settings,
+            cutoff + timedelta(hours=25),
+        )
+        complete_horizon = complete_settlement["horizons"]["24"]
+        self.assertEqual(complete_horizon["status"], "complete")
+        self.assertEqual(complete_horizon["evaluated"], 1)
+        self.assertEqual(complete_horizon["censored"], 0)
+        self.assertEqual(complete_settlement["base_outcomes"]["base-1"]["24"], 1)
 
 
 if __name__ == "__main__":
