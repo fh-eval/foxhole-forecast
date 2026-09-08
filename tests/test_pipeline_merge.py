@@ -61,6 +61,73 @@ class PipelineMergeTests(unittest.TestCase):
             manifest = json.loads((data / "imports/foxholestats-war-1.json").read_text())
             self.assertEqual(manifest["recovery_windows"], [{"from": "a", "to": "b"}])
 
+    def test_merge_ledgers_supersedes_model_runs_and_keeps_settlement_lww_versions(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "data"
+            generated = root / "generated"
+            write_jsonl(
+                data / "ledgers/model_runs/war-140/2026-09-08.jsonl",
+                [{"run_id": "r1", "status": "invalid"}, {"run_id": "r2", "status": "valid"}],
+            )
+            write_jsonl(
+                generated / "ledgers/model_runs/war-140/2026-09-08.jsonl",
+                [
+                    {"run_id": "r1", "status": "valid"},
+                    {"run_id": "r2", "status": "valid"},
+                    {"run_id": "r3", "status": "valid"},
+                ],
+            )
+            write_jsonl(
+                data / "ledgers/settlements/war-140/2026-09-08.jsonl",
+                [{"run_id": "s1", "updated_at": "2026-09-08T01:00:00Z"}],
+            )
+            write_jsonl(
+                generated / "ledgers/settlements/war-140/2026-09-08.jsonl",
+                [{"run_id": "s1", "updated_at": "2026-09-08T02:00:00Z"}],
+            )
+            subprocess.run([sys.executable, str(SCRIPT), str(generated), str(data)], check=True)
+            runs = [
+                json.loads(line)
+                for line in (data / "ledgers/model_runs/war-140/2026-09-08.jsonl").read_text().splitlines()
+            ]
+            self.assertEqual(
+                sorted((row["run_id"], row["status"]) for row in runs),
+                [("r1", "valid"), ("r2", "valid"), ("r3", "valid")],
+            )
+            settlements = [
+                json.loads(line)
+                for line in (data / "ledgers/settlements/war-140/2026-09-08.jsonl").read_text().splitlines()
+            ]
+            self.assertEqual(
+                sorted(row["updated_at"] for row in settlements),
+                ["2026-09-08T01:00:00Z", "2026-09-08T02:00:00Z"],
+            )
+
+    def test_merge_ledgers_noop_when_generated_has_no_ledgers(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "data"
+            generated = root / "generated"
+            data.mkdir()
+            generated.mkdir()
+            subprocess.run([sys.executable, str(SCRIPT), str(generated), str(data)], check=True)
+            self.assertFalse((data / "ledgers").exists())
+
+    def test_merge_ledgers_creates_missing_current_shard(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "data"
+            generated = root / "generated"
+            write_jsonl(
+                generated / "ledgers/model_runs/war-140/2026-09-09.jsonl",
+                [{"run_id": "r9", "status": "valid"}],
+            )
+            subprocess.run([sys.executable, str(SCRIPT), str(generated), str(data)], check=True)
+            shard = data / "ledgers/model_runs/war-140/2026-09-09.jsonl"
+            self.assertTrue(shard.is_file())
+            self.assertEqual(json.loads(shard.read_text().splitlines()[0])["run_id"], "r9")
+
 
 if __name__ == "__main__":
     unittest.main()

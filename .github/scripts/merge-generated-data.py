@@ -179,6 +179,8 @@ def _merge_ledgers(generated_root: Path, data_root: Path) -> None:
             if key not in seen:
                 seen.add(key)
                 merged.append(row)
+        if [ _canonical(row) for row in merged ] == [ _canonical(row) for row in current_rows ]:
+            continue
         _write_jsonl(current_shard, merged)
 
 
