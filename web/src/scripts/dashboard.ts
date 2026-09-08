@@ -1,0 +1,1253 @@
+// @ts-nocheck
+const element = (tag, className, text) => {
+  const value = document.createElement(tag);
+  if (className) value.className = className;
+  if (text !== undefined) value.textContent = String(text);
+  return value;
+};
+const formatDate = (value) => value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value)) + " UTC" : "—";
+const modelFormat = (record) => {
+  const series = String(record?.series_id || "");
+  if (record?.protocol === "event_outcome_v5_crps" || /-event-v\d+$/.test(series)) return "";
+  if (record?.protocol === "timed_transition_v3" || series.includes("-timed-v3")) return " · Legacy timed format";
+  if (series.includes("war-overview-v2")) return " · Legacy war overview";
+  return " · Legacy format";
+};
+const modelLabel = (record) => `${record?.label || record?.model_label || record?.series_id || "Unknown model"}${modelFormat(record)}`;
+const number = (value) => new Intl.NumberFormat().format(Number(value) || 0);
+const eventLabel = (value) => String(value || "").replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+const trancheLabel = (value) => value === "IMMEDIATE"
+  ? "ETA within 6 hours"
+  : value === "EXTENDED"
+    ? "ETA 6–24 hours"
+    : eventLabel(value);
+const teamLabel = (value) => value === "NONE" ? "Neutral / destroyed" : eventLabel(value);
+const regionNames = {
+  AllodsBightHex: "Allod's Bight",
+  CallahansPassageHex: "Callahan's Passage",
+  CallumsCapeHex: "Callum's Cape",
+  FishermansRowHex: "Fisherman's Row",
+  KingsCageHex: "King's Cage",
+  MorgensCrossingHex: "Morgen's Crossing",
+  ReaversPassHex: "Reaver's Pass",
+};
+const regionLabel = (value) => regionNames[value] || String(value || "Unknown region").replace(/Hex$/, "").replace(/([a-z])([A-Z])/g, "$1 $2");
+const morseAlphabet = {
+  A: ".-", B: "-...", C: "-.-.", D: "-..", E: ".", F: "..-.", G: "--.", H: "....", I: "..", J: ".---", K: "-.-", L: ".-..", M: "--", N: "-.", O: "---", P: ".--.", Q: "--.-", R: ".-.", S: "...", T: "-", U: "..-", V: "...-", W: ".--", X: "-..-", Y: "-.--", Z: "--..",
+  0: "-----", 1: ".----", 2: "..---", 3: "...--", 4: "....-", 5: ".....", 6: "-....", 7: "--...", 8: "---..", 9: "----.",
+};
+const morseCode = (value) => String(value || "Unknown region")
+  .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase()
+  .split(/\s+/).map((word) => [...word].map((letter) => morseAlphabet[letter]).filter(Boolean).join(" ")).filter(Boolean).join(" / ");
+const predictionTime = (value) => value ? new Intl.DateTimeFormat(undefined, {
+  month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC",
+}).format(new Date(value)) + " UTC" : "an unknown time";
+const evidenceValue = (item) => {
+  if (item.value == null) return "value unavailable";
+  if (String(item.metric_id).includes("ratio_")) return `${Number(item.value).toFixed(2)}×`;
+  const formatted = number(item.value);
+  return String(item.metric_id).includes(".delta_") && Number(item.value) > 0 ? `+${formatted}` : formatted;
+};
+const evidenceChip = (item) => {
+  const chip = element("span", "evidence-chip", `${item.label || item.metric_id}: ${evidenceValue(item)} · relevance ${item.relevance}/10`);
+  if (item.observed_at) chip.title = `Metric observed ${formatDate(item.observed_at)}`;
+  return chip;
+};
+
+function briefingSummary(text, copyClass = "briefing__copy", truncate = true) {
+  const content = String(text || "No briefing was retained for this round.");
+  const wrapper = element("div", "briefing-summary");
+  const copy = element("p", `${copyClass} briefing-summary__copy`, content);
+  wrapper.append(copy);
+  if (!truncate || content.length <= 420) return wrapper;
+  copy.classList.add("briefing-summary__copy--collapsed");
+  const toggle = element("button", "briefing-summary__toggle", "… Read full briefing");
+  toggle.type = "button";
+  toggle.setAttribute("aria-expanded", "false");
+  toggle.addEventListener("click", () => {
+    const expanded = toggle.getAttribute("aria-expanded") === "true";
+    toggle.setAttribute("aria-expanded", String(!expanded));
+    copy.classList.toggle("briefing-summary__copy--collapsed", expanded);
+    toggle.textContent = expanded ? "… Read full briefing" : "Show less";
+  });
+  wrapper.append(toggle);
+  return wrapper;
+}
+function summaryHeadline(entry) {
+  if (entry?.headline) return String(entry.headline);
+  const text = String(entry?.war_summary || "");
+  const match = text.match(/\bday\s+(\d+)\b|\b(\d+)(?:st|nd|rd|th)\s+day\b/i);
+  return match ? `Day ${match[1] || match[2]}` : `War ${entry?.war_number || "—"} dispatch`;
+}
+function briefingHeadline(entry) {
+  return element("h3", "briefing__headline", summaryHeadline(entry));
+}
+function briefingByline(entry, fallbackLabel = "Foxhole Forecast desk") {
+  const author = entry?.model_label || fallbackLabel;
+  return element("p", "briefing__byline", `By ${author} · Filed ${formatDate(entry?.cutoff)}`);
+}
+
+function fieldReportSummary(entry, fallbackLabel = "Foxhole Forecast desk", desk = "The War Desk") {
+  const summary = element("summary", "field-report__summary");
+  const header = element("div", "briefing__header");
+  header.append(
+    element("span", "briefing__paper", desk),
+    element("time", "", formatDate(entry?.cutoff)),
+  );
+  const headline = element("div", "field-report__headline-block");
+  headline.append(briefingHeadline(entry), briefingByline(entry, fallbackLabel));
+  summary.append(header, headline, element("span", "field-report__toggle"));
+  return summary;
+}
+function strategicAdviceLabel(key) {
+  const label = eventLabel(key);
+  const match = label.match(/^(Colonial|Warden)\s+(.+)$/i);
+  const wrapper = element("span", "strategic-advice__advice-label");
+  if (!match) {
+    wrapper.textContent = label;
+    return wrapper;
+  }
+  const faction = match[1].toLowerCase() === "colonial" ? "COLONIALS" : "WARDENS";
+  wrapper.append(factionName(faction), document.createTextNode(` · ${match[2]}`));
+  return wrapper;
+}
+function strategicAdvicePreview(items) {
+  const [key, item] = items[0] || [];
+  const preview = element("span", "strategic-advice__preview");
+  if (!item) return preview;
+  preview.append(
+    strategicAdviceLabel(key),
+    document.createTextNode(` ${item.base_type || "Strategic Base"} ${item.base_name || item.base_id}: ${item.reason || "No explanation was retained."}`),
+  );
+  return preview;
+}
+function strategicAdviceHeading(key) {
+  const heading = element("strong", "");
+  heading.append(strategicAdviceLabel(key));
+  return heading;
+}
+let dashboard = null;
+let scoreScope = "current";
+let protocolRounds = [];
+let visibleSeries = new Set();
+let eventPage = 0;
+
+function updateEventPager() {
+  const events = document.querySelector("#telemetry-events");
+  const items = [...(events?.children || [])];
+  const visibleDistance = window.matchMedia("(max-width: 580px)").matches ? 0 : window.matchMedia("(max-width: 900px)").matches ? 1 : 2;
+  const itemCount = items.length;
+  eventPage = Math.max(0, Math.min(eventPage, Math.max(0, itemCount - 1)));
+  const states = new Map([[-2, "far-prev"], [-1, "prev"], [0, "active"], [1, "next"], [2, "far-next"]]);
+  items.forEach((item, index) => {
+    const distance = index - eventPage;
+    const visible = Math.abs(distance) <= visibleDistance;
+    item.hidden = !visible;
+    item.classList.remove("event-feed__item--far-prev", "event-feed__item--prev", "event-feed__item--active", "event-feed__item--next", "event-feed__item--far-next");
+    if (!visible) return;
+    item.classList.add(`event-feed__item--${states.get(distance)}`);
+    if (distance === 0) {
+      item.setAttribute("aria-current", "true");
+      item.removeAttribute("role");
+      item.removeAttribute("tabindex");
+      item.removeAttribute("title");
+    } else {
+      item.removeAttribute("aria-current");
+      item.setAttribute("role", "button");
+      item.tabIndex = 0;
+      item.title = "Bring this bulletin to the front";
+    }
+  });
+  const pageLabel = document.querySelector("#telemetry-events-page");
+  const previous = document.querySelector("#telemetry-events-prev");
+  const next = document.querySelector("#telemetry-events-next");
+  const latest = document.querySelector("#telemetry-events-latest");
+  if (pageLabel) pageLabel.textContent = `${itemCount ? eventPage + 1 : 1} / ${Math.max(1, itemCount)}`;
+  if (previous) previous.disabled = eventPage === 0;
+  if (next) next.disabled = eventPage >= itemCount - 1;
+  if (latest) latest.disabled = eventPage === 0;
+}
+function setupEventPager() {
+  document.querySelector("#telemetry-events-prev")?.addEventListener("click", () => { eventPage -= 1; updateEventPager(); });
+  document.querySelector("#telemetry-events-next")?.addEventListener("click", () => { eventPage += 1; updateEventPager(); });
+  document.querySelector("#telemetry-events-latest")?.addEventListener("click", () => { eventPage = 0; updateEventPager(); });
+  const events = document.querySelector("#telemetry-events");
+  const bringForward = (target) => {
+    const item = target?.closest?.(".event-feed__item");
+    if (!item || item.classList.contains("event-feed__item--active")) return;
+    const index = [...events.children].indexOf(item);
+    if (index >= 0) { eventPage = index; updateEventPager(); }
+  };
+  events?.addEventListener("click", (event) => bringForward(event.target));
+  events?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    bringForward(event.target);
+  });
+  window.addEventListener("resize", updateEventPager);
+}
+
+function isCompleteCurrentRound(round) {
+  const expected = dashboard?.methodology?.predictions_per_round ?? 8;
+  const currentProtocol = dashboard?.methodology?.current_protocol;
+  const predictions = round.predictions || [];
+  return round.protocol === currentProtocol
+    && predictions.length >= 1
+    && predictions.length <= expected
+    && predictions.every((bet) =>
+      ["CAPTURED", "CAPTURED_BY_WARDENS", "CAPTURED_BY_COLONIALS", "DESTROYED", "SELF_CAPTURE"].includes(bet.predicted_outcome)
+      && bet.base_name
+      && bet.base_type
+      && bet.current_team
+      && bet.confidence != null
+      && bet.sigma_minutes != null
+      && bet.eta_utc
+      && Array.isArray(bet.evidence)
+      && bet.evidence.length > 0
+    );
+}
+
+const mean = (values) => values.length ? values.reduce((total, value) => total + value, 0) / values.length : null;
+const median = (values) => {
+  if (!values.length) return null;
+  const ordered = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(ordered.length / 2);
+  return ordered.length % 2 ? ordered[middle] : (ordered[middle - 1] + ordered[middle]) / 2;
+};
+const duration = (minutes) => {
+  if (minutes == null) return "—";
+  return minutes < 60 ? `${Math.round(minutes)}m` : `${(minutes / 60).toFixed(1)}h`;
+};
+const crps = (minutes) => minutes == null || !Number.isFinite(Number(minutes)) ? "—" : `${Number(minutes).toFixed(2)}m`;
+const percentage = (value) => value == null || !Number.isFinite(Number(value)) ? "—" : `${(100 * Number(value)).toFixed(1)}%`;
+const ratio = (value) => value == null || !Number.isFinite(Number(value)) ? "—" : `${Number(value).toFixed(2)}×`;
+const firstDefined = (...values) => values.find((value) => value != null);
+
+function modelBehavior(model, rounds) {
+  const bets = rounds.filter((round) => round.series_id === model.series_id).flatMap((round) => round.predictions || []);
+  const scoreable = bets.filter((bet) => predictionScoreValue(bet) != null);
+  const confidences = bets.map((bet) => Number(bet.confidence)).filter(Number.isFinite);
+  const sigmas = bets.map((bet) => Number(bet.sigma_minutes)).filter(Number.isFinite);
+  const leadMinutes = (tranche) => bets
+    .filter((bet) => bet.tranche === tranche)
+    .map((bet) => (new Date(bet.eta_utc) - new Date(bet.cutoff || rounds.find((round) => round.run_id === bet.run_id)?.cutoff)) / 60000)
+    .filter((value) => Number.isFinite(value) && value >= 0);
+  const etaErrors = scoreable.filter((bet) => bet.eta_error_minutes != null).map((bet) => Number(bet.eta_error_minutes)).filter(Number.isFinite);
+  const trancheCrps = (tranche) => scoreable
+    .filter((bet) => bet.tranche === tranche)
+    .map((bet) => Number(bet.crps_minutes))
+    .filter(Number.isFinite);
+  const shortCrpsValues = trancheCrps("IMMEDIATE");
+  const longCrpsValues = trancheCrps("EXTENDED");
+  const shortCrpsMinutes = mean(shortCrpsValues);
+  const longCrpsMinutes = mean(longCrpsValues);
+  const count = (status) => bets.filter((bet) => bet.status === status).length;
+  const selectionBets = scoreable.filter((bet) => bet.selection_capture_observed != null);
+  const selectionGroup = (predicate) => selectionBets.filter(predicate);
+  const selectionRate = (items, field) => items.length
+    ? items.filter((bet) => Boolean(bet[field])).length / items.length
+    : null;
+  const shortSelection = selectionGroup((bet) => bet.tranche === "IMMEDIATE");
+  const longSelection = selectionGroup((bet) => bet.tranche === "EXTENDED");
+  const topSelection = selectionGroup((bet) => [1, 5].includes(Number(bet.rank)));
+  const transitioned = selectionGroup((bet) => bet.selection_transition_observed === true);
+  const actionable = selectionGroup((bet) => {
+    if (bet.selection_exact_outcome !== true) return false;
+    if (bet.eta_error_minutes != null) return Number(bet.eta_error_minutes) <= 180;
+    return bet.eta_error_max_minutes != null && Number(bet.eta_error_max_minutes) <= 180;
+  });
+  const shortActionable = actionable.filter((bet) => bet.tranche === "IMMEDIATE");
+  const longActionable = actionable.filter((bet) => bet.tranche === "EXTENDED");
+  const captureBaselines = selectionBets
+    .filter((bet) => bet.selection_capture_baseline != null)
+    .map((bet) => Number(bet.selection_capture_baseline))
+    .filter(Number.isFinite);
+  const mapCaptureBaselines = selectionBets
+    .filter((bet) => bet.selection_capture_map_baseline != null)
+    .map((bet) => Number(bet.selection_capture_map_baseline))
+    .filter(Number.isFinite);
+  const captureRate = selectionRate(selectionBets, "selection_capture_observed");
+  const captureBaselineRate = mean(captureBaselines);
+  const captureMapBaselineRate = mean(mapCaptureBaselines);
+  const sigmaCalibration = selectionBets.filter((bet) =>
+    bet.selection_exact_outcome === true
+    && bet.eta_error_minutes != null
+    && bet.sigma_minutes != null
+    && bet.sigma_source === "model"
+  );
+  const sigmaCoverageHits = sigmaCalibration.filter((bet) =>
+    Number(bet.eta_error_minutes) <= Number(bet.sigma_minutes)
+  ).length;
+  return {
+    model,
+    bets,
+    scoreable,
+    publishedCount: bets.length,
+    scoreableCount: scoreable.length,
+    shortCrpsMinutes,
+    longCrpsMinutes,
+    shortScoreableCount: shortCrpsValues.length,
+    longScoreableCount: longCrpsValues.length,
+    confidence: mean(confidences),
+    sigmaMinutes: mean(sigmas),
+    immediateLeadMinutes: median(leadMinutes("IMMEDIATE")),
+    extendedLeadMinutes: median(leadMinutes("EXTENDED")),
+    etaErrorMinutes: median(etaErrors),
+    matched: etaErrors.length,
+    hits: count("hit"),
+    partials: count("partial"),
+    misses: count("miss"),
+    censored: count("censored"),
+    open: count("open"),
+    shortCaptureRate: selectionRate(shortSelection, "selection_capture_observed"),
+    shortCaptureHits: shortSelection.filter((bet) => Boolean(bet.selection_capture_observed)).length,
+    shortCaptureBets: shortSelection.length,
+    longCaptureRate: selectionRate(longSelection, "selection_capture_observed"),
+    longCaptureHits: longSelection.filter((bet) => Boolean(bet.selection_capture_observed)).length,
+    longCaptureBets: longSelection.length,
+    transitionRate: selectionRate(selectionBets, "selection_transition_observed"),
+    transitionHits: selectionBets.filter((bet) => Boolean(bet.selection_transition_observed)).length,
+    exactOutcomeRate: selectionRate(selectionBets, "selection_exact_outcome"),
+    exactOutcomeHits: selectionBets.filter((bet) => Boolean(bet.selection_exact_outcome)).length,
+    selectionScoredBets: selectionBets.length,
+    captureRate,
+    captureBaselineRate,
+    captureMapBaselineRate,
+    captureLift: captureRate != null && captureBaselineRate > 0 ? captureRate / captureBaselineRate : null,
+    scoutLift: captureBaselineRate != null && captureMapBaselineRate > 0 ? captureBaselineRate / captureMapBaselineRate : null,
+    pipelineCaptureLift: captureRate != null && captureMapBaselineRate > 0 ? captureRate / captureMapBaselineRate : null,
+    sigmaCoverageHits,
+    sigmaCoverageBets: sigmaCalibration.length,
+    sigmaCoverageRate: sigmaCalibration.length ? sigmaCoverageHits / sigmaCalibration.length : null,
+    topRankCaptureRate: selectionRate(topSelection, "selection_capture_observed"),
+    topRankCaptureHits: topSelection.filter((bet) => Boolean(bet.selection_capture_observed)).length,
+    topRankCaptureBets: topSelection.length,
+    actionableExact3hHits: actionable.length,
+    actionableExact3hBets: selectionBets.length,
+    actionableExact3hRate: selectionBets.length ? actionable.length / selectionBets.length : null,
+    actionableExact3hShortHits: shortActionable.length,
+    actionableExact3hShortBets: shortSelection.length,
+    actionableExact3hShortRate: shortSelection.length ? shortActionable.length / shortSelection.length : null,
+    actionableExact3hLongHits: longActionable.length,
+    actionableExact3hLongBets: longSelection.length,
+    actionableExact3hLongRate: longSelection.length ? longActionable.length / longSelection.length : null,
+    transitionExactHits: transitioned.filter((bet) => bet.selection_exact_outcome === true).length,
+    transitionExactBets: transitioned.length,
+    transitionExactRate: selectionRate(transitioned, "selection_exact_outcome"),
+  };
+}
+
+function metricCell(value, note, className = "") {
+  const cell = element("td", `score-table__metric ${className}`.trim());
+  cell.append(element("strong", "", value), element("small", "", note));
+  return cell;
+}
+
+function adviserCell(value, note, className = "") {
+  const cell = element("td", `adviser-table__metric ${className}`.trim());
+  cell.append(element("strong", "", value), element("small", "", note));
+  return cell;
+}
+
+function renderScores(models, rounds, summaries = []) {
+  const rows = document.querySelector("#score-rows");
+  const selectionRows = document.querySelector("#selection-rows");
+  const adviserRows = document.querySelector("#adviser-rows");
+  const adviserEmpty = document.querySelector("#adviser-empty");
+  const empty = document.querySelector("#score-empty");
+  rows.replaceChildren();
+  selectionRows.replaceChildren();
+  adviserRows.replaceChildren();
+  adviserEmpty.hidden = models.length > 0;
+  empty.hidden = models.length > 0;
+  if (!models.length) {
+    return;
+  }
+  const summaryLookup = new Map(summaries.map((summary) => [summary.series_id, summary]));
+  const behaviors = models.map((model) => {
+    const summary = summaryLookup.get(model.series_id);
+    return summary ? {
+      model,
+      publishedCount: summary.published_bets,
+      scoreableCount: summary.scoreable_bets,
+      shortCrpsMinutes: summary.short_crps_minutes,
+      longCrpsMinutes: summary.long_crps_minutes,
+      shortScoreableCount: summary.short_scoreable_bets,
+      longScoreableCount: summary.long_scoreable_bets,
+      confidence: summary.confidence,
+      sigmaMinutes: summary.sigma_minutes,
+      immediateLeadMinutes: summary.immediate_lead_minutes,
+      extendedLeadMinutes: summary.extended_lead_minutes,
+      etaErrorMinutes: summary.eta_error_minutes,
+      matched: summary.matched_transitions,
+      hits: summary.hits,
+      partials: summary.partials,
+      misses: summary.misses,
+      censored: summary.censored,
+      open: summary.open,
+      shortCaptureRate: summary.short_capture_rate,
+      shortCaptureHits: summary.short_capture_hits,
+      shortCaptureBets: summary.short_capture_bets,
+      longCaptureRate: summary.long_capture_rate,
+      longCaptureHits: summary.long_capture_hits,
+      longCaptureBets: summary.long_capture_bets,
+      transitionRate: summary.transition_rate,
+      transitionHits: summary.transition_hits,
+      exactOutcomeRate: summary.exact_outcome_rate,
+      exactOutcomeHits: summary.exact_outcome_hits,
+      selectionScoredBets: summary.selection_scored_bets,
+      captureRate: summary.capture_rate,
+      captureBaselineRate: summary.capture_baseline_rate,
+      captureMapBaselineRate: summary.capture_map_baseline_rate,
+      captureLift: summary.capture_lift,
+      scoutLift: summary.scout_lift,
+      pipelineCaptureLift: summary.pipeline_capture_lift,
+      sigmaCoverageHits: summary.sigma_coverage_hits,
+      sigmaCoverageBets: summary.sigma_coverage_bets,
+      sigmaCoverageRate: summary.sigma_coverage_rate,
+      topRankCaptureRate: summary.top_rank_capture_rate,
+      topRankCaptureHits: summary.top_rank_capture_hits,
+      topRankCaptureBets: summary.top_rank_capture_bets,
+      actionableExact3hHits: firstDefined(summary.actionable_exact_outcome_hits, summary.exact_outcome_hits),
+      actionableExact3hBets: firstDefined(summary.actionable_exact_outcome_bets, summary.selection_scored_bets),
+      actionableExact3hRate: firstDefined(summary.actionable_exact_outcome_rate, summary.exact_outcome_rate),
+      actionableExact3hShortHits: summary.short_actionable_exact_outcome_hits,
+      actionableExact3hShortBets: summary.short_actionable_exact_outcome_bets,
+      actionableExact3hShortRate: summary.short_actionable_exact_outcome_rate,
+      actionableExact3hLongHits: summary.long_actionable_exact_outcome_hits,
+      actionableExact3hLongBets: summary.long_actionable_exact_outcome_bets,
+      actionableExact3hLongRate: summary.long_actionable_exact_outcome_rate,
+      transitionExactHits: firstDefined(summary.transition_exact_outcome_hits, summary.exact_outcome_hits),
+      transitionExactBets: firstDefined(summary.transition_exact_outcome_bets, summary.transition_hits),
+      transitionExactRate: firstDefined(summary.transition_exact_outcome_rate, summary.exact_outcome_rate),
+      retention: summary.retention || null,
+    } : modelBehavior(model, rounds);
+  }).sort((a, b) =>
+    (a.actionableExact3hRate == null) - (b.actionableExact3hRate == null)
+    || (b.actionableExact3hRate ?? -Infinity) - (a.actionableExact3hRate ?? -Infinity)
+    || (b.transitionRate ?? -Infinity) - (a.transitionRate ?? -Infinity)
+    || modelLabel(a.model).localeCompare(modelLabel(b.model))
+  );
+  const retentionRoot = document.querySelector("#retention-summary");
+  retentionRoot?.replaceChildren();
+  const reasonLabels = (counts) => Object.entries(counts || {})
+    .map(([reason, count]) => `${eventLabel(reason)}: ${count}`)
+    .join(" · ") || "none recorded";
+  behaviors.forEach((behavior) => {
+    const retention = behavior.retention;
+    if (!retention || !retentionRoot) return;
+    const note = element("div", "method-note");
+    note.append(element("strong", "", `${modelLabel(behavior.model)} · retention`));
+    note.append(element("p", "", `${retention.scored_bets ?? behavior.scoreableCount} scored of ${retention.considered_bets ?? behavior.publishedCount} considered (${retention.scored_fraction == null ? "—" : percentage(retention.scored_fraction)}); ${retention.published_bets ?? behavior.publishedCount} published, ${retention.dropped_bets ?? 0} dropped, ${retention.censored_bets ?? behavior.censored} censored, ${retention.open_bets ?? behavior.open} open, ${retention.other_unscored_bets ?? 0} other unscored.`));
+    const reasons = element("ul", "rationale-list");
+    Object.entries(retention.by_submission_mode || {}).forEach(([mode, counts]) => {
+      reasons.append(element("li", "", `${mode === "delayed_replay" ? "Delayed replay" : "Live"}: ${counts.scored_bets ?? 0} scored / ${counts.dropped_bets ?? 0} dropped / ${counts.censored_bets ?? 0} censored / ${counts.open_bets ?? 0} open; dropped reasons: ${reasonLabels(counts.dropped_reasons)}; censored reasons: ${reasonLabels(counts.censored_reasons)}.`));
+    });
+    if (!Object.keys(retention.by_submission_mode || {}).length) reasons.append(element("li", "", `Dropped reasons: ${reasonLabels(retention.dropped_reasons)}; censored reasons: ${reasonLabels(retention.censored_reasons)}.`));
+    note.append(reasons); retentionRoot.append(note);
+  });
+  behaviors.forEach((behavior) => {
+    const adviserRow = document.createElement("tr");
+    const adviserModel = element("td", "adviser-table__model");
+    adviserModel.append(element("strong", "", modelLabel(behavior.model)));
+    if ((behavior.model.dashboard_family_series || []).length > 1) {
+      adviserModel.append(element("small", "", `${behavior.model.dashboard_family_series.length} recorded setup eras combined`));
+    }
+    adviserRow.append(
+      adviserModel,
+      adviserCell(percentage(behavior.actionableExact3hRate), `${behavior.actionableExact3hHits ?? 0}/${behavior.actionableExact3hBets ?? behavior.selectionScoredBets} calls · short ${percentage(behavior.actionableExact3hShortRate)} · long ${percentage(behavior.actionableExact3hLongRate)}`, "adviser-table__primary"),
+      adviserCell(percentage(behavior.transitionRate), `${behavior.transitionHits}/${behavior.selectionScoredBets} had a transition · outcome and ETA ignored`),
+      adviserCell(percentage(behavior.transitionExactRate), `${behavior.transitionExactHits ?? 0}/${behavior.transitionExactBets ?? behavior.transitionHits} moved bases named correctly`),
+      adviserCell(ratio(behavior.captureLift), `${percentage(behavior.captureRate)} selected-base capture rate · ${percentage(behavior.captureBaselineRate)} eligible-base baseline`),
+      adviserCell(`${behavior.scoreableCount} scored`, `${behavior.retention?.considered_bets ?? behavior.publishedCount} considered · ${behavior.retention?.dropped_bets ?? 0} dropped · ${behavior.open} open · ${behavior.censored} not scored`),
+    );
+    adviserRows.append(adviserRow);
+
+    const row = document.createElement("tr");
+    const modelCell = element("td", "score-table__model");
+    modelCell.append(
+      element("strong", "", modelLabel(behavior.model)),
+      element("small", "", `${behavior.model.gateway || "provider"} · ${behavior.model.returned_model || behavior.model.requested_model || behavior.model.series_id}`),
+    );
+    const resultsCell = element("td", "score-table__results");
+    resultsCell.append(
+      element("strong", "", `${behavior.scoreableCount} / ${behavior.retention?.dropped_bets ?? 0} / ${behavior.censored} / ${behavior.open}`),
+      element("small", "", "scored / dropped / censored / open"),
+    );
+    row.append(
+      modelCell,
+      metricCell(crps(behavior.shortCrpsMinutes), `${behavior.shortScoreableCount} scored short bets`, "score-table__primary"),
+      metricCell(crps(behavior.longCrpsMinutes), `${behavior.longScoreableCount} scored long bets`),
+      metricCell(percentage(behavior.confidence), `${behavior.publishedCount} published calls`),
+      metricCell(duration(behavior.sigmaMinutes), "average timing spread (sigma)"),
+      metricCell(percentage(behavior.sigmaCoverageRate), `${behavior.sigmaCoverageHits ?? 0}/${behavior.sigmaCoverageBets ?? 0} exact calls with model sigma`),
+      metricCell(duration(behavior.immediateLeadMinutes), "within required tranche"),
+      metricCell(duration(behavior.extendedLeadMinutes), "within required tranche"),
+      metricCell(duration(behavior.etaErrorMinutes), `${behavior.matched} matched transitions`),
+      resultsCell,
+    );
+    rows.append(row);
+
+    const selectionRow = document.createElement("tr");
+    const selectionModel = element("td", "score-table__model");
+    selectionModel.append(element("strong", "", modelLabel(behavior.model)));
+    selectionRow.append(
+      selectionModel,
+      metricCell(percentage(behavior.shortCaptureRate), `${behavior.shortCaptureHits}/${behavior.shortCaptureBets} selected bases`),
+      metricCell(percentage(behavior.longCaptureRate), `${behavior.longCaptureHits}/${behavior.longCaptureBets} selected bases`),
+      metricCell(percentage(behavior.transitionRate), `${behavior.transitionHits}/${behavior.selectionScoredBets} had a transition; outcome and ETA ignored`),
+      metricCell(percentage(behavior.exactOutcomeRate), `${behavior.exactOutcomeHits}/${behavior.selectionScoredBets} exact calls`),
+      metricCell(ratio(behavior.scoutLift), `${percentage(behavior.captureBaselineRate)} chosen regions · ${percentage(behavior.captureMapBaselineRate)} map`),
+      metricCell(ratio(behavior.captureLift), `${percentage(behavior.captureRate)} selected bases · ${percentage(behavior.captureBaselineRate)} eligible-base baseline`, "score-table__primary"),
+      metricCell(ratio(behavior.pipelineCaptureLift), `${percentage(behavior.captureRate)} calls · ${percentage(behavior.captureMapBaselineRate)} map`),
+      metricCell(percentage(behavior.topRankCaptureRate), `${behavior.topRankCaptureHits}/${behavior.topRankCaptureBets} ranks #1 and #5`),
+    );
+    selectionRows.append(selectionRow);
+  });
+}
+
+function renderScoreboard() {
+  const currentWarId = String(dashboard?.war?.warId || "");
+  const scopedRounds = scoreScope === "all"
+    ? protocolRounds
+    : protocolRounds.filter((round) => String(round.war_id || "") === scoreScope);
+  const summaries = scoreScope === "all"
+    ? dashboard?.model_behavior?.all_time || []
+    : dashboard?.model_behavior?.by_war?.[scoreScope]
+      || (scoreScope === currentWarId ? dashboard?.model_behavior?.current_war : [])
+      || [];
+  const scopedSeries = new Set(
+    summaries.length
+      ? summaries.map((summary) => summary.series_id)
+      : scopedRounds.map((round) => round.series_id)
+  );
+  const scopedModels = (dashboard?.models || []).filter((model) => scopedSeries.has(model.series_id));
+  renderScores(scopedModels, scopedRounds, summaries);
+}
+
+function populateScoreWarSelect() {
+  const select = document.querySelector("#score-war-select");
+  if (!select) return;
+  const currentWarId = String(dashboard?.war?.warId || "");
+  const wars = new Map();
+  (dashboard?.available_wars || []).forEach((war) => {
+    if (!war.war_id) return;
+    wars.set(String(war.war_id), Number(war.war_number) || null);
+  });
+  if (currentWarId) wars.set(currentWarId, Number(dashboard?.war?.warNumber) || wars.get(currentWarId) || null);
+
+  select.replaceChildren();
+  [...wars.entries()]
+    .sort((left, right) => (right[1] ?? -Infinity) - (left[1] ?? -Infinity))
+    .forEach(([warId, warNumber]) => {
+      const option = element("option", "", `${warNumber ? `War ${warNumber}` : "Unknown war"}${warId === currentWarId ? " (current)" : ""}`);
+      option.value = warId;
+      select.append(option);
+    });
+  const allWars = element("option", "", "All wars");
+  allWars.value = "all";
+  select.append(allWars);
+  scoreScope = currentWarId && wars.has(currentWarId) ? currentWarId : "all";
+  select.value = scoreScope;
+}
+
+function wireTeam(value) {
+  if (value === "WARDENS") return { label: "Warden control", short: "Wardens", tone: "wardens" };
+  if (value === "COLONIALS") return { label: "Colonial control", short: "Colonials", tone: "colonials" };
+  if (value === "NONE") return { label: "Neutral / no-man's-land", short: "Neutral", tone: "neutral" };
+  return { label: "Control unconfirmed", short: "Unconfirmed", tone: "unconfirmed" };
+}
+
+function wireReport(group) {
+  const ownerLoss = group.events.find((event) => event.event_type === "OWNER_LOSES");
+  const capture = group.events.find((event) => String(event.event_type || "").startsWith("CAPTURED"));
+  const neutral = group.events.find((event) => event.event_type === "BECOMES_NEUTRAL");
+  const before = wireTeam(ownerLoss?.actor);
+  const after = wireTeam(capture?.actor || (neutral ? "NONE" : null));
+  const base = group.base_name || "This base";
+  if (capture) {
+    const changedHands = ownerLoss?.actor && ownerLoss.actor !== capture.actor;
+    return {
+      tone: after.tone,
+      wireLabel: "Control flash · base captured",
+      headline: `Captured by the ${after.short}`,
+      detail: changedHands
+        ? `${after.short} took ${base} from the ${before.short}.`
+        : `${after.short} established control of ${base}; its prior owner was not confirmed in this report.`,
+      before: ownerLoss ? before : wireTeam(null),
+      after,
+    };
+  }
+  if (neutral) {
+    return {
+      tone: "neutral",
+      wireLabel: "Demolition report · control ended",
+      headline: "Base destroyed — now neutral",
+      detail: ownerLoss
+        ? `${before.short} control ended. No faction had rebuilt ${base} when this report was filed.`
+        : `${base} was observed neutral and had not been rebuilt by either faction.`,
+      before: ownerLoss ? before : wireTeam(null),
+      after,
+    };
+  }
+  return {
+    tone: "unconfirmed",
+    wireLabel: "Incomplete wire · check pending",
+    headline: "Control lost — next state unconfirmed",
+    detail: ownerLoss
+      ? `The API recorded the end of ${before.short} control at ${base}, but no replacement state appeared in the same poll.`
+      : `The API reported a control change at ${base}, but the available record is incomplete.`,
+    before: ownerLoss ? before : wireTeam(null),
+    after: wireTeam(null),
+  };
+}
+
+function renderWarData(snapshot) {
+  const summary = document.querySelector("#telemetry-summary");
+  const regions = document.querySelector("#telemetry-regions");
+  const events = document.querySelector("#telemetry-events");
+  summary.replaceChildren();
+  regions.replaceChildren();
+  events.replaceChildren();
+  if (!snapshot) {
+    summary.append(element("p", "empty-state", "No official War API snapshot is available yet."));
+    return;
+  }
+  const ownership = snapshot.strategic_base_ownership || {};
+  const casualties = snapshot.casualties || {};
+  [
+    ["Day of war", snapshot.day_of_war ?? "—", ""],
+    ["Warden strategic bases", number(ownership.WARDENS), "wardens"],
+    ["Colonial strategic bases", number(ownership.COLONIALS), "colonials"],
+    ["Warden casualties", number(casualties.WARDENS), "wardens"],
+    ["Colonial casualties", number(casualties.COLONIALS), "colonials"],
+  ].forEach(([label, value, faction]) => {
+    const card = element("article", `telemetry-card ${faction ? `telemetry-card--${faction}` : ""}`.trim());
+    card.append(element("small", "", label), element("strong", "", value));
+    summary.append(card);
+  });
+  document.querySelector("#telemetry-cutoff").textContent = `Packet v${snapshot.packet_version || "—"} · ${snapshot.history_hours_available ?? 0}h history · ${formatDate(snapshot.observed_at)}`;
+  (snapshot.active_regions || []).forEach((region) => {
+    const activity = region.activity || {};
+    const ownership = region.ownership || {};
+    const wardenBases = Number(ownership.WARDENS) || 0;
+    const colonialBases = Number(ownership.COLONIALS) || 0;
+    const majority = wardenBases > colonialBases ? "wardens" : colonialBases > wardenBases ? "colonials" : "none";
+    const row = document.createElement("tr");
+    const regionCell = element("td", "");
+    regionCell.append(element("strong", `telemetry-region-name telemetry-region-name--${majority}`, regionLabel(region.map_name)));
+    row.append(
+      regionCell,
+      telemetryPair(
+        `${number(activity.events_2h)} / ${number(activity.events_6h)} / ${number(activity.events_24h)}`,
+        "ownership transitions",
+        activity.events_2h ? "activity" : "",
+      ),
+      telemetryPair(
+        `${number(ownership.WARDENS)} / ${number(ownership.COLONIALS)} / ${number(ownership.NONE)}`,
+        `${number(region.strategic_base_count)} strategic bases`,
+      ),
+      telemetryTrend(region, "warden_casualties"),
+      telemetryTrend(region, "colonial_casualties"),
+      telemetryTrend(region, "enlistments"),
+      telemetryPair(activity.latest_event_at ? predictionTime(activity.latest_event_at) : "—", "most recent transition"),
+    );
+    regions.append(row);
+  });
+  const recent = snapshot.recent_ownership_events || [];
+  if (!recent.length) {
+    events.append(element("li", "empty-state", "No official ownership changes have been observed in the last 24 hours."));
+  } else {
+    const grouped = [];
+    const groupedLookup = new Map();
+    recent.forEach((event) => {
+      const key = `${event.observed_at}|${event.base_name || "Unknown base"}|${event.map_name || ""}`;
+      let group = groupedLookup.get(key);
+      if (!group) {
+        group = { ...event, events: [] };
+        groupedLookup.set(key, group);
+        grouped.push(group);
+      }
+      group.events.push(event);
+    });
+    grouped.forEach((group, groupIndex) => {
+      const region = group.map_display_name || regionLabel(group.map_name);
+      const report = wireReport(group);
+      const item = element("li", `event-feed__item event-feed__item--outcome-${report.tone}`);
+      const meta = element("div", "event-feed__meta");
+      meta.append(element("span", "event-feed__wire-label", report.wireLabel));
+      meta.append(element("time", "", formatDate(group.observed_at)));
+      const state = element("div", "event-feed__state-flow");
+      state.append(
+        element("span", `event-feed__state event-feed__state--${report.before.tone}`, report.before.label),
+        element("b", "", "→"),
+        element("span", `event-feed__state event-feed__state--${report.after.tone}`, report.after.label),
+      );
+      if (groupIndex === 0) item.append(element("span", "event-feed__urgent", "Urgent"));
+      item.append(
+        meta,
+        element("strong", "", group.base_name || "Unknown base"),
+        element("span", "event-feed__region", region),
+        element("small", "event-feed__morse", morseCode(region)),
+        element("span", "event-feed__headline", report.headline),
+        element("p", "event-feed__copy", report.detail),
+        state,
+      );
+      events.append(item);
+    });
+  }
+  eventPage = 0;
+  updateEventPager();
+}
+
+function signed(value) {
+  if (value == null || !Number.isFinite(Number(value))) return "—";
+  return `${Number(value) > 0 ? "+" : ""}${number(value)}`;
+}
+
+function telemetryPair(primary, secondary, className = "") {
+  const cell = element("td", `telemetry-pair ${className}`.trim());
+  cell.append(element("strong", "", primary), element("small", "", secondary));
+  return cell;
+}
+
+function telemetryTrend(region, field) {
+  const trend = region.rate_trends?.["1h_vs_prior_1h"]?.[field];
+  const reportField = field === "enlistments" ? "total_enlistments" : field;
+  const raw = region.report?.[reportField];
+  const delta = region.report_deltas?.["2h"]?.[reportField];
+  const direction = trend?.[3];
+  const symbol = direction === "accelerating" ? "↑" : direction === "cooling" ? "↓" : direction === "steady" ? "→" : "";
+  const rate = trend ? `${number(trend[0])}/h ${symbol}`.trim() : "—";
+  const cell = telemetryPair(rate, `${number(raw)} total · ${signed(delta)} / 2h`, direction ? `trend trend--${direction}` : "");
+  if (trend) cell.title = `Previous 1h pace: ${number(trend[1])}/h; change: ${signed(trend[2])}/h; ${direction}`;
+  return cell;
+}
+
+function stat(label, value) {
+  const wrapper = element("div", "");
+  wrapper.append(element("small", "", label), element("strong", "", value));
+  return wrapper;
+}
+
+function renderBriefings(models) {
+  const list = document.querySelector("#briefing-list");
+  list.replaceChildren();
+  const available = models.filter((model) => model.latest?.war_summary);
+  if (!available.length) {
+    list.append(element("p", "empty-state", "The first model briefing will appear after a valid forecast cohort."));
+    return;
+  }
+  available.forEach((model) => {
+    const article = element("details", "briefing briefing--collapsible");
+    const regions = element("p", "region-list", model.latest.selected_regions?.map(regionLabel).join(" · ") || "No selected regions");
+    const body = element("div", "field-report__body");
+    body.append(briefingSummary(model.latest.war_summary, "briefing__copy", false), regions);
+    article.append(fieldReportSummary(model.latest, modelLabel(model), "Field Report"), body);
+    list.append(article);
+  });
+}
+
+function settleDashboardHash() {
+  if (!window.location.hash) return;
+  const id = decodeURIComponent(window.location.hash.slice(1));
+  const target = document.getElementById(id);
+  if (!target) return;
+  const nav = document.querySelector(".dashboard-nav");
+  const stickyOffset = nav && getComputedStyle(nav).position === "sticky" ? nav.getBoundingClientRect().height + 12 : 12;
+  window.scrollTo(0, Math.max(0, target.getBoundingClientRect().top + window.scrollY - stickyOffset));
+}
+
+function factionName(team) {
+  return element("span", `faction-name faction-name--${String(team || "none").toLowerCase()}`, teamLabel(team));
+}
+
+function baseIdentity(bet) {
+  return element(
+    "strong",
+    `base-identity base-identity--${String(bet.current_team || "none").toLowerCase()}`,
+    `${bet.base_type || "Strategic Base"} ${bet.base_name || "Unknown base"}`,
+  );
+}
+
+function predictionHeadline(bet) {
+  const line = element("p", "prediction-headline");
+  const predictedOutcome = bet.predicted_outcome || (typeof bet.outcome === "string" ? bet.outcome : null);
+  const sigmaSource = bet.sigma_source === "inferred_from_confidence" ? " (inferred)" : "";
+  const sigma = bet.sigma_minutes == null ? "" : ` · timing spread ${duration(Number(bet.sigma_minutes))}${sigmaSource}`;
+  const confidence = element("strong", "prediction-headline__confidence", `${percentage(bet.confidence)} chance`);
+  line.append(confidence, document.createTextNode(`${sigma}: `));
+  if (predictedOutcome) {
+    line.append(baseIdentity(bet));
+    if (predictedOutcome === "DESTROYED") {
+      line.append(document.createTextNode(" will be destroyed at "));
+    } else if (predictedOutcome === "SELF_CAPTURE") {
+      line.append(document.createTextNode(" will be destroyed (predicted faction would capture its own base) at "));
+    } else {
+      line.append(document.createTextNode(" will be captured by "));
+      const predictedFaction = predictedOutcome === "CAPTURED_BY_WARDENS"
+        ? "WARDENS"
+        : predictedOutcome === "CAPTURED_BY_COLONIALS"
+          ? "COLONIALS"
+          : null;
+      if (predictedFaction) {
+        line.append(factionName(predictedFaction));
+      } else if (bet.current_team === "WARDENS") {
+        line.append(factionName("COLONIALS"));
+      } else if (bet.current_team === "COLONIALS") {
+        line.append(factionName("WARDENS"));
+      } else {
+        line.append(factionName("WARDENS"), document.createTextNode(" or "), factionName("COLONIALS"));
+      }
+      line.append(document.createTextNode(" at "));
+    }
+    line.append(element("time", "prediction-headline__time", predictionTime(bet.eta_utc)), document.createTextNode("."));
+    return line;
+  }
+
+  // Retain a readable sentence for archived destination/event protocols.
+  if (bet.destination_team) {
+    line.append(baseIdentity(bet));
+    line.append(document.createTextNode(" will be captured by "), factionName(bet.destination_team), document.createTextNode(" at "));
+  } else if (String(bet.event_type).startsWith("CAPTURED_BY_") && bet.actor) {
+    line.append(baseIdentity(bet));
+    line.append(document.createTextNode(" will be captured by "), factionName(bet.actor), document.createTextNode(" at "));
+  } else if (bet.event_type === "OWNER_LOSES" && bet.actor) {
+    line.append(baseIdentity({ ...bet, current_team: bet.actor }));
+    line.append(document.createTextNode(" will lose ownership at "));
+  } else {
+    line.append(baseIdentity(bet));
+    line.append(document.createTextNode(` will undergo ${eventLabel(bet.event_type)} at `));
+  }
+  line.append(element("time", "prediction-headline__time", predictionTime(bet.eta_utc)), document.createTextNode("."));
+  return line;
+}
+
+function supportingEvidence(items) {
+  const wrapper = element("div", "supporting-evidence");
+  wrapper.append(element("small", "supporting-evidence__label", "Model-cited evidence · relevance is the model's own 1–10 rating"));
+  const evidence = element("div", "evidence-list");
+  (items || []).forEach((item) => evidence.append(evidenceChip(item)));
+  if (!items?.length) evidence.append(element("span", "evidence-empty", "No supporting evidence retained."));
+  wrapper.append(evidence);
+  return wrapper;
+}
+
+function renderStrategicAdvice(advice) {
+  if (!advice || typeof advice !== "object") return null;
+  const items = Object.entries(advice).filter(([, value]) => value && (value.base_name || value.base_id));
+  if (!items.length) return null;
+  const section = element("details", "strategic-advice");
+  const summary = element("summary", "strategic-advice__summary");
+  summary.append(
+    element("span", "strategic-advice__label", "Strategic adviser recommendations"),
+    element("span", "strategic-advice__count", `${items.length} note${items.length === 1 ? "" : "s"} · descriptive, not scored`),
+    element("span", "strategic-advice__toggle"),
+  );
+  const list = element("div", "strategic-advice__grid");
+  items.forEach(([key, item]) => {
+    const card = element("article", "strategic-advice__item");
+    card.append(
+      strategicAdviceHeading(key),
+      element("h4", "", `${item.base_type || "Strategic Base"} ${item.base_name || item.base_id}`),
+      element("p", "", item.reason || "No explanation was retained."),
+    );
+    if (item.map_name || item.current_team) card.append(element("small", "", `${regionLabel(item.map_name)} · currently ${teamLabel(item.current_team)}`));
+    if (item.evidence?.length) card.append(supportingEvidence(item.evidence));
+    list.append(card);
+  });
+  section.append(summary, list);
+  return section;
+}
+
+function droppedAdviceWarning(items) {
+  if (!items?.length) return null;
+  const warning = element("div", "method-note");
+  warning.append(element(
+    "strong",
+    "",
+    `Model output note: ${items.length} invalid strategic recommendation${items.length === 1 ? " was" : "s were"} excluded; the model’s forecast bets remain valid.`,
+  ));
+  const list = element("ul", "rationale-list");
+  items.forEach((item) => list.append(element(
+    "li",
+    "",
+    `${eventLabel(item.advice_key)}${item.base_name ? ` — ${item.base_name}` : ""}: ${item.reason || "invalid recommendation"}.`,
+  )));
+  warning.append(list);
+  return warning;
+}
+
+function predictionStatus(bet) {
+  const source = bet.settlement_sources?.includes("foxholestats_gap_recovery")
+    ? " · FoxholeStats recovery"
+    : "";
+  if (bet.status === "open" && bet.settlement_reason === "awaiting_capture_followup") return `Open · awaiting capture follow-up${source}`;
+  if (bet.status === "open") return `Open · ${bet.settlement_reason === "awaiting_deadline" ? "awaiting deadline" : bet.settlement_reason ? eventLabel(bet.settlement_reason) : "reason not recorded"}${source}`;
+  if (bet.status === "censored" && bet.settlement_reason === "ambiguous_transition_interval") {
+    return `Not scored · transition time ambiguous${source}`;
+  }
+  if (bet.status === "censored") {
+    const reason = bet.settlement_reason === "awaiting_capture_followup"
+      ? "awaiting capture follow-up"
+      : bet.settlement_reason === "insufficient_capture_followup_coverage"
+        ? "insufficient capture follow-up coverage"
+        : bet.settlement_reason === "insufficient_observation_coverage"
+          ? "insufficient observation coverage"
+          : bet.settlement_reason === "war_ended_before_scoring_window_closed"
+            ? "war ended before settlement"
+            : bet.settlement_reason ? eventLabel(bet.settlement_reason) : "reason not recorded";
+    return `Not scored · ${reason}${source}`;
+  }
+  if (bet.crps_minutes != null && bet.settlement_reason === "no_transition_by_deadline") {
+    return `Scored · no qualifying transition by deadline${source}`;
+  }
+  if (bet.crps_minutes != null && bet.settlement_reason === "observed_transition") {
+    const observation = Number(bet.state_credit) === 1
+      ? "named outcome observed"
+      : Number(bet.state_credit) > 0
+        ? "related outcome observed"
+        : "different outcome observed";
+    const timing = bet.eta_error_minutes != null ? ` · ${bet.eta_error_minutes}m from ETA` : "";
+    return `Scored · ${observation}${timing}${source}`;
+  }
+  if (bet.crps_minutes != null) return `Scored${source}`;
+  return eventLabel(bet.status);
+}
+
+function predictionScoreValue(bet) {
+  if (bet.crps_minutes == null) return null;
+  const value = Number(bet.crps_minutes);
+  return Number.isFinite(value) ? value : null;
+}
+
+function predictionQuality(bet) {
+  if (bet.crps_minutes == null) return null;
+  const state = Number(bet.state_credit);
+  const timing = Number(bet.timing_credit);
+  const error = bet.eta_error_minutes != null
+    ? Number(bet.eta_error_minutes)
+    : bet.eta_error_max_minutes != null
+      ? Number(bet.eta_error_max_minutes)
+      : null;
+  const sigma = Number(bet.sigma_minutes);
+  const insideSpread = Number.isFinite(error) && Number.isFinite(sigma) && error <= sigma;
+  if (state === 0 || state === 1 && timing === 0 || bet.status === "miss" && state <= 0) return "miss";
+  if (state === 1 && insideSpread) return "hit";
+  return "partial";
+}
+
+function roundStatusBadges(predictions, droppedCount = 0) {
+  const bets = predictions || [];
+  const total = bets.length;
+  const scored = bets.filter((bet) => bet.crps_minutes != null).length;
+  const resolved = bets.filter((bet) => bet.status && bet.status !== "open").length;
+  const scoredClass = scored === total && total > 0 ? "complete" : "partial";
+  const resolvedClass = resolved === total && total > 0 ? "complete" : "partial";
+  const badges = element("span", "round-statuses");
+  badges.append(
+    element("span", `status status--${scoredClass}`, `${scored}/${total} scored`),
+    element("span", `status status--${resolvedClass}`, `${resolved}/${total} resolved`),
+  );
+  if (droppedCount) badges.append(element("span", "status status--dropped", `${droppedCount} dropped`));
+  return badges;
+}
+
+function predictionResult(bet) {
+  const result = element("div", "prediction-result");
+  const score = predictionScoreValue(bet);
+  const quality = predictionQuality(bet);
+  const displayStatus = quality || bet.status || "open";
+  const status = element("small", `status status--${displayStatus}`, predictionStatus(bet));
+  if (quality) status.title = quality === "hit"
+    ? "Exact outcome: the named outcome was observed and the timing landed inside the model's stated spread."
+    : quality === "partial"
+      ? "Error: the call received partial credit or landed outside the model's timing spread."
+      : "No exact credit: the named outcome or timing received no credit; inspect the settlement details for partial state credit.";
+  result.append(status);
+  if (score != null) {
+    const badge = element("span", "prediction-score prediction-score--scored");
+    badge.title = status.title || "Forecast error measured by the existing partial-credit CRPS-style loss.";
+    badge.append(
+      element("span", "prediction-score__label", "Forecast error · partial-credit CRPS-style loss"),
+      element("strong", `prediction-score__value prediction-score--${quality || "partial"}`, crps(score)),
+    );
+    result.append(badge);
+  }
+  return result;
+}
+
+
+function groupedRounds(rounds) {
+  const groups = new Map();
+  rounds.forEach((round) => {
+    const slot = round.round_slot || round.cutoff;
+    const key = round.round_id || `${round.war_id || "war"}:${slot}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        warId: round.war_id,
+        slot,
+        end: round.round_end,
+        warNumber: round.war_number,
+        participants: [],
+      });
+    }
+    groups.get(key).participants.push(round);
+  });
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      participants: group.participants.sort((a, b) => modelLabel(a).localeCompare(modelLabel(b))),
+    }))
+    .sort((a, b) => new Date(b.slot) - new Date(a.slot));
+}
+
+function roundWindow(group) {
+  const start = new Date(group.slot);
+  const end = group.end ? new Date(group.end) : new Date(start.getTime() + 3 * 60 * 60 * 1000);
+  const day = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", timeZone: "UTC" }).format(start);
+  const time = (value) => new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC" }).format(value);
+  return `${day} · ${time(start)}–${time(end)} UTC`;
+}
+
+function compactOutcome(bet) {
+  const outcome = bet.predicted_outcome || bet.outcome || bet.event_type;
+  if (outcome === "DESTROYED" || outcome === "SELF_CAPTURE") return "destroyed";
+  if (outcome === "CAPTURED_BY_WARDENS") return "captured by Wardens";
+  if (outcome === "CAPTURED_BY_COLONIALS") return "captured by Colonials";
+  if (outcome === "CAPTURED") return "captured";
+  return eventLabel(outcome || "control change").toLowerCase();
+}
+
+function modelSetupLabel(round) {
+  const slug = round?.requested_model || "model slug not recorded";
+  const reasoning = round?.reasoning;
+  if (!reasoning) return `${slug} · reasoning not recorded`;
+  const reasoningLabel = reasoning.enabled
+    ? (reasoning.effort ? `${reasoning.effort} reasoning` : "reasoning used")
+    : "reasoning disabled";
+  const ceiling = Number(reasoning.completion_ceiling_tokens);
+  const ceilingLabel = Number.isFinite(ceiling) && ceiling > 0 ? ` · ${ceiling.toLocaleString()} max output tokens` : "";
+  return `${slug} · ${reasoningLabel}${ceilingLabel}`;
+}
+
+function compactPredictionPreview(bet) {
+  const preview = element("span", "dispatch-call");
+  const meta = element("small", "dispatch-call__meta", `#${bet.rank ?? "—"} · ${trancheLabel(bet.tranche)} · ${regionLabel(bet.map_name)}`);
+  const line = element("span", "dispatch-call__line");
+  line.append(
+    element("strong", "dispatch-call__confidence", percentage(bet.confidence)),
+    baseIdentity(bet),
+  );
+  const outcome = bet.predicted_outcome || bet.outcome || bet.event_type;
+  if (outcome === "DESTROYED" || outcome === "SELF_CAPTURE") {
+    line.append(document.createTextNode(" destroyed · "));
+  } else if (outcome === "CAPTURED_BY_WARDENS") {
+    line.append(document.createTextNode(" captured by "), factionName("WARDENS"), document.createTextNode(" · "));
+  } else if (outcome === "CAPTURED_BY_COLONIALS") {
+    line.append(document.createTextNode(" captured by "), factionName("COLONIALS"), document.createTextNode(" · "));
+  } else {
+    line.append(document.createTextNode(` ${compactOutcome(bet)} · `));
+  }
+  line.append(element("time", "dispatch-call__time", predictionTime(bet.eta_utc)));
+  preview.append(meta, line);
+  return preview;
+}
+
+function roundModelDispatch(round) {
+  const bets = round.predictions || [];
+  const ranked = [...bets].sort((a, b) => (Number(a.rank) || 999) - (Number(b.rank) || 999));
+  const scored = bets.filter((bet) => bet.crps_minutes != null).length;
+  const resolved = bets.filter((bet) => bet.status && bet.status !== "open").length;
+  const dropped = (round.dropped_predictions || []).length;
+  const droppedAdvice = (round.dropped_strategic_advice || []).length;
+  const dispatch = element("span", "dispatch-model");
+  const header = element("span", "dispatch-model__header");
+  const identity = element("span", "dispatch-model__identity");
+  identity.append(
+    element("strong", "dispatch-model__name", modelLabel(round)),
+    element("small", "dispatch-model__setup", modelSetupLabel(round)),
+  );
+  header.append(
+    identity,
+    element("span", "dispatch-model__progress", `${resolved}/${bets.length} resolved · ${scored}/${bets.length} scored`),
+  );
+  const headline = element("span", "dispatch-model__headline", summaryHeadline(round));
+  const calls = element("span", "dispatch-model__calls");
+  ranked.slice(0, 2).forEach((bet) => calls.append(compactPredictionPreview(bet)));
+  if (!ranked.length) {
+    calls.append(element("span", "dispatch-call dispatch-call--empty", "No valid predictions were retained."));
+  }
+  const footer = element("span", "dispatch-model__footer");
+  const hiddenCount = Math.max(0, bets.length - 2);
+  footer.append(element("span", "dispatch-model__more", hiddenCount ? `+${hiddenCount} more prediction${hiddenCount === 1 ? "" : "s"}` : "Full prediction set shown"));
+  const issues = dropped + droppedAdvice;
+  if (issues) {
+    footer.append(element("span", "dispatch-model__issue", `${issues} output note${issues === 1 ? "" : "s"}`));
+  }
+  dispatch.append(header, headline, calls, footer);
+  return dispatch;
+}
+
+function renderRounds(rounds, latestOnly = false) {
+  const list = document.querySelector("#round-list");
+  list.replaceChildren();
+  const groups = groupedRounds(rounds);
+  const visibleGroups = latestOnly ? groups.slice(0, 3) : groups;
+  if (!visibleGroups.length) {
+    list.append(element("p", "empty-state", "The first valid timed prediction round has not landed yet."));
+    return;
+  }
+  visibleGroups.forEach((group, groupIndex) => {
+    const roundSection = element("details", "round round--latest");
+    const roundSlots = [...new Set(groups.filter((item) => item.warId === group.warId).map((item) => item.slot))].sort((a, b) => new Date(a) - new Date(b));
+    const roundNumber = roundSlots.indexOf(group.slot) + 1;
+    const groupPredictions = group.participants.flatMap((round) => round.predictions || []);
+    const dropped = group.participants.reduce((count, round) => count + (round.dropped_predictions || []).length, 0);
+    const roundStatuses = roundStatusBadges(groupPredictions, dropped);
+    const roundSummary = element("summary", "round__summary");
+    const summaryTop = element("span", "round__summary-top");
+    summaryTop.append(
+      element("strong", "", `${group.warNumber ? `War ${group.warNumber} · ` : ""}Round ${String(roundNumber).padStart(2, "0")} · ${roundWindow(group)}`),
+      element("time", "", `${group.participants.length} participating model${group.participants.length === 1 ? "" : "s"}`),
+      roundStatuses,
+    );
+    roundSummary.append(summaryTop, element("span", "round__summary-toggle"));
+    const models = element("div", "round__models");
+    group.participants.forEach((round) => {
+      const participant = element("details", "round-model round-model--latest");
+      const participantSummary = element("summary", "round-model__summary round-model__summary--preview");
+      participantSummary.append(
+        roundModelDispatch(round),
+        element("span", "round-model__toggle round-model__toggle--open", `View all ${round.predictions?.length || 0} predictions ↓`),
+        element("span", "round-model__toggle round-model__toggle--close", "Close predictions ↑"),
+      );
+      const participantBody = element("div", "round-model__body");
+      const predictionHeading = element("div", "dispatch-section-heading");
+      predictionHeading.append(
+        element("strong", "", `All ${round.predictions?.length || 0} predictions`),
+        element("span", "", "Ranked by the model · evidence is frozen at the data cutoff"),
+      );
+      const bets = element("div", "round__bets");
+      (round.predictions || []).forEach((bet) => {
+        const row = element("article", "round-bet");
+        const meta = element("div", "round-bet__meta");
+        meta.append(
+          element("span", "", `#${bet.rank ?? "—"} · ${trancheLabel(bet.tranche)} · ${regionLabel(bet.map_name)}`),
+          predictionResult(bet),
+        );
+        row.append(meta, predictionHeadline(bet), supportingEvidence(bet.evidence));
+        bets.append(row);
+      });
+      participantBody.append(predictionHeading, bets);
+
+      const briefing = element("details", "dispatch-secondary");
+      briefing.classList.add("dispatch-secondary--field-report");
+      const briefingBody = element("div", "dispatch-secondary__body field-report__body");
+      briefingBody.append(
+        briefingSummary(round.war_summary, "briefing__copy", false),
+        element("p", "region-list", (round.selected_regions || []).map(regionLabel).join(" · ")),
+      );
+      briefing.append(fieldReportSummary(round, modelLabel(round), "Field Report"), briefingBody);
+      participantBody.append(briefing);
+
+      const advice = renderStrategicAdvice(round.strategic_advice);
+      if (advice) participantBody.append(advice);
+
+      const outputIssueCount = (round.dropped_predictions || []).length + (round.dropped_strategic_advice || []).length;
+      if (outputIssueCount) {
+        const outputNotes = element("details", "dispatch-secondary dispatch-output-notes");
+        const outputSummary = element("summary", "dispatch-secondary__summary");
+        outputSummary.append(
+          element("strong", "", "Model output notes"),
+          element("span", "", `${outputIssueCount} excluded item${outputIssueCount === 1 ? "" : "s"}`),
+          element("span", "dispatch-secondary__toggle"),
+        );
+        const outputBody = element("div", "dispatch-secondary__body");
+        const adviceWarning = droppedAdviceWarning(round.dropped_strategic_advice);
+        if (adviceWarning) outputBody.append(adviceWarning);
+        if (round.dropped_predictions?.length) {
+          const warning = element("div", "method-note");
+          warning.append(element("strong", "", `Model error: ${round.dropped_predictions.length} invalid bet${round.dropped_predictions.length === 1 ? " was" : "s were"} dropped and will not be scored.`));
+          const droppedList = element("ul", "rationale-list");
+          round.dropped_predictions.forEach((dropped) => {
+            const target = String(dropped.outcome || "").replace("CAPTURED_BY_", "");
+            droppedList.append(element("li", "", `#${dropped.rank ?? "—"} ${dropped.base_type || "Base"} ${dropped.base_name || dropped.base_id}: ${dropped.reason || `predicted capture by ${teamLabel(target)}, but the recorded validation state rejected this call`}.`));
+          });
+          warning.append(droppedList);
+          outputBody.append(warning);
+        }
+        outputNotes.append(outputSummary, outputBody);
+        participantBody.append(outputNotes);
+      }
+
+      participantBody.append(element(
+        "p",
+        `dispatch-audit${round?.reasoning?.enabled === false ? " dispatch-audit--limited" : ""}`,
+        `${round.provider_label || "Provider unrecorded"} · Data cutoff ${formatDate(round.cutoff)}${round.retried_at ? ` · Recovered later from frozen cutoff data (${formatDate(round.retried_at)})` : ""}${round.replay_config_overrides?.max_tokens ? ` · Audited output ceiling ${round.replay_config_overrides.max_tokens.frozen}→${round.replay_config_overrides.max_tokens.replay} tokens` : ""}`,
+      ));
+      participant.append(participantSummary, participantBody);
+      participant.addEventListener("toggle", () => {
+        if (!participant.open) return;
+        roundSection.querySelectorAll(".round-model--latest[open]").forEach((other) => {
+          if (other !== participant) other.open = false;
+        });
+      });
+      models.append(participant);
+    });
+    roundSection.append(roundSummary, models);
+    roundSection.open = groupIndex === 0;
+    roundSection.addEventListener("toggle", () => {
+      if (roundSection.open) return;
+      roundSection.querySelectorAll(".round-model--latest[open]").forEach((participant) => {
+        participant.open = false;
+      });
+    });
+    list.append(roundSection);
+  });
+}
+
+async function boot() {
+  try {
+    const base = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+    const response = await fetch(`${base}data/dashboard-main.json`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    dashboard = await response.json();
+    const currentRounds = (dashboard.rounds || []).filter(isCompleteCurrentRound);
+    protocolRounds = currentRounds;
+    populateScoreWarSelect();
+    visibleSeries = new Set(currentRounds.map((round) => round.series_id));
+    const currentModels = (dashboard.models || []).filter((model) => visibleSeries.has(model.series_id));
+    document.querySelector("#war-number").textContent = dashboard.war ? `World Conquest ${dashboard.war.warNumber}` : "Waiting for data";
+    document.querySelector("#war-status").textContent = dashboard.forecast_status === "war_inactive"
+      ? "WAR ENDED"
+      : dashboard.forecast_status === "warming_up"
+        ? "WARMING UP"
+        : "OBSERVING";
+    document.querySelector("#last-observation").textContent = formatDate(dashboard.last_collected_at);
+    document.querySelector("#base-count").textContent = dashboard.strategic_base_count ?? 0;
+    document.querySelector("#poll-count").textContent = dashboard.collector_runs ?? 0;
+    document.querySelector("#generated-at").textContent = dashboard.generated_at ? `Generated ${formatDate(dashboard.generated_at)}` : "No dataset generated yet";
+    setupEventPager();
+    renderWarData(dashboard.war_api_snapshot);
+    renderScoreboard();
+    renderRounds(currentRounds, true);
+    renderBriefings(currentModels);
+    settleDashboardHash();
+  } catch (error) {
+    const empty = document.querySelector("#score-empty");
+    empty.textContent = `Dashboard data could not be loaded: ${error.message}`;
+    empty.hidden = false;
+    settleDashboardHash();
+  }
+}
+
+document.querySelector("#score-war-select")?.addEventListener("change", (event) => {
+  const select = event.currentTarget;
+  if (!(select instanceof HTMLSelectElement)) return;
+  scoreScope = select.value;
+  if (dashboard) renderScoreboard();
+});
+
+boot();

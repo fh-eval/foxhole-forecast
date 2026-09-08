@@ -1,0 +1,32 @@
+---
+interface Props {
+  basePath: string;
+}
+
+const { basePath } = Astro.props;
+---
+
+    <nav class="section-nav dashboard-nav" aria-label="Dashboard navigation">
+      <div class="page-width dashboard-nav__inner">
+        <div class="dashboard-nav__group dashboard-nav__group--site" role="group" aria-label="Site navigation">
+          <div class="dashboard-nav__links">
+            <a href={`${basePath}predictions/`}>Round history</a>
+            <a href={`${basePath}comparisons/`}>Model comparisons</a>
+            <a href={`${basePath}history/`}>Archive</a>
+            <a href={`${basePath}prompt-flow/`}>Prompt flow</a>
+          </div>
+        </div>
+        <div class="dashboard-nav__group dashboard-nav__group--dashboard" role="group" aria-label="On this dashboard">
+          <div class="dashboard-nav__links">
+            <a href="#scoreboard">The scoreboard</a>
+            <a href="#war-data">War data</a>
+            <a href="#rounds">The calls</a>
+            <a href="#briefings">News from the Front</a>
+            <a href="#probability">For nerds</a>
+            <a href="#limitations">Caveats</a>
+            <a href="#method">Method</a>
+            <a class="dashboard-nav__top" href="#top" title="Back to top" aria-label="Back to top"><span aria-hidden="true">↑</span></a>
+          </div>
+        </div>
+      </div>
+    </nav>

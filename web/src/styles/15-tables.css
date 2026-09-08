@@ -1,0 +1,23 @@
+/* ---------- Tables ---------- */
+
+/* Scroll shadows hint that wide audit tables continue off-screen. */
+.table-shell {
+  overflow-x: auto;
+  border: 2px solid var(--inkline);
+  box-shadow: var(--hard-sm);
+  background-color: var(--card);
+  background-image: linear-gradient(to right, var(--card) 30%, rgba(var(--card-rgb),0)), linear-gradient(to left, var(--card) 30%, rgba(var(--card-rgb),0)), linear-gradient(to right, rgba(var(--ink-rgb),.18), rgba(var(--ink-rgb),0)), linear-gradient(to left, rgba(var(--ink-rgb),.18), rgba(var(--ink-rgb),0));
+  background-position: 0 0, 100% 0, 0 0, 100% 0;
+  background-repeat: no-repeat;
+  background-size: 48px 100%, 48px 100%, 14px 100%, 14px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
+table { width: 100%; border-collapse: collapse; min-width: 820px; }
+th { color: var(--soft); font-size: 11.5px; text-align: left; letter-spacing: .1em; text-transform: uppercase; }
+th small { display: block; margin-top: 4px; color: var(--faint); font-size: 11px; font-weight: 400; letter-spacing: .03em; text-transform: none; }
+th, td { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+thead th { border-bottom: 2px solid var(--inkline); }
+tbody tr:hover { background: var(--wash); }
+.faction { font-size: 12.5px; }
+.faction--wardens { color: var(--steel); }
+.faction--colonials { color: var(--olive); }

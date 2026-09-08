@@ -1,0 +1,39 @@
+      <section id="probability" class="section-block">
+        <div class="section-heading">
+          <div><p class="kicker">Confidence and timing</p><h2>How do the whole forecasts compare?</h2></div>
+          <p>A model can sound humble and still be useless, or nail every call while claiming it was never sure. Read this beside the practical scoreboard: the partial-credit CRPS-style loss combines outcome, timing, and stated probability as an exploratory diagnostic. It does not establish calibration or a best model.</p>
+        </div>
+        <div class="table-caption table-caption--equation">
+          <p class="kicker">Whole-forecast error</p>
+          <p><strong>Partial-credit CRPS-style loss = ∫ E[(F(t) − credit × I(T≤t))²] dt</strong></p>
+          <span>In plain words: across the window from the data cutoff through three hours after the model’s ETA, how far is its probability curve from the observed event state and timing? The window varies with each ETA, and event intervals are averaged when the exact time is unknown. Certain near-matches receive 0.75 credit; exact-outcome counts are reported separately. Lower loss is an exploratory signal, not a calibration verdict.</span>
+        </div>
+        <div class="table-shell">
+          <table class="score-table probability-table" aria-describedby="score-guide">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Near-term forecast error<small>Partial-credit CRPS-style loss · 0–6h calls · lower ↓</small></th>
+                <th>Next-day forecast error<small>Partial-credit CRPS-style loss · 6–24h calls · lower ↓</small></th>
+                <th>Claimed chance<small>Mean confidence</small></th>
+                <th>Claimed timing spread<small>Mean sigma</small></th>
+                <th>Inside stated spread<small>Exact calls · model sigma only</small></th>
+                <th>Typical near-term target<small>Median after cutoff</small></th>
+                <th>Typical next-day target<small>Median after cutoff</small></th>
+                <th>Matched timing error<small>Matched events only · lower ↓</small></th>
+                <th>Call status<small>Scored / dropped / not scored / open</small></th>
+              </tr>
+            </thead>
+            <tbody id="score-rows" aria-live="polite"></tbody>
+          </table>
+          <p id="score-empty" class="empty-state" hidden>No model has scoreable probability forecasts under the current protocol yet.</p>
+        </div>
+        <dl id="score-guide" class="score-guide">
+          <div><dt>Near-term / next-day error <span>(partial-credit CRPS-style loss)</span></dt><dd>Integrated loss over each call’s cutoff-to-ETA-plus-three-hours window, combining outcome credit, timing, and stated probability. Lower is better as an exploratory diagnostic; it does not establish calibration or model superiority.</dd></div>
+          <div><dt>Stated chance <span>(confidence)</span></dt><dd>How likely the model said its named outcome was. A low-confidence call can score reasonably when nothing happens while offering little actionable advice — read this beside the bullseye rate.</dd></div>
+          <div><dt>Timing window <span>(sigma)</span></dt><dd>How spread out the model’s own timing estimate is. A narrow window is a bold, risky claim; a wide one hedges.</dd></div>
+          <div><dt>Inside stated spread</dt><dd>Among exact outcomes with a model-supplied sigma, how often did timing land inside that claimed spread? Read coverage beside average sigma: wider spreads are easier to cover. Legacy calls with inferred sigma are excluded.</dd></div>
+          <div><dt>Matched timing error <span>(ETA error)</span></dt><dd>How far the event landed from the ETA — but only for calls where something actually happened. False alarms don’t appear here, so never read this number alone.</dd></div>
+          <div><dt>Not scored <span>(censored)</span></dt><dd>Our observation coverage had gaps or the war ended before a fair judgment was possible. Excluded, not counted as misses.</dd></div>
+        </dl>
+      </section>

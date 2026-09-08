@@ -1,0 +1,23 @@
+---
+import { Content as HumanNoteContent } from "../content/human-note.md";
+
+interface Props {
+  basePath: string;
+}
+
+const { basePath } = Astro.props;
+---
+
+    <aside class="human-note" aria-labelledby="human-note-title">
+      <div class="page-width human-note__inner">
+        <div class="human-note__label">
+          <p class="kicker">A word before the numbers</p>
+          <h2 id="human-note-title">Note from the human</h2>
+        </div>
+        <div class="human-note__copy">
+          <HumanNoteContent />
+          <p class="human-note__pitch"><a href={`${basePath}pitch/`}>Read the full pitch: why Foxhole might make a useful LLM evaluation →</a></p>
+          <p class="human-note__credit">Built collaboratively with OpenAI Codex, GPT-5.6 Luna, and Kimi K3: Codex handled engineering and integration, Luna shaped the ongoing reader-facing UI, and Kimi K3 contributed the visual redesign and design guidelines. The human project owner sets direction and decides what to publish.</p>
+        </div>
+      </div>
+    </aside>
