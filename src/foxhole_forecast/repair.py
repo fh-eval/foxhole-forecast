@@ -738,7 +738,13 @@ def _existing_repair_state(
     duplicates, unexpected identifiers, or audits without their ledger row
     are refused.  Unrelated cohorts remain untouched.
     """
-    ledger_rows = _pkg.read_ledger(_LEDGER, data_dir=data_dir)
+    try:
+        ledger_rows = _pkg.read_ledger(_LEDGER, data_dir=data_dir)
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise RepairRefused(
+            f"Malformed existing {_LEDGER} JSON; refusing to resume cohort "
+            f"{cohort_id}: {_error_text(error)}"
+        ) from error
     expected_by_run = {row["run_id"]: row for row in expected_rows}
     matching_rows: list[dict[str, Any]] = []
     seen_run_ids: set[str] = set()
@@ -770,7 +776,13 @@ def _existing_repair_state(
         kind=_LEDGER,
         cohort_id=cohort_id,
     )
-    audits = _pkg.read_jsonl(data_dir / "recovery_audit.jsonl")
+    try:
+        audits = _pkg.read_jsonl(data_dir / "recovery_audit.jsonl")
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise RepairRefused(
+            f"Malformed recovery audit JSON; refusing to resume cohort "
+            f"{cohort_id}: {_error_text(error)}"
+        ) from error
     matching_audits: list[dict[str, Any]] = []
     seen_audit_ids: set[str] = set()
     for audit in audits:
@@ -823,6 +835,81 @@ def _existing_repair_state(
             "refusing to repair a cohort twice"
         )
     return row_count, audit_count
+
+
+def _resume_repaired_at(cohort_id: str, *, data_dir: Path) -> str | None:
+    """Find the timestamp of an interrupted repair, if one is present.
+
+    The CLI's timestamp default is intentionally stable across a retry.  Only
+    timestamps attached to existing rows or audit entries for this cohort are
+    considered.  The exact-prefix check in ``_existing_repair_state`` still
+    validates the complete contents and order after reconstruction; this
+    helper only prevents a retry from changing the annotation while rebuilding
+    those expected rows.
+    """
+    cohort = _load_cohort_record(cohort_id, data_dir)
+    run_ids = {
+        model["run_id"]
+        for model in cohort.get("models", [])
+        if model.get("run_id") and model.get("series_id")
+    }
+    if not run_ids:
+        return None
+
+    try:
+        ledger_rows = _pkg.read_ledger(_LEDGER, data_dir=data_dir)
+        audits = _pkg.read_jsonl(data_dir / "recovery_audit.jsonl")
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise RepairRefused(
+            f"Malformed existing repair ledger or audit JSON; refusing to "
+            f"resume cohort {cohort_id}: {_error_text(error)}"
+        ) from error
+
+    timestamps: set[str] = set()
+    matching_state = False
+    for row in ledger_rows:
+        if not isinstance(row, dict):
+            continue
+        if row.get("cohort_id") != cohort_id and row.get("run_id") not in run_ids:
+            continue
+        matching_state = True
+        annotation = row.get("repair")
+        timestamp = (
+            annotation.get("repaired_at") if isinstance(annotation, dict) else None
+        )
+        if not isinstance(timestamp, str) or not timestamp:
+            raise RepairRefused(
+                f"Existing repair row for cohort {cohort_id} has no usable "
+                "repaired_at; rerun with --repaired-at set to the original "
+                "timestamp"
+            )
+        timestamps.add(timestamp)
+    for audit in audits:
+        if not isinstance(audit, dict):
+            continue
+        if (
+            audit.get("cohort_id") != cohort_id
+            and audit.get("run_id") not in run_ids
+        ):
+            continue
+        matching_state = True
+        timestamp = audit.get("repaired_at")
+        if not isinstance(timestamp, str) or not timestamp:
+            raise RepairRefused(
+                f"Existing recovery audit for cohort {cohort_id} has no usable "
+                "repaired_at; rerun with --repaired-at set to the original "
+                "timestamp"
+            )
+        timestamps.add(timestamp)
+
+    if len(timestamps) > 1:
+        values = ", ".join(sorted(timestamps))
+        raise RepairRefused(
+            f"Existing repair state for cohort {cohort_id} has conflicting "
+            f"repaired_at values ({values}); rerun with an explicit "
+            "--repaired-at only after resolving the conflicting state"
+        )
+    return next(iter(timestamps)) if matching_state and timestamps else None
 
 
 def repair_cohort(
@@ -998,18 +1085,28 @@ if __name__ == "__main__":  # pragma: no cover - operational entry point
         help="Build and verify the rows without writing anything",
     )
     arguments = parser.parse_args()
-    repaired_at = arguments.repaired_at or isoformat()
+    # Keep one timestamp for a fresh multi-cohort invocation, but recover the
+    # timestamp from an interrupted cohort when --repaired-at was omitted.
+    default_repaired_at = arguments.repaired_at or isoformat()
     try:
-        results = [
-            _pkg.repair_cohort(
-                cohort_id,
-                data_dir=arguments.data_dir,
-                repaired_at=repaired_at,
-                forecast_result=arguments.forecast_result,
-                dry_run=arguments.dry_run,
+        results = []
+        for cohort_id in arguments.cohort:
+            repaired_at = arguments.repaired_at or (
+                _pkg._resume_repaired_at(
+                    cohort_id,
+                    data_dir=arguments.data_dir,
+                )
+                or default_repaired_at
             )
-            for cohort_id in arguments.cohort
-        ]
+            results.append(
+                _pkg.repair_cohort(
+                    cohort_id,
+                    data_dir=arguments.data_dir,
+                    repaired_at=repaired_at,
+                    forecast_result=arguments.forecast_result,
+                    dry_run=arguments.dry_run,
+                )
+            )
     except _pkg.RepairRefused as error:
         # NOTE: under ``python -m foxhole_forecast.repair`` the module is
         # also imported under its canonical name, so the class raised by
