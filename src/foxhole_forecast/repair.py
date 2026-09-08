@@ -181,8 +181,19 @@ def _attempt(
     }
 
 
-def _load_response_objects(data_dir: Path) -> list[dict[str, Any]]:
-    """Load every stored ``provider_responses`` object with its footprint."""
+def _load_response_objects(
+    data_dir: Path, window_start: datetime, window_end: datetime
+) -> list[dict[str, Any]]:
+    """Load response objects whose created timestamps overlap a call window.
+
+    The object store contains historical provider responses, including some
+    malformed responses unrelated to the cohort being repaired.  Determine
+    scope from the numeric timestamps first, then apply strict validation only
+    to objects that overlap this cohort's call window.  An object with no
+    numeric timestamps cannot be attributed to a window and is ignored; an
+    object with at least one in-window timestamp is refused if any entry is
+    malformed.
+    """
     objects: list[dict[str, Any]] = []
     root = data_dir / "objects" / "sha256"
     if not root.is_dir():
@@ -197,13 +208,22 @@ def _load_response_objects(data_dir: Path) -> list[dict[str, Any]]:
         if not isinstance(responses, list) or not responses:
             continue
         created: list[float] = []
+        malformed_created = False
         for raw in responses:
             value = raw.get("created") if isinstance(raw, dict) else None
             if not isinstance(value, (int, float)) or isinstance(value, bool):
-                raise RepairRefused(
-                    f"Response object {path.name} has a response without a numeric created"
-                )
+                malformed_created = True
+                continue
             created.append(float(value))
+        if not created or not any(
+            window_start.timestamp() <= value < window_end.timestamp()
+            for value in created
+        ):
+            continue
+        if malformed_created:
+            raise RepairRefused(
+                f"Response object {path.name} has a response without a numeric created"
+            )
         model = responses[0].get("model")
         if not isinstance(model, str) or any(
             (isinstance(raw, dict) and raw.get("model") != model)
@@ -340,6 +360,7 @@ def _replay_forecast_validators(
                 "filtered": filtered,
                 "dropped_predictions": dropped,
                 "dropped_strategic_advice": advice,
+                "strict_error": strict_error,
             }
         except (
             ValidationError,
@@ -352,6 +373,16 @@ def _replay_forecast_validators(
                 "error": strict_error,
                 "fallback_error": fallback_error,
             }
+        except Exception as fallback_error:
+            raise RepairRefused(
+                "Unexpected exception while replaying the forecast fallback "
+                f"validator: {_error_text(fallback_error)}"
+            ) from fallback_error
+    except Exception as strict_error:
+        raise RepairRefused(
+            "Unexpected exception while replaying the forecast strict "
+            f"validator: {_error_text(strict_error)}"
+        ) from strict_error
 
 
 def _repair_annotation(repaired_at: str) -> dict[str, Any]:
@@ -446,7 +477,17 @@ def rebuild_run_row(
     scout_parsed, scout_salvaged = _parse_json_content_with_metadata(
         _response_content(scout_raw)
     )
-    overview = validate_scout(scout_parsed, model_scout_packet, settings)
+    try:
+        overview = validate_scout(scout_parsed, model_scout_packet, settings)
+    except (ValidationError, ValueError, KeyError, json.JSONDecodeError) as error:
+        raise RepairRefused(
+            f"Scout response for {run_id} failed validation: {_error_text(error)}"
+        ) from error
+    except Exception as error:
+        raise RepairRefused(
+            f"Unexpected exception while validating the scout response for {run_id}: "
+            f"{_error_text(error)}"
+        ) from error
 
     # Independent cross-checks against frozen run-time artifacts.
     frozen_overview = bundle.get("overview")
@@ -469,7 +510,7 @@ def rebuild_run_row(
         )
 
     scout_attempt = _attempt(
-        "scout",
+        "war_overview",
         config,
         settings,
         scout_raw,
@@ -524,6 +565,18 @@ def rebuild_run_row(
     )
     correction_template = bundle["prompts"]["correction"]
 
+    try:
+        validation_attempts = max(1, int(config.get("validation_attempts", 2)))
+    except (TypeError, ValueError) as error:
+        raise RepairRefused(
+            f"Invalid validation_attempts for {run_id}: {_error_text(error)}"
+        ) from error
+    if len(forecast_raws) > validation_attempts:
+        raise RepairRefused(
+            f"Response object for {run_id} contains {len(forecast_raws)} forecast "
+            f"responses, exceeding validation_attempts={validation_attempts}"
+        )
+
     calls: list[dict[str, Any]] = [scout_attempt]
     last_error: BaseException | None = None
     accepted: dict[str, Any] | None = None
@@ -552,6 +605,8 @@ def rebuild_run_row(
             attempt["json_salvaged"] = True
         outcome = _replay_forecast_validators(parsed, detail_packet, settings)
         if outcome["accepted"]:
+            if outcome.get("strict_error") is not None:
+                attempt["error"] = _error_text(outcome["strict_error"])
             if index != len(forecast_raws) - 1:
                 raise RepairRefused(
                     f"Forecast response {index + 1} of {run_id} validates but "
@@ -682,7 +737,7 @@ def repair_cohort(
     window_end = _next_cutoff(cohort, data_dir)
     window_start = parse_time(cohort["cutoff"])
     clusters_by_model: dict[str, list[list[dict[str, Any]]]] = {}
-    for obj in _load_response_objects(data_dir):
+    for obj in _load_response_objects(data_dir, window_start, window_end):
         clusters_by_model.setdefault(obj["model"], []).append(obj)
     clusters_by_model = {
         model: _cluster_objects(objects)
@@ -753,6 +808,8 @@ def repair_cohort(
                 "schema_version": 1,
                 "record_type": "cohort_run_repair",
                 "cohort_id": cohort_id,
+                "war_id": cohort["war_id"],
+                "war_number": cohort["war_number"],
                 "run_id": run["run_id"],
                 "series_id": run["series_id"],
                 "status": run["status"],
