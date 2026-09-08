@@ -6,14 +6,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from ..ledger import read_historical_events, read_recovered_coverage
 from ..storage import (
     append_jsonl,
     isoformat,
     parse_time,
     read_json,
-    read_jsonl,
     write_json,
-    write_jsonl,
 )
 from . import paths
 from .gaps import _missing_poll_intervals, _official_poll_times, _window_key
@@ -25,14 +24,19 @@ RECOVERY_MAX_BACKOFF_HOURS = 24
 
 
 def _publish_recovery_batch(writes: dict[Path, tuple[str, Any]]) -> None:
-    """Publish history, coverage, and manifest as one rollback-safe batch."""
+    """Publish history, coverage, and manifest as one rollback-safe batch.
+
+    Ledger shards receive appends; on any failure every touched shard is
+    truncated back to its original byte length (or deleted when newly
+    created) and JSON writes are restored from their backups.
+    """
     backups = {
         path: path.read_bytes() if path.exists() else None for path in writes
     }
     try:
         for path, (kind, value) in writes.items():
-            if kind == "jsonl":
-                write_jsonl(path, value)
+            if kind == "jsonl_append":
+                append_jsonl(path, value)
             elif kind == "json":
                 write_json(path, value)
             else:
@@ -76,7 +80,7 @@ def _recovered_window_keys(war: dict[str, Any], poll_minutes: int) -> set[tuple[
     # Older recovery runs persisted only cadence points. Treat a gap containing
     # one of those tagged points as recovered without trusting unrelated rows.
     covered = []
-    for row in read_jsonl(paths.DATA_DIR / "recovered_coverage.jsonl"):
+    for row in read_recovered_coverage(data_dir=paths.DATA_DIR):
         if (
             row.get("war_id") != war.get("warId")
             or row.get("source") != "foxholestats_gap_recovery"
@@ -133,7 +137,7 @@ def _legacy_recovered_window_keys(
     if not gaps:
         return windows
     legacy_points: list[datetime] = []
-    for row in read_jsonl(paths.DATA_DIR / "historical_events.jsonl"):
+    for row in read_historical_events(data_dir=paths.DATA_DIR):
         if (
             row.get("war_id") == war_id
             and row.get("source") == "foxholestats_gap_recovery"
@@ -144,7 +148,7 @@ def _legacy_recovered_window_keys(
                     legacy_points.append(parse_time(row[key]))
                 except (KeyError, TypeError, ValueError):
                     pass
-    for row in read_jsonl(paths.DATA_DIR / "recovered_coverage.jsonl"):
+    for row in read_recovered_coverage(data_dir=paths.DATA_DIR):
         if (
             row.get("war_id") == war_id
             and row.get("source") == "foxholestats_gap_recovery"

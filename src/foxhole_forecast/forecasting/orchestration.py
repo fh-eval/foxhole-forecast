@@ -96,7 +96,12 @@ def run_forecast_cohort(
         if model_config.get("enabled", True):
             result = _pkg._run_model(settings, model_config, scout_packet, cohort_id, cohort_dir, state)
             result = externalize_run_responses(result, _pkg.DATA_DIR)
-            _pkg.append_jsonl(_pkg.DATA_DIR / "model_runs.jsonl", result)
+            _pkg.append_ledger(
+                "model_runs",
+                scout_packet["war"]["warNumber"],
+                result,
+                data_dir=_pkg.DATA_DIR,
+            )
             model_results.append(
                 {
                     "run_id": result["run_id"],
@@ -124,8 +129,7 @@ def run_forecast_cohort(
 
 def salvage_invalid_run(settings: Settings, run_id: str) -> dict[str, Any]:
     """Revalidate a stored provider response without making another model call."""
-    runs_path = _pkg.DATA_DIR / "model_runs.jsonl"
-    runs = _pkg.read_jsonl(runs_path)
+    runs = _pkg.read_ledger("model_runs", data_dir=_pkg.DATA_DIR)
     matching = [index for index, run in enumerate(runs) if run.get("run_id") == run_id]
     if len(matching) != 1:
         raise ValueError(f"Expected exactly one stored run for {run_id}; found {len(matching)}")
@@ -216,7 +220,7 @@ def salvage_invalid_run(settings: Settings, run_id: str) -> dict[str, Any]:
     }
     repaired.pop("error", None)
     runs[index] = repaired
-    write_jsonl(runs_path, runs)
+    _pkg.replace_ledger_row("model_runs", runs, index, repaired, data_dir=_pkg.DATA_DIR)
 
     cohorts_path = _pkg.DATA_DIR / "cohorts.jsonl"
     cohorts = _pkg.read_jsonl(cohorts_path)
@@ -240,8 +244,7 @@ def retry_invalid_run(
     settings: Settings, run_id: str, snapshot_path: Path
 ) -> dict[str, Any]:
     """Retry an invalid model run using its original frozen cutoff snapshot."""
-    runs_path = _pkg.DATA_DIR / "model_runs.jsonl"
-    runs = _pkg.read_jsonl(runs_path)
+    runs = _pkg.read_ledger("model_runs", data_dir=_pkg.DATA_DIR)
     matching = [index for index, run in enumerate(runs) if run.get("run_id") == run_id]
     if len(matching) != 1:
         raise ValueError(f"Expected exactly one stored run for {run_id}; found {len(matching)}")
@@ -296,7 +299,7 @@ def retry_invalid_run(
     retried["retry_history"] = retry_history
     retried = externalize_run_responses(retried, _pkg.DATA_DIR)
     runs[index] = retried
-    write_jsonl(runs_path, runs)
+    _pkg.replace_ledger_row("model_runs", runs, index, retried, data_dir=_pkg.DATA_DIR)
 
     cohorts_path = _pkg.DATA_DIR / "cohorts.jsonl"
     cohorts = _pkg.read_jsonl(cohorts_path)
@@ -325,8 +328,7 @@ def replay_invalid_run(
     max_tokens_override: int | None = None,
 ) -> dict[str, Any]:
     """Append a delayed replay that can observe only its frozen cutoff bundle."""
-    runs_path = _pkg.DATA_DIR / "model_runs.jsonl"
-    runs = _pkg.read_jsonl(runs_path)
+    runs = _pkg.read_ledger("model_runs", data_dir=_pkg.DATA_DIR)
     original = next((row for row in runs if row.get("run_id") == run_id), None)
     if original is None:
         raise ValueError(f"Unknown run: {run_id}")
@@ -538,7 +540,12 @@ def replay_invalid_run(
         )
         _pkg.write_json(state_path, state)
     replay = externalize_run_responses(replay, _pkg.DATA_DIR)
-    _pkg.append_jsonl(runs_path, replay)
+    _pkg.append_ledger(
+        "model_runs",
+        _pkg.war_number_for_war_id(original["war_id"], data_dir=_pkg.DATA_DIR),
+        replay,
+        data_dir=_pkg.DATA_DIR,
+    )
 
     cohorts_path = _pkg.DATA_DIR / "cohorts.jsonl"
     cohorts = _pkg.read_jsonl(cohorts_path)
@@ -587,7 +594,7 @@ def recover_invalid_runs(
         if entry.get("status") == "valid":
             continue
         run_id = entry.get("run_id")
-        runs = _pkg.read_jsonl(_pkg.DATA_DIR / "model_runs.jsonl")
+        runs = _pkg.read_ledger("model_runs", data_dir=_pkg.DATA_DIR)
         run = next((row for row in runs if row.get("run_id") == run_id), None)
         if run is None:
             actions.append(

@@ -21,6 +21,12 @@ from typing import Any, Callable
 
 from ..artifacts import attempt_raw_response, externalize_run_responses
 from ..config import DATA_DIR, ROOT, Settings, load_models
+from ..ledger import (
+    append_ledger,
+    read_ledger,
+    replace_ledger_row,
+    war_number_for_war_id,
+)
 from ..packets import (
     build_detail_packet,
     build_detail_source,
@@ -137,6 +143,7 @@ __all__ = [
     "_transient_provider_failure",
     "_write_replay_bundle",
     "append_jsonl",
+    "append_ledger",
     "asdict",
     "attempt_raw_response",
     "build_detail_packet",
@@ -160,8 +167,10 @@ __all__ = [
     "re",
     "read_json",
     "read_jsonl",
+    "read_ledger",
     "recover_invalid_runs",
     "replay_invalid_run",
+    "replace_ledger_row",
     "retry_invalid_run",
     "run_forecast_cohort",
     "salvage_invalid_run",
@@ -171,6 +180,7 @@ __all__ = [
     "validate_scout",
     "validate_strategic_recommendation",
     "war_ended_at",
+    "war_number_for_war_id",
     "war_is_active",
     "write_json",
     "write_jsonl",

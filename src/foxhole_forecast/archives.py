@@ -6,6 +6,12 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .artifacts import read_json_object
+from .ledger import (
+    load_settlements,
+    read_historical_events,
+    read_ledger,
+    read_recovered_coverage,
+)
 from .storage import (
     canonical_json_sha256,
     parse_time,
@@ -17,6 +23,33 @@ from .storage import (
 
 
 ARCHIVE_SCHEMA_VERSION = 1
+
+# Live files whose storage moved to the sharded ledger store. Reads go through
+# the ledger module (which keeps the legacy monolith readable during the
+# transition window); writes are append-only.
+_LIVE_LEDGER_FILES = {
+    "settlements.json": "settlements",
+    "model_runs.jsonl": "model_runs",
+    "historical_events.jsonl": "historical_events",
+    "recovered_coverage.jsonl": "recovered_coverage",
+}
+
+
+def _live_rows(data_dir: Path, live_name: str) -> list[dict[str, Any]]:
+    name = _LIVE_LEDGER_FILES.get(live_name)
+    if name is None:
+        return read_jsonl(data_dir / live_name)
+    if name == "historical_events":
+        return read_historical_events(data_dir=data_dir)
+    if name == "recovered_coverage":
+        return read_recovered_coverage(data_dir=data_dir)
+    return read_ledger(name, data_dir=data_dir)
+
+
+def _live_mapping(data_dir: Path, live_name: str) -> dict[str, Any]:
+    if _LIVE_LEDGER_FILES.get(live_name) == "settlements":
+        return load_settlements(data_dir=data_dir)
+    return read_json(data_dir / live_name, default={})
 
 
 def create_war_archive(data_dir: Path, war_number: int) -> dict[str, Any]:
@@ -41,7 +74,7 @@ def create_war_archive(data_dir: Path, war_number: int) -> dict[str, Any]:
         path = data_dir / name
         if path.exists():
             source_paths.add(path)
-        return [row for row in read_jsonl(path) if row.get("war_id") == war_id]
+        return [row for row in _live_rows(data_dir, name) if row.get("war_id") == war_id]
 
     collector_runs = rows_for_war("collector_runs.jsonl")
     legacy_observations = rows_for_war("observations.jsonl")
@@ -61,10 +94,11 @@ def create_war_archive(data_dir: Path, war_number: int) -> dict[str, Any]:
 
     run_ids = {run["run_id"] for run in model_runs}
     settlements_path = data_dir / "settlements.json"
-    source_paths.add(settlements_path)
+    if settlements_path.exists():
+        source_paths.add(settlements_path)
     settlements = {
         run_id: settlement
-        for run_id, settlement in read_json(settlements_path, default={}).items()
+        for run_id, settlement in load_settlements(data_dir=data_dir).items()
         if run_id in run_ids
     }
 
@@ -212,7 +246,7 @@ def read_rows_with_archives(
         if not isinstance(payload, list):
             raise ValueError(f"War archive artifact is not a row list: {artifact_name}")
         archived_rows.extend(payload)
-    live_rows = read_jsonl(data_dir / live_name)
+    live_rows = _live_rows(data_dir, live_name)
 
     def identity(row: dict[str, Any]) -> tuple[Any, ...]:
         if not identity_fields:
@@ -230,7 +264,6 @@ def read_rows_with_archives(
         row for row in archived_rows if identity(row) not in live_identities
     ] + live_rows
 
-
 def read_mapping_with_archives(
     data_dir: Path, live_name: str, artifact_name: str
 ) -> dict[str, Any]:
@@ -241,7 +274,7 @@ def read_mapping_with_archives(
         if not isinstance(payload, dict):
             raise ValueError(f"War archive artifact is not a mapping: {artifact_name}")
         merged.update(payload)
-    live = read_json(data_dir / live_name, default={})
+    live = _live_mapping(data_dir, live_name)
     if not isinstance(live, dict):
         raise ValueError(f"Live data is not a mapping: {live_name}")
     merged.update(live)
@@ -299,7 +332,11 @@ def prune_archived_war(
         data_dir / "model_runs.jsonl",
         *sorted((data_dir / "observations").glob("*.jsonl")),
     ]
-    remaining_runs: list[dict[str, Any]] = []
+    remaining_runs: list[dict[str, Any]] = [
+        row
+        for row in _live_rows(data_dir, "model_runs.jsonl")
+        if row.get("war_id") != war_id
+    ]
     for path in live_row_files:
         rows = read_jsonl(path)
         kept = [row for row in rows if row.get("war_id") != war_id]
@@ -307,8 +344,6 @@ def prune_archived_war(
         if removed:
             rewrites.append((path, kept))
             removed_rows[str(path.relative_to(data_dir))] = removed
-        if path == data_dir / "model_runs.jsonl":
-            remaining_runs = kept
 
     archived_runs = _read_verified_artifact(archive_dir, "model-runs.json.gz")
     archived_run_ids = {run["run_id"] for run in archived_runs}
@@ -359,12 +394,14 @@ def prune_archived_war(
     recovery_state = (recovery_status.get("wars") or {}).get(war_id)
     status_delete = recovery_status_path if recovery_state is not None else None
 
+    ledger_shard_deletes = _ledger_war_shard_files(data_dir, war_number)
+
     touched_paths = {path for path, _rows in rewrites}
     if removed_settlements:
         touched_paths.add(settlements_path)
     if status_delete:
         touched_paths.add(status_delete)
-    deleted_files = [*packet_deletes, *object_deletes]
+    deleted_files = [*packet_deletes, *object_deletes, *ledger_shard_deletes]
     if import_delete:
         deleted_files.append(import_delete)
     bytes_before = sum(path.stat().st_size for path in touched_paths | set(deleted_files))
@@ -416,6 +453,16 @@ def prune_archived_war(
     }
 
 
+def _ledger_war_shard_files(data_dir: Path, war_number: int) -> list[Path]:
+    """Shard files of one war across the sharded ledgers (for prune deletes)."""
+    files: list[Path] = []
+    for name in ("settlements", "model_runs", "historical_events", "recovered_coverage"):
+        ledger_dir = data_dir / "ledgers" / name / f"war-{war_number:03d}"
+        if ledger_dir.is_dir():
+            files.extend(sorted(ledger_dir.glob("*.jsonl")))
+    return files
+
+
 def verify_war_archive_parity(data_dir: Path, war_number: int) -> dict[str, Any]:
     """Confirm that an archive is a semantic copy of any remaining live data."""
     verification = verify_war_archive(data_dir, war_number)
@@ -435,7 +482,11 @@ def verify_war_archive_parity(data_dir: Path, war_number: int) -> dict[str, Any]
         "model-runs.json.gz": data_dir / "model_runs.jsonl",
     }
     live_payloads = {
-        artifact: [row for row in read_jsonl(path) if row.get("war_id") == war_id]
+        artifact: [
+            row
+            for row in _live_rows(data_dir, path.name)
+            if row.get("war_id") == war_id
+        ]
         for artifact, path in row_specs.items()
         if artifact in archived_artifacts
     }
@@ -465,9 +516,7 @@ def verify_war_archive_parity(data_dir: Path, war_number: int) -> dict[str, Any]
     run_ids = {run["run_id"] for run in archived_runs}
     live_settlements = {
         run_id: settlement
-        for run_id, settlement in read_json(
-            data_dir / "settlements.json", default={}
-        ).items()
+        for run_id, settlement in load_settlements(data_dir=data_dir).items()
         if run_id in run_ids
     }
     archived_cohorts = _read_verified_artifact(archive_dir, "cohorts.json.gz")

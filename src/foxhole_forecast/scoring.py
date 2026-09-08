@@ -8,6 +8,13 @@ from typing import Any
 
 from .archives import read_mapping_with_archives, read_rows_with_archives
 from .config import DATA_DIR, Settings, load_models, load_series_aliases
+from .ledger import (
+    append_ledger,
+    load_settlements,
+    read_historical_events,
+    read_ledger,
+    read_recovered_coverage,
+)
 from .score_metrics import summarize_crps, summarize_selection
 from .storage import isoformat, parse_time, read_json, read_jsonl, write_json
 
@@ -22,29 +29,48 @@ def _war_end(wars: dict[str, dict[str, Any]], war_id: str) -> datetime | None:
     return parse_time(value) if value else None
 
 
+def _settlement_content(record: dict[str, Any]) -> dict[str, Any]:
+    """Content identity for append-on-change, ignoring the volatile timestamp."""
+    return {key: value for key, value in record.items() if key != "updated_at"}
+
+
+def _run_war_number(
+    run: dict[str, Any],
+    cohorts: dict[str, dict[str, Any]],
+    wars: dict[str, dict[str, Any]],
+) -> int:
+    number = (cohorts.get(run.get("cohort_id")) or {}).get("war_number")
+    if isinstance(number, int):
+        return number
+    number = (wars.get(run.get("war_id")) or {}).get("war_number")
+    if isinstance(number, int):
+        return number
+    raise ValueError(f"Cannot derive war_number for run {run.get('run_id')}")
+
+
 def settle_and_score(settings: Settings, now: datetime | None = None) -> dict[str, Any]:
     current = (now or datetime.now(UTC)).astimezone(UTC)
-    runs = read_jsonl(DATA_DIR / "model_runs.jsonl")
+    runs = read_ledger("model_runs", data_dir=DATA_DIR)
     cohorts = {row["cohort_id"]: row for row in read_jsonl(DATA_DIR / "cohorts.jsonl")}
     events = [
         *read_jsonl(DATA_DIR / "events.jsonl"),
         *[
             transition
-            for row in read_jsonl(DATA_DIR / "historical_events.jsonl")
+            for row in read_historical_events(data_dir=DATA_DIR)
             if (transition := _recovered_transition(row)) is not None
         ],
     ]
     collector_runs = [
         *read_jsonl(DATA_DIR / "collector_runs.jsonl"),
-        *read_jsonl(DATA_DIR / "recovered_coverage.jsonl"),
+        *read_recovered_coverage(data_dir=DATA_DIR),
     ]
-    settlements = read_json(DATA_DIR / "settlements.json", default={})
+    settlements = load_settlements(data_dir=DATA_DIR)
     wars = read_json(DATA_DIR / "wars.json", default={}).get("wars", {})
 
     for run in runs:
         if run.get("status") != "valid" or run["cohort_id"] not in cohorts:
             continue
-        settlements[run["run_id"]] = settle_run(
+        settlement = settle_run(
             run,
             cohorts[run["cohort_id"]],
             events,
@@ -53,7 +79,15 @@ def settle_and_score(settings: Settings, now: datetime | None = None) -> dict[st
             current,
             _war_end(wars, run["war_id"]),
         )
-    write_json(DATA_DIR / "settlements.json", settlements)
+        prior = settlements.get(run["run_id"])
+        if prior is None or _settlement_content(prior) != _settlement_content(settlement):
+            append_ledger(
+                "settlements",
+                _run_war_number(run, cohorts, wars),
+                settlement,
+                data_dir=DATA_DIR,
+            )
+        settlements[run["run_id"]] = settlement
     aggregate_runs = read_rows_with_archives(
         DATA_DIR,
         "model_runs.jsonl",
