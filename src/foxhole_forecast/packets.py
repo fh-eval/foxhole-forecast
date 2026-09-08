@@ -7,6 +7,7 @@ from typing import Any
 
 from .config import DATA_DIR, Settings
 from .domain import strategic_base_type
+from .ledger import read_historical_events
 from .storage import parse_time, read_json, read_jsonl
 
 
@@ -67,7 +68,7 @@ def _events_before(cutoff: str, war_id: str, hours: int) -> list[dict[str, Any]]
     official = read_jsonl(DATA_DIR / "events.jsonl")
     historical = [
         row
-        for row in read_jsonl(DATA_DIR / "historical_events.jsonl")
+        for row in read_historical_events(data_dir=DATA_DIR)
         if row.get("strategic") and row.get("base_id") and row.get("event_type") in {
             "OWNER_LOSES",
             "CAPTURED_BY_WARDENS",

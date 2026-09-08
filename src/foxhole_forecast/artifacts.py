@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from .ledger import read_ledger, replace_ledger_row
 from .storage import (
     canonical_json_sha256,
     read_json,
@@ -86,17 +87,44 @@ def attempt_raw_response(attempt: dict[str, Any], data_dir: Path) -> Any:
 
 
 def compact_model_runs(data_dir: Path) -> dict[str, Any]:
-    path = data_dir / "model_runs.jsonl"
-    before_sha256 = _file_sha256(path)
-    rows = read_jsonl(path)
-    compacted = [externalize_run_responses(row, data_dir) for row in rows]
-    changed_runs = sum(before != after for before, after in zip(rows, compacted))
-    if changed_runs:
-        write_jsonl(path, compacted)
-    after_sha256 = _file_sha256(path)
+    """Externalize inline provider responses into content-addressed objects.
+
+    Rows come from the legacy ``model_runs.jsonl`` monolith while it still
+    exists (transition window); once the production migration has deleted it,
+    rows are read from the sharded model_runs ledger instead and changed rows
+    are written back with ``replace_ledger_row`` (only the owning day shard is
+    rewritten).  The report's ``source`` field states where the rows came
+    from.  ``model_runs_sha256_before/after`` are the monolith file digest in
+    monolith mode and the digest over all shard bytes (sorted shard order) in
+    ledger mode.
+    """
+    monolith = data_dir / "model_runs.jsonl"
+    if monolith.exists():
+        source = "legacy monolith model_runs.jsonl"
+        before_sha256 = _file_sha256(monolith)
+        rows = read_jsonl(monolith)
+        compacted = [externalize_run_responses(row, data_dir) for row in rows]
+        changed_runs = sum(before != after for before, after in zip(rows, compacted))
+        if changed_runs:
+            write_jsonl(monolith, compacted)
+        after_sha256 = _file_sha256(monolith)
+    else:
+        shards = sorted((data_dir / "ledgers" / "model_runs").glob("war-*/*.jsonl"))
+        source = f"model_runs ledger shards ({len(shards)} files)"
+        before_sha256 = _shards_sha256(shards)
+        rows = read_ledger("model_runs", data_dir=data_dir)
+        compacted = [externalize_run_responses(row, data_dir) for row in rows]
+        changed_indexes = [
+            index for index, (before, after) in enumerate(zip(rows, compacted)) if before != after
+        ]
+        changed_runs = len(changed_indexes)
+        for index in reversed(changed_indexes):
+            replace_ledger_row("model_runs", rows, index, compacted[index], data_dir=data_dir)
+        after_sha256 = _shards_sha256(shards)
     objects = list((data_dir / "objects" / "sha256").glob("*/*.json.gz"))
     result = {
         "schema_version": 1,
+        "source": source,
         "runs": len(rows),
         "changed_runs": changed_runs,
         "model_runs_sha256_before": before_sha256,
@@ -166,4 +194,12 @@ def _file_sha256(path: Path) -> str:
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _shards_sha256(shard_paths: list[Path]) -> str:
+    """Digest over all shard bytes in the given (sorted) order."""
+    digest = hashlib.sha256()
+    for path in shard_paths:
+        digest.update(path.read_bytes())
     return digest.hexdigest()

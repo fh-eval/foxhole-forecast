@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import DATA_DIR, load_models
+from .ledger import read_ledger
 from .storage import parse_time, read_jsonl
 
 
@@ -37,7 +38,11 @@ def audit_model_runs(
     }
     runs = {
         row["run_id"]: row
-        for row in read_jsonl(runs_path or DATA_DIR / "model_runs.jsonl")
+        for row in (
+            read_jsonl(runs_path)
+            if runs_path is not None
+            else read_ledger("model_runs", data_dir=DATA_DIR)
+        )
         if row.get("run_id")
     }
     incidents: list[dict[str, Any]] = []

@@ -289,7 +289,7 @@ def _previous_model_summary(
         return None
 
     candidates: list[tuple[datetime, dict[str, Any]]] = []
-    for run in _pkg.read_jsonl(_pkg.DATA_DIR / "model_runs.jsonl"):
+    for run in _pkg.read_ledger("model_runs", data_dir=_pkg.DATA_DIR):
         if (
             run.get("status") != "valid"
             or run.get("series_id") != series_id

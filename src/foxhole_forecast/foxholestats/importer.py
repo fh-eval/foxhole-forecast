@@ -8,14 +8,20 @@ from pathlib import Path
 from typing import Any
 
 from ..config import Settings
+from ..ledger import (
+    coverage_key,
+    day_key,
+    historical_event_key,
+    read_historical_events,
+    read_recovered_coverage,
+    shard_path,
+)
 from ..storage import (
     canonical_json_sha256,
     isoformat,
     parse_time,
     read_json,
     read_jsonl,
-    write_json,
-    write_jsonl,
 )
 from . import paths
 from .gaps import _in_import_windows, _missing_poll_intervals, _synthetic_coverage_points
@@ -158,22 +164,19 @@ def import_foxholestats_html(
     import_source = (
         "foxholestats_gap_recovery" if recovery_windows else "foxholestats_backfill"
     )
-    # Preserve official rows and prior recovery rows.  Recovery runs can be
-    # split across windows, and the evaluate/persist hand-off may contain a
-    # newer row than the page currently being imported.
-    existing = read_jsonl(path)
-    merged: dict[tuple[Any, ...], dict[str, Any]] = {}
-    for row in [*existing, *normalized]:
-        source_event_id = row.get("source_event_id")
-        key = (
-            row.get("source"),
-            source_event_id,
-        ) if source_event_id else (
-            "content",
-            canonical_json_sha256(row),
-        )
-        merged[key] = row
-    rows = sorted(merged.values(), key=lambda row: (row["observed_to"], row.get("source_event_id", "")))
+    # Historical events are an append-only ledger now.  Preserve official rows
+    # and prior recovery rows: a re-imported event whose identity and content
+    # already exist appends nothing; a differing re-import appends a
+    # superseding record (canonical reads resolve last-write-wins).  Recovery
+    # runs can be split across windows, and the evaluate/persist hand-off may
+    # contain a newer row than the page currently being imported.
+    existing = read_historical_events(data_dir=paths.DATA_DIR)
+    existing_by_key = {historical_event_key(row): row for row in existing}
+    new_rows: list[dict[str, Any]] = []
+    for row in normalized:
+        prior = existing_by_key.get(historical_event_key(row))
+        if prior is None or canonical_json_sha256(prior) != canonical_json_sha256(row):
+            new_rows.append(row)
     coverage_rows: list[dict[str, Any]] | None = None
     coverage_points: list[dict[str, Any]] = []
     if recovery_windows:
@@ -207,32 +210,14 @@ def import_foxholestats_html(
                 import_start, import_end, settings.poll_minutes
             )
         ]
-        coverage_path = paths.DATA_DIR / "recovered_coverage.jsonl"
-        existing_coverage = read_jsonl(coverage_path)
-        coverage_keys = {
-            (
-                row.get("war_id"),
-                row.get("source"),
-                row.get("reconstruction_mode"),
-                row.get("observed_at"),
-            )
-            for row in existing_coverage
-        }
+        existing_coverage = read_recovered_coverage(data_dir=paths.DATA_DIR)
+        coverage_keys = {coverage_key(row) for row in existing_coverage}
         coverage_points = [
             row
             for row in coverage_points
-            if (
-                row.get("war_id"),
-                row.get("source"),
-                row.get("reconstruction_mode"),
-                row.get("observed_at"),
-            )
-            not in coverage_keys
+            if coverage_key(row) not in coverage_keys
         ]
-        coverage_rows = sorted(
-            [*existing_coverage, *coverage_points],
-            key=lambda row: row["observed_at"],
-        )
+        coverage_rows = list(coverage_points)
     strategic = [row for row in normalized if row["strategic"]]
     canonical = [row for row in strategic if row["event_type"].startswith(("OWNER_", "CAPTURED_"))]
     matched = [row for row in canonical if row["base_id"]]
@@ -282,15 +267,29 @@ def import_foxholestats_html(
         ),
         "history_path": str(path.relative_to(paths.DATA_DIR.parent)),
     }
-    if recovery_windows:
-        writes: dict[Path, tuple[str, Any]] = {
-            path: ("jsonl", rows),
-            manifest_path: ("json", summary),
-        }
-        if coverage_rows is not None:
-            writes[coverage_path] = ("jsonl", coverage_rows)
-        _publish_recovery_batch(writes)
-    else:
-        write_jsonl(path, rows)
-        write_json(manifest_path, summary)
+    def append_writes(name: str, rows: list[dict[str, Any]]) -> dict[Path, list[dict[str, Any]]]:
+        grouped: dict[Path, list[dict[str, Any]]] = {}
+        for row in rows:
+            shard = shard_path(
+                name,
+                row["war_number"],
+                day_key(name, row),
+                data_dir=paths.DATA_DIR,
+            )
+            grouped.setdefault(shard, []).append(row)
+        return grouped
+
+    writes: dict[Path, tuple[str, Any]] = {
+        shard: ("jsonl_append", shard_rows)
+        for shard, shard_rows in sorted(
+            append_writes("historical_events", new_rows).items()
+        )
+    }
+    if recovery_windows and coverage_rows:
+        for shard, shard_rows in sorted(
+            append_writes("recovered_coverage", coverage_rows).items()
+        ):
+            writes[shard] = ("jsonl_append", shard_rows)
+    writes[manifest_path] = ("json", summary)
+    _publish_recovery_batch(writes)
     return summary
