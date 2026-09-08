@@ -123,8 +123,26 @@ def _error_text(error: BaseException) -> str:
     return f"{type(error).__name__}: {error}"
 
 
-def _response_content(raw: dict[str, Any]) -> str:
-    content = raw["choices"][0]["message"]["content"]
+def _response_content(raw: Any) -> str:
+    """Extract provider message content or refuse malformed response data."""
+    if not isinstance(raw, dict):
+        raise RepairRefused("Provider response is not an object")
+    choices = raw.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise RepairRefused(
+            "Provider response has malformed choices; expected a non-empty list"
+        )
+    choice = choices[0]
+    if not isinstance(choice, dict):
+        raise RepairRefused("Provider response has a malformed choice object")
+    message = choice.get("message")
+    if not isinstance(message, dict):
+        raise RepairRefused(
+            "Provider response has a malformed message; expected an object"
+        )
+    if "content" not in message:
+        raise RepairRefused("Provider response message has no content")
+    content = message["content"]
     if isinstance(content, list):
         content = "".join(
             str(part.get("text", "")) for part in content if isinstance(part, dict)
@@ -476,9 +494,18 @@ def rebuild_run_row(
         datetime.fromtimestamp(scout_raw["created"], tz=timezone.utc)
     )
 
-    scout_parsed, scout_salvaged = _parse_json_content_with_metadata(
-        _response_content(scout_raw)
-    )
+    try:
+        scout_parsed, scout_salvaged = _parse_json_content_with_metadata(
+            _response_content(scout_raw)
+        )
+    except RepairRefused as error:
+        raise RepairRefused(
+            f"Malformed scout response for {run_id}: {error}"
+        ) from error
+    except (ValueError, KeyError, json.JSONDecodeError) as error:
+        raise RepairRefused(
+            f"Scout response for {run_id} could not be parsed: {_error_text(error)}"
+        ) from error
     try:
         overview = validate_scout(scout_parsed, model_scout_packet, settings)
     except (ValidationError, ValueError, KeyError, json.JSONDecodeError) as error:
@@ -599,6 +626,11 @@ def rebuild_run_row(
             parsed, salvaged = _parse_json_content_with_metadata(
                 _response_content(raw)
             )
+        except RepairRefused as shape_error:
+            raise RepairRefused(
+                f"Malformed forecast response {index + 1} for {run_id}: "
+                f"{shape_error}"
+            ) from shape_error
         except (ValueError, KeyError, json.JSONDecodeError) as parse_error:
             last_error = parse_error
             attempt["error"] = _error_text(parse_error)
@@ -929,11 +961,34 @@ def repair_cohort(
     interrupted append can resume.
     """
     cohort = _load_cohort_record(cohort_id, data_dir)
-    entries = [
-        model
-        for model in cohort.get("models", [])
-        if model.get("run_id") and model.get("series_id")
-    ]
+    raw_entries = cohort.get("models")
+    if not isinstance(raw_entries, list):
+        raise RepairRefused(f"Cohort record for {cohort_id} has no model entries")
+    entries: list[dict[str, Any]] = []
+    seen_series_ids: set[str] = set()
+    for index, entry in enumerate(raw_entries, start=1):
+        if not isinstance(entry, dict):
+            raise RepairRefused(
+                f"Cohort {cohort_id} model entry {index} is not an object"
+            )
+        series_id = entry.get("series_id")
+        run_id = entry.get("run_id")
+        if not isinstance(series_id, str) or not series_id:
+            raise RepairRefused(
+                f"Cohort {cohort_id} model entry {index} has no valid series_id"
+            )
+        expected_run_id = f"{cohort_id}:{series_id}"
+        if run_id != expected_run_id:
+            raise RepairRefused(
+                f"Cohort {cohort_id} model entry {index} has noncanonical "
+                f"run_id {run_id!r}; expected {expected_run_id!r}"
+            )
+        if series_id in seen_series_ids:
+            raise RepairRefused(
+                f"Cohort {cohort_id} has duplicate model series_id {series_id!r}"
+            )
+        seen_series_ids.add(series_id)
+        entries.append(entry)
     if not entries:
         raise RepairRefused(f"Cohort record for {cohort_id} has no model entries")
     if forecast_result is not None:
@@ -950,6 +1005,7 @@ def repair_cohort(
     }
 
     runs: list[dict[str, Any]] = []
+    attributed_objects: set[str] = set()
     for entry in entries:
         run_id = entry["run_id"]
         bundle = _load_bundle(
@@ -965,6 +1021,15 @@ def repair_cohort(
             window_end,
             run_id,
         )
+        if response_object is not None:
+            object_digest = response_object["sha256"]
+            if object_digest in attributed_objects:
+                raise RepairRefused(
+                    f"Response object {object_digest} is attributed to more than "
+                    f"one expected run in cohort {cohort_id}; refusing reused "
+                    "response attribution"
+                )
+            attributed_objects.add(object_digest)
         row = _pkg.rebuild_run_row(
             cohort,
             entry,
