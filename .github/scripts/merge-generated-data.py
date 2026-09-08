@@ -147,7 +147,43 @@ def _merge_manifest(current: Path, generated: Path) -> None:
     _write_json(current, output)
 
 
+def _merge_ledgers(generated_root: Path, data_root: Path) -> None:
+    """Merge sharded ledger rows from the evaluate artifact into the checkout.
+
+    Rows are append-only, so exact duplicates are dropped and everything else
+    is added. For ``model_runs`` the generated rows supersede current rows
+    with the same ``run_id``: the evaluate artifact holds the post-salvage
+    state of the run being persisted. Settlement re-settlements keep both
+    versions (rows differ, LWW by ``updated_at`` resolves at read time).
+    """
+    generated_ledgers = generated_root / "ledgers"
+    if not generated_ledgers.is_dir():
+        return
+    for generated_shard in sorted(generated_ledgers.glob("*/*/*.jsonl")):
+        relative = generated_shard.relative_to(generated_ledgers)
+        name = relative.parts[0]
+        current_shard = data_root / "ledgers" / relative
+        generated_rows = _read_jsonl(generated_shard)
+        if not generated_rows:
+            continue
+        current_rows = _read_jsonl(current_shard)
+        merged = list(current_rows)
+        if name == "model_runs":
+            generated_run_ids = {
+                row.get("run_id") for row in generated_rows if row.get("run_id")
+            }
+            merged = [row for row in merged if row.get("run_id") not in generated_run_ids]
+        seen = {_canonical(row) for row in merged}
+        for row in generated_rows:
+            key = _canonical(row)
+            if key not in seen:
+                seen.add(key)
+                merged.append(row)
+        _write_jsonl(current_shard, merged)
+
+
 def merge(generated_root: Path, data_root: Path) -> None:
+    _merge_ledgers(generated_root, data_root)
     row_names = (
         "collector_runs.jsonl",
         "events.jsonl",
