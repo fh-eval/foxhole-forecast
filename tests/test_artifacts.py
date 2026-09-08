@@ -139,7 +139,7 @@ class ProviderResponseArtifactTests(unittest.TestCase):
         data source.  Only the day shard owning a changed row is rewritten."""
         with tempfile.TemporaryDirectory() as temporary:
             data_dir = Path(temporary)
-            day1 = append_ledger(
+            append_ledger(
                 "model_runs",
                 140,
                 {
