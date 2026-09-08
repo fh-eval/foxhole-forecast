@@ -112,6 +112,29 @@ class LedgerShardingTests(unittest.TestCase):
             self.assertEqual(settlements["run-nostamp"]["status"], "monolith-only")
             self.assertEqual(settlements["run-ledger"]["status"], "open")
 
+    def test_load_settlements_exact_updated_at_tie_resolves_to_later_appended_record(self) -> None:
+        """LWW tie rule: two ledger records with the same run_id and identical
+        updated_at resolve to the record appended later (append order breaks
+        exact ties, mirroring the monolith's row order)."""
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            stamp = "2026-09-02T00:00:00Z"
+            append_ledger(
+                "settlements",
+                140,
+                {"run_id": "run-tie", "status": "first-appended", "updated_at": stamp},
+                data_dir=data,
+            )
+            append_ledger(
+                "settlements",
+                140,
+                {"run_id": "run-tie", "status": "later-appended", "updated_at": stamp},
+                data_dir=data,
+            )
+
+            settlements = load_settlements(data_dir=data, legacy=False)
+            self.assertEqual(settlements["run-tie"]["status"], "later-appended")
+
     def test_legacy_monolith_fallback_merge_keeps_chronological_row_order(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             data = Path(directory)
