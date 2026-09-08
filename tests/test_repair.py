@@ -9,9 +9,10 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from unittest import mock
 from pathlib import Path
+from unittest import mock
 
+import foxhole_forecast.repair as repair_module
 from foxhole_forecast.artifacts import put_json_object
 from foxhole_forecast.config import Settings
 from foxhole_forecast.forecasting import (
@@ -45,6 +46,9 @@ WAR_ID = "war-1"
 COHORT_ID = "cohort-1"
 SERIES_ID = "model-1"
 RUN_ID = f"{COHORT_ID}:{SERIES_ID}"
+SERIES_ID_2 = "model-2"
+RUN_ID_2 = f"{COHORT_ID}:{SERIES_ID_2}"
+MODEL_2 = "provider/model-2"
 MODEL = "provider/model-1"
 METRIC_ID = "region.TestHex.activity.events_2h"
 REPAIR_KEYS = {"reason", "source", "repaired_at"}
@@ -220,6 +224,75 @@ def _repair(data: Path, **kwargs) -> dict:
     return repair_cohort(
         COHORT_ID, data_dir=data, repaired_at=REPAIRED_AT, **kwargs
     )
+
+
+def _build_two_run_fixture(directory: str) -> Path:
+    """Extend the one-run fixture with a second independently attributed run."""
+    data = _build_fixture(directory)
+    cohort_dir = data / "raw" / "cohorts" / COHORT_ID
+    scout_packet = read_json(
+        cohort_dir / f"{SERIES_ID}-scout-packet.json.gz"
+    )
+    detail_packet = read_json(
+        cohort_dir / f"{SERIES_ID}-detail-packet.json.gz"
+    )
+    bundle = read_json(
+        cohort_dir / f"{SERIES_ID}-replay-bundle.json.gz"
+    )
+    bundle["series_id"] = SERIES_ID_2
+    bundle["model_config"] = {
+        **bundle["model_config"],
+        "series_id": SERIES_ID_2,
+        "label": "Model 2",
+        "model": MODEL_2,
+    }
+    bundle["inputs"] = {
+        **bundle["inputs"],
+        "scout_packet": f"{SERIES_ID_2}-scout-packet.json.gz",
+        "detail_packet": f"{SERIES_ID_2}-detail-packet.json.gz",
+    }
+    write_json(
+        cohort_dir / f"{SERIES_ID_2}-scout-packet.json.gz", scout_packet
+    )
+    write_json(
+        cohort_dir / f"{SERIES_ID_2}-detail-packet.json.gz", detail_packet
+    )
+    write_json(
+        cohort_dir / f"{SERIES_ID_2}-replay-bundle.json.gz", bundle
+    )
+    write_json(
+        cohort_dir / f"{SERIES_ID_2}-war-overview.json",
+        {
+            "schema_version": 1,
+            "cohort_id": COHORT_ID,
+            "series_id": SERIES_ID_2,
+            "cutoff": CUTOFF,
+            "headline": SCOUT_OUTPUT["headline"],
+            "war_summary": SCOUT_OUTPUT["war_summary"],
+            "selected_regions": SCOUT_OUTPUT["selected_regions"],
+        },
+    )
+    put_json_object(
+        data,
+        {
+            "schema_version": 1,
+            "object_type": "provider_responses",
+            "responses": [
+                _raw(_unix("2026-01-02T00:15:00Z"), SCOUT_OUTPUT, model=MODEL_2),
+                _raw(
+                    _unix("2026-01-02T00:17:00Z"),
+                    {"predictions": [_prediction()]},
+                    model=MODEL_2,
+                ),
+            ],
+        },
+    )
+    cohorts = read_jsonl(data / "cohorts.jsonl")
+    cohorts[0]["models"].append(
+        {"run_id": RUN_ID_2, "series_id": SERIES_ID_2, "status": "valid"}
+    )
+    write_jsonl(data / "cohorts.jsonl", cohorts)
+    return data
 
 
 def _rows(data: Path) -> list[dict]:
@@ -492,6 +565,89 @@ class NoResponseRepairTests(unittest.TestCase):
 
 
 class GuardTests(unittest.TestCase):
+    def test_interrupted_ledger_append_resumes_without_duplication(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as clean_directory:
+            data = _build_two_run_fixture(directory)
+            clean = _build_two_run_fixture(clean_directory)
+            original_append = repair_module.append_ledger
+            appended = 0
+
+            def append_then_interrupt(*args, **kwargs):
+                nonlocal appended
+                original_append(*args, **kwargs)
+                appended += 1
+                if appended == 1:
+                    raise RuntimeError("simulated interruption")
+
+            with mock.patch.object(
+                repair_module, "append_ledger", side_effect=append_then_interrupt
+            ):
+                with self.assertRaisesRegex(RuntimeError, "simulated interruption"):
+                    _repair(data)
+            self.assertEqual(len(_rows(data)), 1)
+            self.assertFalse((data / "recovery_audit.jsonl").exists())
+
+            _repair(data)
+            _repair(clean)
+            self.assertEqual(_rows(data), _rows(clean))
+            self.assertEqual(
+                (data / "recovery_audit.jsonl").read_bytes(),
+                (clean / "recovery_audit.jsonl").read_bytes(),
+            )
+
+    def test_interrupted_audit_append_resumes_without_duplication(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as clean_directory:
+            data = _build_two_run_fixture(directory)
+            clean = _build_two_run_fixture(clean_directory)
+            original_append = repair_module.append_jsonl
+
+            def append_first_audit_then_interrupt(path, values):
+                if path.name == "recovery_audit.jsonl":
+                    entries = [values] if isinstance(values, dict) else list(values)
+                    original_append(path, entries[:1])
+                    raise RuntimeError("simulated audit interruption")
+                original_append(path, values)
+
+            with mock.patch.object(
+                repair_module,
+                "append_jsonl",
+                side_effect=append_first_audit_then_interrupt,
+            ):
+                with self.assertRaisesRegex(
+                    RuntimeError, "simulated audit interruption"
+                ):
+                    _repair(data)
+            self.assertEqual(len(_rows(data)), 2)
+            self.assertEqual(len(read_jsonl(data / "recovery_audit.jsonl")), 1)
+
+            _repair(data)
+            _repair(clean)
+            self.assertEqual(_rows(data), _rows(clean))
+            self.assertEqual(
+                (data / "recovery_audit.jsonl").read_bytes(),
+                (clean / "recovery_audit.jsonl").read_bytes(),
+            )
+
+    def test_mismatched_existing_repair_row_refuses_resume(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = _build_fixture(directory)
+            _repair(data)
+            ledger_path = (
+                data / "ledgers" / "model_runs" / "war-001" / "2026-01-02.jsonl"
+            )
+            rows = read_jsonl(ledger_path)
+            rows[0]["cost_usd"] = 999.0
+            write_jsonl(ledger_path, rows)
+            ledger_before = ledger_path.read_bytes()
+            audit_before = (data / "recovery_audit.jsonl").read_bytes()
+
+            with self.assertRaisesRegex(RepairRefused, "does not exactly match"):
+                _repair(data)
+            self.assertEqual(ledger_path.read_bytes(), ledger_before)
+            self.assertEqual(
+                (data / "recovery_audit.jsonl").read_bytes(), audit_before
+            )
+
     def test_idempotence_guard_refuses_second_repair(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             data = _build_fixture(directory)
