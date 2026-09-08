@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from foxhole_forecast.artifacts import put_json_object
@@ -33,7 +34,7 @@ from foxhole_forecast.storage import (
     write_json,
     write_jsonl,
 )
-from foxhole_forecast.validation import ValidationError
+from foxhole_forecast.validation import ValidationError, validate_forecast
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -273,7 +274,8 @@ class RepairDeterminismTests(unittest.TestCase):
                 },
             )
             self.assertEqual(
-                [call["stage"] for call in row["calls"]], ["scout", "forecast"]
+                [call["stage"] for call in row["calls"]],
+                ["war_overview", "forecast"],
             )
             for call in row["calls"]:
                 self.assertIn("raw_response_ref", call)
@@ -359,7 +361,7 @@ class ParsePathFidelityTests(unittest.TestCase):
             )
             self.assertEqual(
                 [call["stage"] for call in row["calls"]],
-                ["scout", "forecast", "forecast"],
+                ["war_overview", "forecast", "forecast"],
             )
             failed = row["calls"][1]
             self.assertIn("error", failed)
@@ -406,6 +408,46 @@ class ParsePathFidelityTests(unittest.TestCase):
                 _sha256_of_messages(correction_messages),
             )
             self.assertEqual(row["cost_usd"], 0.03)
+
+    def test_fallback_success_preserves_strict_error_on_attempt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = _build_fixture(directory)
+            settings = Settings.load()
+            detail_packet = _detail_packet(CUTOFF)
+            fallback_output = {
+                "predictions": [_prediction()],
+                "strategic_advice": {},
+            }
+            for path in sorted((data / "objects" / "sha256").glob("*/*.json.gz")):
+                payload = json.loads(_read_object_text(path))
+                if payload["responses"][0]["created"] == _unix(
+                    "2026-01-02T00:05:00Z"
+                ):
+                    path.unlink()
+            put_json_object(
+                data,
+                {
+                    "schema_version": 1,
+                    "object_type": "provider_responses",
+                    "responses": [
+                        _raw(_unix("2026-01-02T00:05:00Z"), SCOUT_OUTPUT),
+                        _raw(_unix("2026-01-02T00:07:00Z"), fallback_output),
+                    ],
+                },
+            )
+
+            _repair(data)
+            (row,) = _rows(data)
+            (forecast_attempt,) = [
+                call for call in row["calls"] if call["stage"] == "forecast"
+            ]
+            with self.assertRaises(ValidationError) as strict_error:
+                validate_forecast(fallback_output, detail_packet, settings)
+            self.assertEqual(
+                forecast_attempt["error"],
+                f"{type(strict_error.exception).__name__}: {strict_error.exception}",
+            )
+            self.assertNotIn("fallback_error", forecast_attempt)
 
     def test_status_mismatch_with_recorded_valid_stops(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -508,6 +550,82 @@ class GuardTests(unittest.TestCase):
             with self.assertRaises(RepairRefused):
                 _repair(data)
 
+    def test_malformed_object_outside_window_is_ignored(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = _build_fixture(directory)
+            # This historical object contains a malformed response entry, but
+            # its numeric timestamps are outside this cohort's call window.
+            put_json_object(
+                data,
+                {
+                    "schema_version": 1,
+                    "object_type": "provider_responses",
+                    "responses": [
+                        _raw(_unix("2026-01-01T23:55:00Z"), SCOUT_OUTPUT),
+                        {
+                            "choices": [],
+                            "id": "malformed-out-of-window",
+                        },
+                    ],
+                },
+            )
+            result = _repair(data)
+            self.assertEqual(result["runs"][0]["status"], "valid")
+            self.assertEqual(len(_rows(data)), 1)
+
+    def test_malformed_object_in_window_refuses(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = _build_fixture(directory)
+            put_json_object(
+                data,
+                {
+                    "schema_version": 1,
+                    "object_type": "provider_responses",
+                    "responses": [
+                        _raw(_unix("2026-01-02T01:00:00Z"), SCOUT_OUTPUT),
+                        {
+                            "choices": [],
+                            "id": "malformed-in-window",
+                        },
+                    ],
+                },
+            )
+            with self.assertRaises(RepairRefused):
+                _repair(data)
+
+    def test_response_entries_exceeding_validation_attempts_refuse(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = _build_fixture(directory)
+            for path in sorted((data / "objects" / "sha256").glob("*/*.json.gz")):
+                path.unlink()
+            put_json_object(
+                data,
+                {
+                    "schema_version": 1,
+                    "object_type": "provider_responses",
+                    "responses": [
+                        _raw(_unix("2026-01-02T00:05:00Z"), SCOUT_OUTPUT),
+                        _raw(_unix("2026-01-02T00:07:00Z"), {"predictions": [_prediction()]}),
+                        _raw(_unix("2026-01-02T00:09:00Z"), {"predictions": [_prediction()]}),
+                        _raw(_unix("2026-01-02T00:11:00Z"), {"predictions": [_prediction()]}),
+                    ],
+                },
+            )
+            with self.assertRaisesRegex(RepairRefused, "exceeding validation_attempts"):
+                _repair(data)
+            self.assertEqual(_rows(data), [])
+
+    def test_unexpected_validator_exception_becomes_refusal(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = _build_fixture(directory)
+            with mock.patch(
+                "foxhole_forecast.repair.validate_forecast",
+                side_effect=RuntimeError("validator exploded"),
+            ):
+                with self.assertRaisesRegex(RepairRefused, "Unexpected exception"):
+                    _repair(data)
+            self.assertEqual(_rows(data), [])
+
     def test_forecast_result_disagreement_refuses(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             data = _build_fixture(directory)
@@ -563,6 +681,8 @@ class AuditTests(unittest.TestCase):
             self.assertEqual(entry["record_type"], "cohort_run_repair")
             self.assertEqual(entry["run_id"], RUN_ID)
             self.assertEqual(entry["cohort_id"], COHORT_ID)
+            self.assertEqual(entry["war_id"], WAR_ID)
+            self.assertEqual(entry["war_number"], 1)
             self.assertEqual(entry["status"], "valid")
             self.assertEqual(entry["repaired_at"], REPAIRED_AT)
             self.assertTrue(entry["response_object"]["sha256"])
