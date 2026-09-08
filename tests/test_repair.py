@@ -595,6 +595,35 @@ class GuardTests(unittest.TestCase):
                 (clean / "recovery_audit.jsonl").read_bytes(),
             )
 
+    def test_malformed_existing_ledger_refuses_without_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = _build_fixture(directory)
+            ledger_path = (
+                data / "ledgers" / "model_runs" / "war-001" / "2026-01-02.jsonl"
+            )
+            ledger_path.parent.mkdir(parents=True, exist_ok=True)
+            ledger_path.write_text("{not valid JSON\n", encoding="utf-8")
+            ledger_before = ledger_path.read_bytes()
+
+            with self.assertRaisesRegex(RepairRefused, "Malformed existing model_runs JSON"):
+                _repair(data)
+
+            self.assertEqual(ledger_path.read_bytes(), ledger_before)
+            self.assertFalse((data / "recovery_audit.jsonl").exists())
+
+    def test_malformed_existing_audit_refuses_without_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = _build_fixture(directory)
+            audit_path = data / "recovery_audit.jsonl"
+            audit_path.write_text("{not valid JSON\n", encoding="utf-8")
+            audit_before = audit_path.read_bytes()
+
+            with self.assertRaisesRegex(RepairRefused, "Malformed recovery audit JSON"):
+                _repair(data)
+
+            self.assertEqual(audit_path.read_bytes(), audit_before)
+            self.assertFalse((data / "ledgers").exists())
+
     def test_interrupted_audit_append_resumes_without_duplication(self) -> None:
         with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as clean_directory:
             data = _build_two_run_fixture(directory)
@@ -896,6 +925,83 @@ class ModuleEntryTests(unittest.TestCase):
             )
             self.assertEqual(completed.returncode, 1)
             self.assertEqual(json.loads(completed.stdout)["status"], "refused")
+
+    def test_cli_retry_reuses_timestamp_from_partial_repair(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        env = {
+            **os.environ,
+            "PYTHONPATH": str(repo_root / "src"),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            data = _build_two_run_fixture(directory)
+            original_append = repair_module.append_ledger
+            appended = 0
+
+            def append_then_interrupt(*args, **kwargs):
+                nonlocal appended
+                original_append(*args, **kwargs)
+                appended += 1
+                if appended == 1:
+                    raise RuntimeError("simulated interruption")
+
+            with mock.patch.object(
+                repair_module, "append_ledger", side_effect=append_then_interrupt
+            ):
+                with self.assertRaisesRegex(RuntimeError, "simulated interruption"):
+                    _repair(data)
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "foxhole_forecast.repair",
+                    "--cohort",
+                    COHORT_ID,
+                    "--data-dir",
+                    str(data),
+                ],
+                capture_output=True,
+                text=True,
+                env=env,
+                cwd=repo_root,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            payload = json.loads(completed.stdout)
+            self.assertEqual(payload["status"], "ok")
+            self.assertEqual(payload["cohorts"][0]["repaired_at"], REPAIRED_AT)
+            self.assertEqual(len(_rows(data)), 2)
+
+    def test_cli_malformed_audit_is_structured_refusal(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        env = {
+            **os.environ,
+            "PYTHONPATH": str(repo_root / "src"),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            data = _build_fixture(directory)
+            audit_path = data / "recovery_audit.jsonl"
+            audit_path.write_text("{not valid JSON\n", encoding="utf-8")
+            audit_before = audit_path.read_bytes()
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "foxhole_forecast.repair",
+                    "--cohort",
+                    COHORT_ID,
+                    "--data-dir",
+                    str(data),
+                ],
+                capture_output=True,
+                text=True,
+                env=env,
+                cwd=repo_root,
+            )
+            self.assertEqual(completed.returncode, 1)
+            self.assertNotIn("Traceback", completed.stderr)
+            self.assertEqual(json.loads(completed.stdout)["status"], "refused")
+            self.assertEqual(audit_path.read_bytes(), audit_before)
+            self.assertFalse((data / "ledgers").exists())
 
 
 # ---- helpers used by the tests above ------------------------------------
