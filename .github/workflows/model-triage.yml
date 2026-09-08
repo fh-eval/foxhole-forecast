@@ -71,11 +71,11 @@ jobs:
           import os
           import sys
           from pathlib import Path
+          from foxhole_forecast.ledger import read_ledger
           from foxhole_forecast.opencode_output import (
               last_text_event,
               validated_recovery_plan,
           )
-          from foxhole_forecast.storage import read_jsonl
 
           source, destination, plan_path = map(Path, sys.argv[1:])
           answer = last_text_event(source) if source.exists() else None
@@ -90,7 +90,7 @@ jobs:
                   plan = validated_recovery_plan(
                       answer,
                       incident,
-                      read_jsonl(Path("data/model_runs.jsonl")),
+                      read_ledger("model_runs"),
                   )
               except (ValueError, json.JSONDecodeError) as error:
                   body += (

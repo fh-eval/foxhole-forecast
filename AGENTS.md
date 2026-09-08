@@ -91,7 +91,14 @@ requires the orchestrator to be a frontier model.
 - Reviewers are never the implementer's session. Read-only. Independently
   re-verify claims — rerun tests, recompute, re-grep — rather than trusting
   handoffs, and review behavior against the user's goal, not just the
-  implementation's own tests.
+  implementation's own tests. Reviewers audit ALL INTERSECTING SYSTEMS of
+  the changed code even when those systems fall outside the implementer's
+  spec ownership: every consumer of an interface the change touches —
+  moved/renamed/deleted paths, module APIs, data formats, monkeypatch
+  surfaces, output schemas, CI artifact handoffs, workflow path lists,
+  merge scripts — must be independently found and verified across source,
+  tests, `.github/`, and CLI. A stale consumer left behind is a BLOCKER
+  even when the changed code itself is perfect and all tests pass.
 - For website changes, exercise the real rendered page, keyboard interaction,
   and relevant screen widths.
 - Report findings ranked BLOCKER / MINOR / NOTE with evidence, limitations,

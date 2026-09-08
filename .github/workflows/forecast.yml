@@ -162,7 +162,7 @@ jobs:
           name: foxhole-forecast-data
           path: |
             data/cohorts.jsonl
-            data/model_runs.jsonl
+            data/ledgers
             data/objects
             data/raw/latest.json
             data/raw/cohorts
@@ -379,11 +379,21 @@ jobs:
       contents: read
       issues: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ needs.persist.result == 'success' }}
+        with:
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         if: ${{ needs.persist.result == 'success' }}
         with:
           name: foxhole-forecast-data
           path: .
+      - name: Dump model run rows from the sharded ledger
+        if: ${{ needs.persist.result == 'success' }}
+        run: |
+          PYTHONPATH=src python3 -c "import json, sys; from foxhole_forecast.ledger import read_ledger; sys.stdout.writelines(json.dumps(r, separators=(',', ':')) + '\n' for r in read_ledger('model_runs'))" > /tmp/model-runs.jsonl
       - name: Report the exact recovered run
         if: ${{ needs.persist.result == 'success' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -409,7 +419,7 @@ jobs:
             if (!labels.includes('model-failure') || !issue.body.includes('`' + runId + '`')) {
               throw new Error('Recovery issue does not authorize this run ID.');
             }
-            const runs = fs.readFileSync('data/model_runs.jsonl', 'utf8')
+            const runs = fs.readFileSync('/tmp/model-runs.jsonl', 'utf8')
               .split(/\r?\n/)
               .filter(Boolean)
               .map((line) => JSON.parse(line));
