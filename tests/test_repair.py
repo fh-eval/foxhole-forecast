@@ -1084,6 +1084,9 @@ class ModuleEntryTests(unittest.TestCase):
             "malformed message": lambda response: response["choices"][0].__setitem__(
                 "message", []
             ),
+            "non-text content": lambda response: response["choices"][0][
+                "message"
+            ].__setitem__("content", {}),
         }
         for label, mutate in mutations.items():
             with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:

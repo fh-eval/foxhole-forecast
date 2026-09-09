@@ -143,6 +143,10 @@ def _response_content(raw: Any) -> str:
     if "content" not in message:
         raise RepairRefused("Provider response message has no content")
     content = message["content"]
+    if not isinstance(content, (str, list)):
+        raise RepairRefused(
+            "Provider response message content is neither text nor a content-part list"
+        )
     if isinstance(content, list):
         content = "".join(
             str(part.get("text", "")) for part in content if isinstance(part, dict)
