@@ -299,6 +299,17 @@ def _rows(data: Path) -> list[dict]:
     return read_ledger("model_runs", data_dir=data)
 
 
+def _replace_first_response(data: Path, mutate) -> None:
+    paths = sorted((data / "objects" / "sha256").glob("*/*.json.gz"))
+    if len(paths) != 1:
+        raise AssertionError(f"expected one response object, found {len(paths)}")
+    path = paths[0]
+    payload = read_json(path)
+    mutate(payload["responses"][0])
+    path.unlink()
+    put_json_object(data, payload)
+
+
 class RepairDeterminismTests(unittest.TestCase):
     def test_rebuild_twice_is_byte_identical(self) -> None:
         with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
@@ -778,6 +789,97 @@ class GuardTests(unittest.TestCase):
             with self.assertRaises(RepairRefused):
                 _repair(data)
 
+    def test_empty_choices_refuses_without_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = _build_fixture(directory)
+            _replace_first_response(
+                data,
+                lambda response: response.__setitem__("choices", []),
+            )
+            with self.assertRaisesRegex(RepairRefused, "malformed choices"):
+                _repair(data)
+            self.assertEqual(_rows(data), [])
+            self.assertFalse((data / "recovery_audit.jsonl").exists())
+
+    def test_malformed_message_refuses_without_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = _build_fixture(directory)
+            _replace_first_response(
+                data,
+                lambda response: response["choices"][0].__setitem__(
+                    "message", []
+                ),
+            )
+            with self.assertRaisesRegex(RepairRefused, "malformed message"):
+                _repair(data)
+            self.assertEqual(_rows(data), [])
+            self.assertFalse((data / "recovery_audit.jsonl").exists())
+
+    def test_malformed_usage_refuses_without_writing(self) -> None:
+        for usage in (None, [], "bad"):
+            with self.subTest(usage=usage), tempfile.TemporaryDirectory() as directory:
+                data = _build_fixture(directory)
+                _replace_first_response(
+                    data,
+                    lambda response: response.__setitem__("usage", usage),
+                )
+                with self.assertRaisesRegex(RepairRefused, "usage is not an object"):
+                    _repair(data)
+                self.assertEqual(_rows(data), [])
+                self.assertFalse((data / "recovery_audit.jsonl").exists())
+
+    def test_nonnumeric_usage_tokens_refuse(self) -> None:
+        for usage in (
+            {"cost": "bad", "prompt_tokens": 1000},
+            {"prompt_tokens": []},
+            {"completion_tokens": float("nan")},
+            {"cost": -1},
+            {"output_tokens": 10**400},
+        ):
+            with self.subTest(usage=usage), self.assertRaisesRegex(
+                RepairRefused, "usage field"
+            ):
+                repair_module._attempt(
+                    "forecast",
+                    {"model": "openai/gpt-5.6-luna"},
+                    Settings.load(),
+                    {"usage": usage},
+                    "prompt-sha256",
+                )
+
+    def test_noncanonical_run_id_refuses_before_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = _build_fixture(directory)
+            cohorts = read_jsonl(data / "cohorts.jsonl")
+            cohorts[0]["models"][0]["run_id"] = "wrong-run-id"
+            write_jsonl(data / "cohorts.jsonl", cohorts)
+            with self.assertRaisesRegex(RepairRefused, "noncanonical run_id"):
+                _repair(data)
+            self.assertEqual(_rows(data), [])
+            self.assertFalse((data / "recovery_audit.jsonl").exists())
+
+    def test_response_object_cannot_be_reused_for_same_model_series(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = _build_two_run_fixture(directory)
+            bundle_path = (
+                data
+                / "raw"
+                / "cohorts"
+                / COHORT_ID
+                / f"{SERIES_ID_2}-replay-bundle.json.gz"
+            )
+            bundle = read_json(bundle_path)
+            bundle["model_config"]["model"] = MODEL
+            write_json(bundle_path, bundle)
+            for path in sorted((data / "objects" / "sha256").glob("*/*.json.gz")):
+                payload = read_json(path)
+                if payload["responses"][0]["model"] == MODEL_2:
+                    path.unlink()
+            with self.assertRaisesRegex(RepairRefused, "reused response attribution"):
+                _repair(data)
+            self.assertEqual(_rows(data), [])
+            self.assertFalse((data / "recovery_audit.jsonl").exists())
+
     def test_response_entries_exceeding_validation_attempts_refuse(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             data = _build_fixture(directory)
@@ -1002,6 +1104,49 @@ class ModuleEntryTests(unittest.TestCase):
             self.assertEqual(json.loads(completed.stdout)["status"], "refused")
             self.assertEqual(audit_path.read_bytes(), audit_before)
             self.assertFalse((data / "ledgers").exists())
+
+    def test_cli_malformed_response_shapes_are_structured_refusals(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        env = {
+            **os.environ,
+            "PYTHONPATH": str(repo_root / "src"),
+        }
+        mutations = {
+            "empty choices": lambda response: response.__setitem__("choices", []),
+            "malformed message": lambda response: response["choices"][0].__setitem__(
+                "message", []
+            ),
+            "non-text content": lambda response: response["choices"][0][
+                "message"
+            ].__setitem__("content", {}),
+            "malformed usage": lambda response: response.__setitem__("usage", []),
+        }
+        for label, mutate in mutations.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                data = _build_fixture(directory)
+                _replace_first_response(data, mutate)
+                completed = subprocess.run(
+                    [
+                        sys.executable,
+                        "-m",
+                        "foxhole_forecast.repair",
+                        "--cohort",
+                        COHORT_ID,
+                        "--data-dir",
+                        str(data),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                    cwd=repo_root,
+                )
+                self.assertEqual(completed.returncode, 1)
+                self.assertNotIn("Traceback", completed.stderr)
+                payload = json.loads(completed.stdout)
+                self.assertEqual(payload["status"], "refused")
+                self.assertIn(label.split()[1], payload["reason"])
+                self.assertEqual(_rows(data), [])
+                self.assertFalse((data / "recovery_audit.jsonl").exists())
 
 
 # ---- helpers used by the tests above ------------------------------------
