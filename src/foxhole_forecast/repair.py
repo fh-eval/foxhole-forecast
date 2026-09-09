@@ -186,12 +186,13 @@ def _validated_usage(raw: dict[str, Any]) -> dict[str, Any]:
         raise RepairRefused("Provider response usage is not an object")
 
     def require_count(value: Any, field: str) -> None:
-        if (
-            not isinstance(value, (int, float))
-            or isinstance(value, bool)
-            or not math.isfinite(value)
-            or value < 0
-        ):
+        valid = isinstance(value, (int, float)) and not isinstance(value, bool)
+        if valid:
+            try:
+                valid = math.isfinite(value) and value >= 0
+            except OverflowError:
+                valid = False
+        if not valid:
             raise RepairRefused(
                 f"Provider response usage field {field!r} must be a finite "
                 "non-negative number"

@@ -834,6 +834,7 @@ class GuardTests(unittest.TestCase):
             {"prompt_tokens": []},
             {"completion_tokens": float("nan")},
             {"cost": -1},
+            {"output_tokens": 10**400},
         ):
             with self.subTest(usage=usage), self.assertRaisesRegex(
                 RepairRefused, "usage field"
