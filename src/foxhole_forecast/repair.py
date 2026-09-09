@@ -187,6 +187,15 @@ def _attempt(
 ) -> dict[str, Any]:
     """Rebuild one ``provider.attempts`` entry from its stored raw response."""
     usage = raw.get("usage", {})
+    if not isinstance(usage, dict):
+        raise RepairRefused("Provider response usage is not an object")
+    try:
+        cost_usd = _cost(config["model"], usage)
+        reasoning_tokens = _reasoning_tokens(usage)
+    except (TypeError, ValueError, OverflowError) as error:
+        raise RepairRefused(
+            f"Provider response has malformed usage: {_error_text(error)}"
+        ) from error
     return {
         "stage": stage,
         "prompt_sha256": prompt_sha256,
@@ -194,13 +203,13 @@ def _attempt(
         "returned_model": raw.get("model"),
         "upstream_provider": raw.get("provider"),
         "usage": usage,
-        "cost_usd": _cost(config["model"], usage),
+        "cost_usd": cost_usd,
         "request_max_tokens": int(
             config.get("max_tokens", settings.output_token_limit)
         ),
         "request_reasoning": _request_reasoning(config, settings),
         "reasoning_trace_returned": _reasoning_trace_returned(raw),
-        "reasoning_tokens": _reasoning_tokens(usage),
+        "reasoning_tokens": reasoning_tokens,
         "raw_response": raw,
     }
 

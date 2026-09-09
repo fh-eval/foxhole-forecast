@@ -815,6 +815,29 @@ class GuardTests(unittest.TestCase):
             self.assertEqual(_rows(data), [])
             self.assertFalse((data / "recovery_audit.jsonl").exists())
 
+    def test_malformed_usage_refuses_without_writing(self) -> None:
+        for usage in (None, [], "bad"):
+            with self.subTest(usage=usage), tempfile.TemporaryDirectory() as directory:
+                data = _build_fixture(directory)
+                _replace_first_response(
+                    data,
+                    lambda response: response.__setitem__("usage", usage),
+                )
+                with self.assertRaisesRegex(RepairRefused, "usage is not an object"):
+                    _repair(data)
+                self.assertEqual(_rows(data), [])
+                self.assertFalse((data / "recovery_audit.jsonl").exists())
+
+    def test_nonnumeric_usage_tokens_refuse(self) -> None:
+        with self.assertRaisesRegex(RepairRefused, "malformed usage"):
+            repair_module._attempt(
+                "forecast",
+                {"model": "openai/gpt-5.6-luna"},
+                Settings.load(),
+                {"usage": {"prompt_tokens": "not-a-number"}},
+                "prompt-sha256",
+            )
+
     def test_noncanonical_run_id_refuses_before_writing(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             data = _build_fixture(directory)
@@ -1087,6 +1110,7 @@ class ModuleEntryTests(unittest.TestCase):
             "non-text content": lambda response: response["choices"][0][
                 "message"
             ].__setitem__("content", {}),
+            "malformed usage": lambda response: response.__setitem__("usage", []),
         }
         for label, mutate in mutations.items():
             with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
