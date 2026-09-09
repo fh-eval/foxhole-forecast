@@ -52,6 +52,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -178,6 +179,49 @@ def _request_reasoning(config: dict[str, Any], settings: Settings) -> Any:
     }
 
 
+def _validated_usage(raw: dict[str, Any]) -> dict[str, Any]:
+    """Return usage metadata only when its accounting values are trustworthy."""
+    usage = raw.get("usage", {})
+    if not isinstance(usage, dict):
+        raise RepairRefused("Provider response usage is not an object")
+
+    def require_count(value: Any, field: str) -> None:
+        if (
+            not isinstance(value, (int, float))
+            or isinstance(value, bool)
+            or not math.isfinite(value)
+            or value < 0
+        ):
+            raise RepairRefused(
+                f"Provider response usage field {field!r} must be a finite "
+                "non-negative number"
+            )
+
+    for field in (
+        "cost",
+        "prompt_tokens",
+        "input_tokens",
+        "completion_tokens",
+        "output_tokens",
+        "prompt_cache_hit_tokens",
+        "prompt_cache_miss_tokens",
+        "reasoning_tokens",
+    ):
+        if field in usage:
+            require_count(usage[field], field)
+    for field in ("completion_tokens_details", "output_tokens_details"):
+        if field not in usage:
+            continue
+        details = usage[field]
+        if not isinstance(details, dict):
+            raise RepairRefused(
+                f"Provider response usage field {field!r} is not an object"
+            )
+        if "reasoning_tokens" in details:
+            require_count(details["reasoning_tokens"], f"{field}.reasoning_tokens")
+    return usage
+
+
 def _attempt(
     stage: str,
     config: dict[str, Any],
@@ -186,9 +230,7 @@ def _attempt(
     prompt_sha256: str,
 ) -> dict[str, Any]:
     """Rebuild one ``provider.attempts`` entry from its stored raw response."""
-    usage = raw.get("usage", {})
-    if not isinstance(usage, dict):
-        raise RepairRefused("Provider response usage is not an object")
+    usage = _validated_usage(raw)
     try:
         cost_usd = _cost(config["model"], usage)
         reasoning_tokens = _reasoning_tokens(usage)

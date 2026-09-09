@@ -829,14 +829,22 @@ class GuardTests(unittest.TestCase):
                 self.assertFalse((data / "recovery_audit.jsonl").exists())
 
     def test_nonnumeric_usage_tokens_refuse(self) -> None:
-        with self.assertRaisesRegex(RepairRefused, "malformed usage"):
-            repair_module._attempt(
-                "forecast",
-                {"model": "openai/gpt-5.6-luna"},
-                Settings.load(),
-                {"usage": {"prompt_tokens": "not-a-number"}},
-                "prompt-sha256",
-            )
+        for usage in (
+            {"cost": "bad", "prompt_tokens": 1000},
+            {"prompt_tokens": []},
+            {"completion_tokens": float("nan")},
+            {"cost": -1},
+        ):
+            with self.subTest(usage=usage), self.assertRaisesRegex(
+                RepairRefused, "usage field"
+            ):
+                repair_module._attempt(
+                    "forecast",
+                    {"model": "openai/gpt-5.6-luna"},
+                    Settings.load(),
+                    {"usage": usage},
+                    "prompt-sha256",
+                )
 
     def test_noncanonical_run_id_refuses_before_writing(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
