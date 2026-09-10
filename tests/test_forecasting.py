@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from foxhole_forecast.artifacts import externalize_run_responses
-from foxhole_forecast.config import Settings
+from foxhole_forecast.config import Settings, load_models
 from foxhole_forecast.forecasting import (
     CORRECTION_USER,
     FORECAST_SYSTEM,
@@ -957,6 +957,27 @@ class ForecastBudgetTests(unittest.TestCase):
         self.assertIs(ledger, state["daily_costs_by_group"]["2026-08-22"])
         self.assertEqual(key, "deepseek-direct")
         self.assertEqual((spent, limit, reserve), (0.0, 0.1, 0.04))
+
+    def test_deepseek_series_do_not_consume_each_others_daily_budget(self) -> None:
+        models = {
+            model["model"]: model
+            for model in load_models()
+            if model["gateway"] == "deepseek"
+        }
+        v4 = models["deepseek-v4-flash"]
+        v41 = models["deepseek-flash"]
+        state = {
+            "daily_costs_by_group": {
+                "2026-08-22": {v4["budget_group"]: v4["max_paid_usd_per_day"]}
+            }
+        }
+
+        _ledger, key, spent, limit, reserve = _budget(
+            Settings.load(), v41, state, "2026-08-22"
+        )
+
+        self.assertEqual(key, v41["budget_group"])
+        self.assertEqual((spent, limit, reserve), (0.0, 0.5, 0.04))
 
 
 if __name__ == "__main__":

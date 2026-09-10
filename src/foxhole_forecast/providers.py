@@ -306,17 +306,28 @@ def _cost(model: str, usage: dict[str, Any]) -> float:
     direct = usage.get("cost")
     if isinstance(direct, (int, float)):
         return float(direct)
-    if model == "deepseek-v4-flash":
+    # DeepSeek reports an exact cost in normal responses. These per-model
+    # rates are the documented fallback for responses without one; keep the
+    # legacy V4 alias separate from the new V4.1 endpoint for auditability.
+    deepseek_prices = {
+        "deepseek-v4-flash": (0.0028, 0.14, 0.28),
+        "deepseek-flash": (0.003, 0.15, 0.6),
+    }
+    if model in deepseek_prices:
+        cache_hit_price, cache_miss_price, output_price = deepseek_prices[model]
         cache_hit = usage.get("prompt_cache_hit_tokens")
         cache_miss = usage.get("prompt_cache_miss_tokens")
         completion = usage.get("completion_tokens", usage.get("output_tokens", 0)) or 0
         if isinstance(cache_hit, (int, float)) and isinstance(cache_miss, (int, float)):
-            input_cost = cache_hit * 0.0028 / 1_000_000 + cache_miss * 0.14 / 1_000_000
+            input_cost = (
+                cache_hit * cache_hit_price / 1_000_000
+                + cache_miss * cache_miss_price / 1_000_000
+            )
         else:
             # Treat all prompt tokens as cache misses when detailed usage is absent.
             prompt = usage.get("prompt_tokens", usage.get("input_tokens", 0)) or 0
-            input_cost = prompt * 0.14 / 1_000_000
-        return round(input_cost + completion * 0.28 / 1_000_000, 8)
+            input_cost = prompt * cache_miss_price / 1_000_000
+        return round(input_cost + completion * output_price / 1_000_000, 8)
     prices = {
         "openai/gpt-5.6-luna": (0.20, 1.20),
         "google/gemini-3.7-flash": (0.75, 3.75),
