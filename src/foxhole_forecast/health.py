@@ -16,6 +16,21 @@ def _short_error(value: Any, limit: int = 600) -> str | None:
     return text if len(text) <= limit else f"{text[: limit - 1]}…"
 
 
+def _valid_retirement_skip(run: dict[str, Any], model: dict[str, Any]) -> bool:
+    """Accept a retirement skip only with intact catalog proof."""
+    if not isinstance(run, dict) or run.get("requested_model") != model.get("model"):
+        return False
+    catalog = run.get("catalog")
+    if not isinstance(catalog, dict) or not isinstance(catalog.get("data"), list):
+        return False
+    ids = {
+        entry.get("id")
+        for entry in catalog["data"]
+        if isinstance(entry, dict) and isinstance(entry.get("id"), str)
+    }
+    return bool(ids) and model.get("model") not in ids
+
+
 def audit_model_runs(
     not_before: datetime | None = None,
     *,
@@ -67,6 +82,15 @@ def audit_model_runs(
             status = (run or entry or {}).get("status")
             if entry is None:
                 reason = "missing_cohort_entry"
+            elif (
+                entry.get("status") == "skipped_provider_unavailable"
+                and (run or {}).get("status") == "skipped_provider_unavailable"
+                and (run or {}).get("reason") == "model_absent_from_catalog"
+                and model.get("gateway") == "deepseek"
+                and model.get("catalog_retirement_skip") is True
+                and _valid_retirement_skip(run or {}, model)
+            ):
+                continue
             elif run is None:
                 reason = "missing_run_record"
             elif entry.get("status") != "valid" or run.get("status") != "valid":

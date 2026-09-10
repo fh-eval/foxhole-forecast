@@ -77,6 +77,7 @@ def _run_model(
     cohort_dir: Path,
     state: dict[str, Any],
     detail_snapshot: dict[str, Any] | None = None,
+    deepseek_catalog: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     run_id = f"{cohort_id}:{config['series_id']}"
     base = {
@@ -92,6 +93,15 @@ def _run_model(
         "war_id": scout_packet["war"]["warId"],
         "created_at": isoformat(),
     }
+    if deepseek_catalog and not deepseek_catalog.get("available", True):
+        return {
+            **base,
+            "status": "skipped_provider_unavailable",
+            "reason": deepseek_catalog.get("reason", "model_absent_from_catalog"),
+            "catalog": copy.deepcopy(deepseek_catalog.get("catalog")),
+            "catalog_checked_at": deepseek_catalog.get("checked_at"),
+            "cost_usd": 0.0,
+        }
     date_key = scout_packet["cutoff"][:10]
     ledger, ledger_key, spent, daily_limit, reserve = _budget(
         settings, config, state, date_key

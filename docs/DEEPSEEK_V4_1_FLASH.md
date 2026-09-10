@@ -47,3 +47,48 @@ cannot be queried here. The direct API's public catalog retains
 both explicit model IDs so normal cohorts run both whenever the account exposes
 them; ordinary missing-key/provider-error handling still preserves the other
 models' cohorts.
+
+## Endpoint retirement safety
+
+### Outcome
+
+If DeepSeek removes V4 Flash from its account-visible model catalog and serves
+only V4.1 Flash, forecast cohorts must run V4.1 only. They must not spend a
+second call on a withdrawn V4 alias, record V4.1 results under the V4 series,
+or open a model-failure incident for that documented retirement state.
+
+### Required behavior
+
+1. Before a normal cohort calls the direct DeepSeek models, fetch the
+   no-generation `/models` catalog once for that credential.
+2. If the catalog is usable and V4 Flash is absent, append an auditable
+   `skipped_provider_unavailable` V4 run with the catalog evidence/reason;
+   continue to run V4.1. Treat that explicit retirement skip as healthy in the
+   model-run audit. A missing V4.1 entry remains a real failure.
+3. Require each DeepSeek response to report the model identity expected by its
+   configuration. A mismatch (including the V4 request returning
+   `deepseek-flash`) is invalid and must retain the raw response/audit details.
+   The same protection applies to delayed replay. Salvage must not turn such a
+   mismatch into a valid run.
+4. If catalog lookup itself fails, retain the existing call behavior and alert
+   semantics rather than treating a transient catalog outage as proof of model
+   retirement.
+
+### Acceptance examples
+
+- Catalog: `{deepseek-flash}` produces a V4 retirement skip and a V4.1 call;
+  the health audit reports no incident for the intentional V4 skip.
+- Catalog: `{deepseek-v4-flash, deepseek-flash}` calls both models.
+- A V4 response labelled `deepseek-flash` is invalid, even when its JSON is
+  otherwise valid; a later salvage attempt remains refused.
+- Missing credentials and catalog-request errors preserve the prior per-model
+  missing-key/failure handling.
+
+### Limit
+
+This can verify the account-visible catalog and the model ID returned by the
+provider. No client can prove which weights ran if DeepSeek deliberately keeps
+both identifiers listed and reports the requested legacy identifier while
+silently changing its backing model; the raw catalog (when it causes a
+retirement skip) and returned identities remain stored to make that limitation
+auditable.

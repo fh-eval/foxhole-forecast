@@ -231,6 +231,16 @@ def _attempt(
     prompt_sha256: str,
 ) -> dict[str, Any]:
     """Rebuild one ``provider.attempts`` entry from its stored raw response."""
+    if (
+        config.get("gateway") == "deepseek"
+        and raw.get("model")
+        != config.get("expected_returned_model", config["model"])
+    ):
+        expected = config.get("expected_returned_model", config["model"])
+        raise RepairRefused(
+            f"DeepSeek response model identity mismatch: expected {expected}, "
+            f"got {raw.get('model')}"
+        )
     usage = _validated_usage(raw)
     try:
         cost_usd = _cost(config["model"], usage)

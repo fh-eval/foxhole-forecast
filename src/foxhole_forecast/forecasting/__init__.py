@@ -36,6 +36,7 @@ from ..packets import (
 )
 from ..providers import (
     MissingApiKey,
+    ModelIdentityMismatch,
     ModelProvider,
     ProviderResponse,
     _parse_json_content,
@@ -93,6 +94,7 @@ from .provider_call import (
     _transient_provider_failure,
 )
 from .orchestration import (
+    _deepseek_catalogs,
     _has_stored_forecast_response,
     _identifier,
     forecast_due,
@@ -114,6 +116,7 @@ __all__ = [
     "Any",
     "Callable",
     "MissingApiKey",
+    "ModelIdentityMismatch",
     "ModelProvider",
     "ProviderResponse",
     "Settings",
@@ -124,6 +127,7 @@ __all__ = [
     "_call_validated",
     "_canonical_hash",
     "_drop_invalid_predictions",
+    "_deepseek_catalogs",
     "_drop_invalid_strategic_advice",
     "_dropped_prediction_error",
     "_filter_forecast_output",

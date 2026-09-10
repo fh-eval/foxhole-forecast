@@ -7,6 +7,7 @@ from unittest.mock import patch
 from foxhole_forecast.config import Settings, load_models
 from foxhole_forecast.providers import (
     ModelProvider,
+    ModelIdentityMismatch,
     _cost,
     _parse_json_content,
     _redact_provider_error,
@@ -30,6 +31,17 @@ class _Response:
         ).encode()
 
 
+class _DeepSeekResponse(_Response):
+    def read(self) -> bytes:
+        return json.dumps(
+            {
+                "choices": [{"message": {"content": "{\"ok\":true}"}}],
+                "model": "deepseek-flash",
+                "usage": {},
+            }
+        ).encode()
+
+
 class _MalformedPaidResponse:
     def __enter__(self):
         return self
@@ -48,6 +60,26 @@ class _MalformedPaidResponse:
 
 
 class ProviderTests(unittest.TestCase):
+    def test_deepseek_model_identity_mismatch_is_invalid_but_raw_is_retained(self) -> None:
+        config = {
+            "gateway": "deepseek",
+            "model": "deepseek-v4-flash",
+            "series_id": "deepseek-v4-test",
+            "api_key_env": "TEST_DEEPSEEK_KEY",
+        }
+        with patch.dict("os.environ", {"TEST_DEEPSEEK_KEY": "secret"}), patch(
+            "urllib.request.urlopen", return_value=_Response()
+        ):
+            provider = ModelProvider(config, Settings.load())
+            with self.assertRaises(ModelIdentityMismatch):
+                provider.complete_json(
+                    [{"role": "user", "content": "Return JSON"}],
+                    "test",
+                    {"type": "object"},
+                )
+        self.assertEqual(provider.attempts[0]["returned_model"], "test/model")
+        self.assertIn("raw_response", provider.attempts[0])
+
     def test_provider_error_redacts_private_fields_recursively(self) -> None:
         detail = json.dumps(
             {
@@ -404,7 +436,7 @@ class ProviderTests(unittest.TestCase):
 
         def urlopen(request, timeout):
             captured.update(json.loads(request.data))
-            return _Response()
+            return _DeepSeekResponse()
 
         model = next(
             candidate

@@ -5,11 +5,53 @@ import unittest
 from datetime import UTC, datetime
 from pathlib import Path
 
-from foxhole_forecast.health import audit_model_runs
+from foxhole_forecast.health import _valid_retirement_skip, audit_model_runs
 from foxhole_forecast.storage import write_json, write_jsonl
 
 
 class ModelRunHealthTests(unittest.TestCase):
+    def test_catalog_proven_retirement_is_healthy_but_malformed_is_incident(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            models = {
+                "models": [
+                    {"series_id": "v4", "label": "V4", "gateway": "deepseek", "model": "deepseek-v4-flash", "catalog_retirement_skip": True},
+                    {"series_id": "v41", "label": "V4.1", "gateway": "deepseek", "model": "deepseek-flash"},
+                ]
+            }
+            cohort = {"cohort_id": "c", "cutoff": "2026-08-26T03:05:00Z", "models": [
+                {"series_id": "v4", "run_id": "c:v4", "status": "skipped_provider_unavailable"},
+                {"series_id": "v41", "run_id": "c:v41", "status": "valid"},
+            ]}
+            runs = [
+                {"run_id": "c:v4", "status": "skipped_provider_unavailable", "reason": "model_absent_from_catalog", "requested_model": "deepseek-v4-flash", "catalog": {"data": [{"id": "deepseek-flash"}]}},
+                {"run_id": "c:v41", "status": "valid"},
+            ]
+            write_json(root / "models.json", models)
+            write_jsonl(root / "cohorts.jsonl", [cohort])
+            write_jsonl(root / "runs.jsonl", runs)
+            self.assertEqual(audit_model_runs(cohorts_path=root / "cohorts.jsonl", runs_path=root / "runs.jsonl", models_path=root / "models.json")["status"], "healthy")
+            runs[0].pop("catalog")
+            write_jsonl(root / "runs.jsonl", runs)
+            self.assertEqual(audit_model_runs(cohorts_path=root / "cohorts.jsonl", runs_path=root / "runs.jsonl", models_path=root / "models.json")["status"], "missing_model_runs")
+
+    def test_retirement_skip_requires_catalog_proof(self) -> None:
+        model = {
+            "gateway": "deepseek",
+            "model": "deepseek-v4-flash",
+            "catalog_retirement_skip": True,
+        }
+        base = {
+            "status": "skipped_provider_unavailable",
+            "requested_model": "deepseek-v4-flash",
+        }
+        self.assertFalse(_valid_retirement_skip(base, model))
+        self.assertTrue(
+            _valid_retirement_skip(
+                {**base, "catalog": {"data": [{"id": "deepseek-flash"}]}}, model
+            )
+        )
+
     def audit(self, cohorts: list[dict], runs: list[dict]) -> dict:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

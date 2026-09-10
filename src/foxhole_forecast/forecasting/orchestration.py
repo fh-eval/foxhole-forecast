@@ -12,7 +12,7 @@ from typing import Any
 from ..artifacts import attempt_raw_response, externalize_run_responses
 from ..config import Settings
 from ..packets import build_detail_packet, cohort_evidence_path
-from ..providers import _parse_json_content
+from ..providers import ModelIdentityMismatch, _parse_json_content
 from ..schemas import forecast_schema
 from ..storage import isoformat, parse_time, write_jsonl
 from ..validation import ValidationError, validate_forecast, validate_scout
@@ -90,11 +90,18 @@ def run_forecast_cohort(
         _pkg.build_detail_source(settings),
     )
     model_results: list[dict[str, Any]] = []
+    deepseek_catalogs = _deepseek_catalogs(settings, models)
     for model_config in models:
         if series_id and model_config["series_id"] != series_id:
             continue
         if model_config.get("enabled", True):
-            result = _pkg._run_model(settings, model_config, scout_packet, cohort_id, cohort_dir, state)
+            result = _pkg._run_model(
+                settings, model_config, scout_packet, cohort_id, cohort_dir, state,
+                deepseek_catalog=deepseek_catalogs.get(
+                    f"{model_config.get('api_key_env')}:{model_config.get('model')}"
+                ) or deepseek_catalogs.get(model_config.get("api_key_env"))
+                if model_config.get("gateway") == "deepseek" else None,
+            )
             result = externalize_run_responses(result, _pkg.DATA_DIR)
             _pkg.append_ledger(
                 "model_runs",
@@ -137,6 +144,18 @@ def salvage_invalid_run(settings: Settings, run_id: str) -> dict[str, Any]:
     run = runs[index]
     if run.get("status") != "invalid":
         raise ValueError(f"Run {run_id} is not invalid")
+    expected_model = run.get("requested_model")
+    if run.get("gateway") == "deepseek":
+        for attempt in run.get("calls", []):
+            if attempt.get("stage") not in {"scout", "war_overview", "forecast"}:
+                continue
+            if not (attempt.get("raw_response") or attempt.get("raw_response_ref")):
+                continue
+            raw = attempt_raw_response(attempt, _pkg.DATA_DIR)
+            if raw.get("model") != expected_model:
+                raise ModelIdentityMismatch(
+                    f"expected {expected_model}, got {raw.get('model')}"
+                )
     detail_packet = _pkg.read_json(
         cohort_evidence_path(
             _pkg.DATA_DIR / "raw" / "cohorts" / run["cohort_id"],
@@ -167,6 +186,13 @@ def salvage_invalid_run(settings: Settings, run_id: str) -> dict[str, Any]:
     for attempt_index, attempt in enumerate(forecast_attempts):
         raw = attempt_raw_response(attempt, _pkg.DATA_DIR)
         try:
+            if (
+                run.get("gateway") == "deepseek"
+                and raw.get("model") != expected_model
+            ):
+                raise ModelIdentityMismatch(
+                    f"expected {expected_model}, got {raw.get('model')}"
+                )
             content = raw["choices"][0]["message"]["content"]
             if isinstance(content, list):
                 content = "".join(
@@ -187,7 +213,7 @@ def salvage_invalid_run(settings: Settings, run_id: str) -> dict[str, Any]:
                     dropped_advice,
                 )
             )
-        except (ValidationError, ValueError, KeyError, json.JSONDecodeError) as error:
+        except (ModelIdentityMismatch, ValidationError, ValueError, KeyError, json.JSONDecodeError) as error:
             errors.append(error)
     if not candidates:
         if errors:
@@ -696,3 +722,53 @@ def recover_invalid_runs(
 def _identifier(war_id: str, cutoff: str) -> str:
     digest = hashlib.sha256(f"{war_id}:{cutoff}".encode()).hexdigest()[:12]
     return f"{cutoff[:10]}-{digest}"
+
+
+def _deepseek_catalogs(
+    settings: Settings, models: list[dict[str, Any]]
+) -> dict[str, dict[str, Any]]:
+    """Check each DeepSeek credential once; catalog outages fail open."""
+    catalogs: dict[str, dict[str, Any]] = {}
+    for config in models:
+        if not config.get("enabled", True) or config.get("gateway") != "deepseek":
+            continue
+        env_name = config["api_key_env"]
+        if env_name in catalogs:
+            continue
+        try:
+            provider = _pkg.ModelProvider(config, settings)
+        except _pkg.MissingApiKey:
+            catalogs[env_name] = {"available": True}
+            continue
+        try:
+            catalog = provider.model_catalog()
+            entries = catalog.get("data") if isinstance(catalog, dict) else None
+            if not isinstance(entries, list):
+                raise ValueError("DeepSeek model catalog has no data list")
+            model_ids = {
+                entry.get("id")
+                for entry in entries
+                if isinstance(entry, dict) and isinstance(entry.get("id"), str)
+            }
+            catalogs[env_name] = {
+                "available": True,
+                "catalog_ids": sorted(model_ids),
+                "catalog": catalog,
+                "checked_at": isoformat(),
+            }
+            for candidate in models:
+                if (
+                    candidate.get("enabled", True)
+                    and candidate.get("gateway") == "deepseek"
+                    and candidate.get("api_key_env") == env_name
+                    and candidate.get("catalog_retirement_skip")
+                    and candidate.get("model") not in model_ids
+                ):
+                    catalogs[f"{env_name}:{candidate['model']}"] = {
+                        **catalogs[env_name],
+                        "available": False,
+                        "reason": "model_absent_from_catalog",
+                    }
+        except Exception:
+            catalogs[env_name] = {"available": True}
+    return catalogs

@@ -28,6 +28,10 @@ class MissingApiKey(RuntimeError):
     pass
 
 
+class ModelIdentityMismatch(RuntimeError):
+    """The provider answered with a model other than the one requested."""
+
+
 _PRIVATE_ERROR_FIELDS = frozenset(
     {
         "access_token",
@@ -106,6 +110,21 @@ class ModelProvider:
         self.api_key = os.environ.get(model_config["api_key_env"])
         if not self.api_key:
             raise MissingApiKey(f"Missing {model_config['api_key_env']}")
+
+    def model_catalog(self) -> dict[str, Any]:
+        """Fetch DeepSeek's account-visible model catalog without generation."""
+        if self.config.get("gateway") != "deepseek":
+            raise ValueError("Model catalogs are only supported for DeepSeek")
+        request = urllib.request.Request(
+            "https://api.deepseek.com/models",
+            method="GET",
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Accept": "application/json",
+                "User-Agent": "FoxholeForecast/0.1",
+            },
+        )
+        return self._request_with_retry(request)
 
     def complete_json(
         self,
@@ -201,6 +220,18 @@ class ModelProvider:
             "raw_response": raw,
         }
         self.attempts.append(attempt)
+        if (
+            gateway == "deepseek"
+            and self.config.get("series_id")
+            and raw.get("model")
+            != self.config.get("expected_returned_model", self.config["model"])
+        ):
+            attempt["error"] = (
+                "ModelIdentityMismatch: expected "
+                f"{self.config.get('expected_returned_model', self.config['model'])}, "
+                f"got {raw.get('model')}"
+            )
+            raise ModelIdentityMismatch(attempt["error"])
         content = raw["choices"][0]["message"]["content"]
         if isinstance(content, list):
             content = "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))

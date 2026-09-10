@@ -311,6 +311,18 @@ def _replace_first_response(data: Path, mutate) -> None:
 
 
 class RepairDeterminismTests(unittest.TestCase):
+    def test_public_repair_refuses_deepseek_identity_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = _build_fixture(directory)
+            bundle_path = data / "raw" / "cohorts" / COHORT_ID / f"{SERIES_ID}-replay-bundle.json.gz"
+            bundle = read_json(bundle_path)
+            bundle["model_config"].update({"gateway": "deepseek", "model": "deepseek-v4-flash", "expected_returned_model": "deepseek-v4-flash"})
+            write_json(bundle_path, bundle)
+            _replace_first_response(data, lambda response: response.update({"model": "deepseek-flash"}))
+            with self.assertRaises(RepairRefused):
+                _repair(data)
+            self.assertEqual(_rows(data), [])
+
     def test_rebuild_twice_is_byte_identical(self) -> None:
         with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
             _repair(_build_fixture(first))
