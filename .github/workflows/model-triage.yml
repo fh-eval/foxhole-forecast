@@ -43,6 +43,46 @@ jobs:
           fi
           gh issue view "$ISSUE_NUMBER" --json number,title,body,url,labels \
             > .opencode/runtime-incident.json
+      - name: Validate the model-failure incident packet
+        run: |
+          python3 - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          incident = json.loads(
+              Path(".opencode/runtime-incident.json").read_text(encoding="utf-8")
+          )
+          labels = incident.get("labels")
+          label_names = set()
+          if isinstance(labels, list):
+              for label in labels:
+                  if isinstance(label, str):
+                      label_names.add(label)
+                  elif isinstance(label, dict) and isinstance(label.get("name"), str):
+                      label_names.add(label["name"])
+
+          body = incident.get("body")
+          errors = []
+          if "model-failure" not in label_names:
+              errors.append("missing model-failure label")
+          if not isinstance(body, str):
+              errors.append("incident body is not text")
+          else:
+              if "<!-- foxhole-model-failure -->" not in body:
+                  errors.append("missing model-failure marker")
+              if len(set(re.findall(r"/actions/runs/(\d+)", body))) != 1:
+                  errors.append("incident must identify exactly one source workflow run")
+              if not re.findall(r"^- Run: `([^`]+)`\s*$", body, re.MULTILINE):
+                  errors.append("incident does not identify a failed model run")
+
+          if errors:
+              raise SystemExit(
+                  "Refusing to triage issue as a model-failure incident: "
+                  + "; ".join(errors)
+              )
+          print("Validated model-failure incident packet.")
+          PY
       - name: Ask Luna for a read-only diagnosis
         id: agent
         continue-on-error: true
