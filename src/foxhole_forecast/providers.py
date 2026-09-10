@@ -28,6 +28,10 @@ class MissingApiKey(RuntimeError):
     pass
 
 
+class ModelIdentityMismatch(RuntimeError):
+    """The provider answered with a model other than the one requested."""
+
+
 _PRIVATE_ERROR_FIELDS = frozenset(
     {
         "access_token",
@@ -106,6 +110,21 @@ class ModelProvider:
         self.api_key = os.environ.get(model_config["api_key_env"])
         if not self.api_key:
             raise MissingApiKey(f"Missing {model_config['api_key_env']}")
+
+    def model_catalog(self) -> dict[str, Any]:
+        """Fetch DeepSeek's account-visible model catalog without generation."""
+        if self.config.get("gateway") != "deepseek":
+            raise ValueError("Model catalogs are only supported for DeepSeek")
+        request = urllib.request.Request(
+            "https://api.deepseek.com/models",
+            method="GET",
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Accept": "application/json",
+                "User-Agent": "FoxholeForecast/0.1",
+            },
+        )
+        return self._request_with_retry(request)
 
     def complete_json(
         self,
@@ -201,6 +220,18 @@ class ModelProvider:
             "raw_response": raw,
         }
         self.attempts.append(attempt)
+        if (
+            gateway == "deepseek"
+            and self.config.get("series_id")
+            and raw.get("model")
+            != self.config.get("expected_returned_model", self.config["model"])
+        ):
+            attempt["error"] = (
+                "ModelIdentityMismatch: expected "
+                f"{self.config.get('expected_returned_model', self.config['model'])}, "
+                f"got {raw.get('model')}"
+            )
+            raise ModelIdentityMismatch(attempt["error"])
         content = raw["choices"][0]["message"]["content"]
         if isinstance(content, list):
             content = "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
@@ -306,17 +337,28 @@ def _cost(model: str, usage: dict[str, Any]) -> float:
     direct = usage.get("cost")
     if isinstance(direct, (int, float)):
         return float(direct)
-    if model == "deepseek-v4-flash":
+    # DeepSeek reports an exact cost in normal responses. These per-model
+    # rates are the documented fallback for responses without one; keep the
+    # legacy V4 alias separate from the new V4.1 endpoint for auditability.
+    deepseek_prices = {
+        "deepseek-v4-flash": (0.0028, 0.14, 0.28),
+        "deepseek-flash": (0.003, 0.15, 0.6),
+    }
+    if model in deepseek_prices:
+        cache_hit_price, cache_miss_price, output_price = deepseek_prices[model]
         cache_hit = usage.get("prompt_cache_hit_tokens")
         cache_miss = usage.get("prompt_cache_miss_tokens")
         completion = usage.get("completion_tokens", usage.get("output_tokens", 0)) or 0
         if isinstance(cache_hit, (int, float)) and isinstance(cache_miss, (int, float)):
-            input_cost = cache_hit * 0.0028 / 1_000_000 + cache_miss * 0.14 / 1_000_000
+            input_cost = (
+                cache_hit * cache_hit_price / 1_000_000
+                + cache_miss * cache_miss_price / 1_000_000
+            )
         else:
             # Treat all prompt tokens as cache misses when detailed usage is absent.
             prompt = usage.get("prompt_tokens", usage.get("input_tokens", 0)) or 0
-            input_cost = prompt * 0.14 / 1_000_000
-        return round(input_cost + completion * 0.28 / 1_000_000, 8)
+            input_cost = prompt * cache_miss_price / 1_000_000
+        return round(input_cost + completion * output_price / 1_000_000, 8)
     prices = {
         "openai/gpt-5.6-luna": (0.20, 1.20),
         "google/gemini-3.7-flash": (0.75, 3.75),

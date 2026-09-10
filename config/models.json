@@ -87,6 +87,8 @@
       "label": "DeepSeek V4 Flash",
       "gateway": "deepseek",
       "model": "deepseek-v4-flash",
+      "expected_returned_model": "deepseek-v4-flash",
+      "catalog_retirement_skip": true,
       "api_key_env": "DEEPSEEK_KEY",
       "max_tokens": 65536,
       "request_timeout_seconds": 240,
@@ -98,7 +100,29 @@
         "reasoning_effort": "high"
       },
       "paid": true,
-      "budget_group": "deepseek-direct",
+      "budget_group": "deepseek-v4-flash-direct",
+      "max_paid_usd_per_day": 0.5,
+      "budget_reserve_usd": 0.04,
+      "enabled": true
+    },
+    {
+      "series_id": "deepseek-v4.1-flash-direct-json-event-v1",
+      "label": "DeepSeek V4.1 Flash",
+      "gateway": "deepseek",
+      "model": "deepseek-flash",
+      "expected_returned_model": "deepseek-flash",
+      "api_key_env": "DEEPSEEK_KEY",
+      "max_tokens": 65536,
+      "request_timeout_seconds": 240,
+      "omit_temperature": true,
+      "request_extra": {
+        "thinking": {
+          "type": "enabled"
+        },
+        "reasoning_effort": "high"
+      },
+      "paid": true,
+      "budget_group": "deepseek-v4.1-flash-direct",
       "max_paid_usd_per_day": 0.5,
       "budget_reserve_usd": 0.04,
       "enabled": true

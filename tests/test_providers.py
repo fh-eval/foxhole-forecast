@@ -7,6 +7,7 @@ from unittest.mock import patch
 from foxhole_forecast.config import Settings, load_models
 from foxhole_forecast.providers import (
     ModelProvider,
+    ModelIdentityMismatch,
     _cost,
     _parse_json_content,
     _redact_provider_error,
@@ -30,6 +31,17 @@ class _Response:
         ).encode()
 
 
+class _DeepSeekResponse(_Response):
+    def read(self) -> bytes:
+        return json.dumps(
+            {
+                "choices": [{"message": {"content": "{\"ok\":true}"}}],
+                "model": "deepseek-flash",
+                "usage": {},
+            }
+        ).encode()
+
+
 class _MalformedPaidResponse:
     def __enter__(self):
         return self
@@ -48,6 +60,26 @@ class _MalformedPaidResponse:
 
 
 class ProviderTests(unittest.TestCase):
+    def test_deepseek_model_identity_mismatch_is_invalid_but_raw_is_retained(self) -> None:
+        config = {
+            "gateway": "deepseek",
+            "model": "deepseek-v4-flash",
+            "series_id": "deepseek-v4-test",
+            "api_key_env": "TEST_DEEPSEEK_KEY",
+        }
+        with patch.dict("os.environ", {"TEST_DEEPSEEK_KEY": "secret"}), patch(
+            "urllib.request.urlopen", return_value=_Response()
+        ):
+            provider = ModelProvider(config, Settings.load())
+            with self.assertRaises(ModelIdentityMismatch):
+                provider.complete_json(
+                    [{"role": "user", "content": "Return JSON"}],
+                    "test",
+                    {"type": "object"},
+                )
+        self.assertEqual(provider.attempts[0]["returned_model"], "test/model")
+        self.assertIn("raw_response", provider.attempts[0])
+
     def test_provider_error_redacts_private_fields_recursively(self) -> None:
         detail = json.dumps(
             {
@@ -135,6 +167,31 @@ class ProviderTests(unittest.TestCase):
             {"prompt_tokens": 1_000_000, "completion_tokens": 1_000_000},
         )
         self.assertEqual(cost, 0.42)
+
+    def test_deepseek_v41_cost_uses_its_documented_rates(self) -> None:
+        cost = _cost(
+            "deepseek-flash",
+            {
+                "prompt_cache_hit_tokens": 1_000_000,
+                "prompt_cache_miss_tokens": 1_000_000,
+                "completion_tokens": 1_000_000,
+            },
+        )
+        self.assertEqual(cost, 0.753)
+
+    def test_deepseek_models_keep_distinct_series_and_budget_groups(self) -> None:
+        models = {
+            model["model"]: model
+            for model in load_models()
+            if model["gateway"] == "deepseek"
+        }
+
+        self.assertEqual(models["deepseek-v4-flash"]["series_id"], "deepseek-v4-flash-direct-json-event-v5")
+        self.assertEqual(models["deepseek-flash"]["series_id"], "deepseek-v4.1-flash-direct-json-event-v1")
+        self.assertNotEqual(
+            models["deepseek-v4-flash"]["budget_group"],
+            models["deepseek-flash"]["budget_group"],
+        )
 
     def test_gemini_fallback_cost_uses_current_openrouter_rate(self) -> None:
         cost = _cost(
@@ -373,6 +430,31 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(captured["body"]["response_format"], {"type": "json_object"})
         self.assertEqual(captured["body"]["thinking"], {"type": "enabled"})
         self.assertEqual(captured["body"]["reasoning_effort"], "high")
+
+    def test_deepseek_v41_request_records_exact_released_model_id(self) -> None:
+        captured = {}
+
+        def urlopen(request, timeout):
+            captured.update(json.loads(request.data))
+            return _DeepSeekResponse()
+
+        model = next(
+            candidate
+            for candidate in load_models()
+            if candidate["model"] == "deepseek-flash"
+        )
+        with patch.dict("os.environ", {"TEST_DEEPSEEK_KEY": "secret"}), patch(
+            "urllib.request.urlopen", side_effect=urlopen
+        ):
+            config = {**model, "api_key_env": "TEST_DEEPSEEK_KEY"}
+            response = ModelProvider(config, Settings.load()).complete_json(
+                [{"role": "user", "content": "Return JSON"}],
+                "test",
+                {"type": "object"},
+            )
+
+        self.assertEqual(captured["model"], "deepseek-flash")
+        self.assertEqual(response.requested_model, "deepseek-flash")
 
     def test_deepseek_forecast_series_keeps_high_reasoning_with_room_to_finish(self) -> None:
         model = next(

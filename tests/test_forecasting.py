@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from foxhole_forecast.artifacts import externalize_run_responses
-from foxhole_forecast.config import Settings
+from foxhole_forecast.config import Settings, load_models
 from foxhole_forecast.forecasting import (
     CORRECTION_USER,
     FORECAST_SYSTEM,
@@ -23,6 +23,7 @@ from foxhole_forecast.forecasting import (
     _identifier,
     _messages,
     _drop_invalid_predictions,
+    _deepseek_catalogs,
     _previous_model_summary,
     _settings_payload,
     _transient_provider_failure,
@@ -34,12 +35,92 @@ from foxhole_forecast.forecasting import (
 )
 from foxhole_forecast.ledger import read_ledger
 from foxhole_forecast.packets import cohort_evidence_path
+from foxhole_forecast.providers import ProviderResponse
 from foxhole_forecast.schemas import forecast_schema
 from foxhole_forecast.storage import read_jsonl, write_json, write_jsonl
 from foxhole_forecast.validation import ValidationError
 
 
 class ForecastBudgetTests(unittest.TestCase):
+    def test_cohort_flow_skips_retired_v4_and_runs_v41(self) -> None:
+        models = [
+            {"series_id": "v4", "label": "V4", "gateway": "deepseek", "model": "deepseek-v4-flash", "api_key_env": "KEY", "catalog_retirement_skip": True},
+            {"series_id": "v41", "label": "V4.1", "gateway": "deepseek", "model": "deepseek-flash", "api_key_env": "KEY"},
+        ]
+        packet = {"cutoff": "2026-08-22T03:10:00Z", "war": {"warId": "war", "warNumber": 1}, "history_hours_available": 5, "regions": [{"map_name": "TestHex"}]}
+        calls = []
+        catalog_payload = {"data": [{"id": "deepseek-flash"}]}
+        class ProviderStub:
+            def __init__(self, config, _settings):
+                self.config = config
+                self.attempts = []
+                self.accumulated_cost = 0.0
+            def model_catalog(self):
+                return catalog_payload
+            def complete_json(self, _messages, schema_name, _schema):
+                calls.append(self.config["model"])
+                parsed = {"headline": "h", "war_summary": "s", "selected_regions": ["TestHex"]} if schema_name == "foxhole_war_overview" else {"predictions": [], "strategic_advice": []}
+                raw = {"model": self.config["model"], "choices": [{"message": {"content": json.dumps(parsed)}}], "usage": {}}
+                self.attempts.append({"stage": schema_name, "raw_response": raw, "requested_model": self.config["model"], "returned_model": self.config["model"], "usage": {}, "cost_usd": 0.0})
+                return ProviderResponse(parsed, raw, self.config["model"], self.config["model"], None, {}, 0.0)
+        with tempfile.TemporaryDirectory() as directory, patch.dict("os.environ", {"KEY": "secret"}), patch(
+            "foxhole_forecast.forecasting.DATA_DIR", Path(directory)
+        ), patch("foxhole_forecast.forecasting.read_json", return_value={"packet_type": "detail_source", "cutoff": packet["cutoff"], "war": packet["war"]}), patch(
+            "foxhole_forecast.forecasting.forecast_due", return_value=(True, "slot")
+        ), patch("foxhole_forecast.forecasting.load_models", return_value=models), patch(
+            "foxhole_forecast.forecasting.build_scout_packet", return_value=packet
+        ), patch("foxhole_forecast.forecasting.build_detail_source", return_value={"packet_type": "detail_source", "cutoff": packet["cutoff"], "war": packet["war"]}), patch(
+            "foxhole_forecast.forecasting.current_strategic_base_ids", return_value=[]
+        ), patch("foxhole_forecast.forecasting.ModelProvider", ProviderStub), patch(
+            "foxhole_forecast.forecasting.validate_scout", return_value=None
+        ), patch("foxhole_forecast.forecasting.validate_forecast", return_value=None
+        ), patch("foxhole_forecast.forecasting.build_detail_packet", return_value={"regions": {}, "selected_region_hourly_series": {}, "selected_regions": ["TestHex"], "war": packet["war"], "cutoff": packet["cutoff"]}), patch(
+            "foxhole_forecast.forecasting._drop_invalid_predictions", side_effect=lambda value, _packet: (value, [])
+        ), patch("foxhole_forecast.forecasting._filter_forecast_output", side_effect=lambda value, _packet, _settings: (value, [], [])
+        ), patch("foxhole_forecast.forecasting._freeze_evidence", side_effect=lambda value, *_args: value
+        ), patch("foxhole_forecast.forecasting.orchestration.war_is_active", return_value=True):
+            result = run_forecast_cohort(Settings.load(), force=True)
+            ledger = read_ledger("model_runs", data_dir=Path(directory))
+            first_calls = list(calls)
+            calls.clear()
+            catalog_payload["data"] = [{"id": "deepseek-v4-flash"}, {"id": "deepseek-flash"}]
+            second = run_forecast_cohort(Settings.load(), force=True)
+        self.assertTrue(first_calls)
+        self.assertEqual(set(first_calls), {"deepseek-flash"})
+        self.assertEqual([row["status"] for row in ledger], ["skipped_provider_unavailable", "invalid"], ledger)
+        self.assertEqual(ledger[0]["catalog"]["data"][0]["id"], "deepseek-flash")
+        self.assertEqual(result["models"][0]["status"], "skipped_provider_unavailable")
+        self.assertIn("deepseek-v4-flash", calls)
+        self.assertIn("deepseek-flash", calls)
+        self.assertEqual([entry["status"] for entry in second["models"]], ["invalid", "invalid"])
+
+    def test_salvage_public_path_refuses_mismatched_deepseek_scout(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            run_id = "c:v4"
+            raw = {"model": "deepseek-flash", "choices": [{"message": {"content": "{}"}}]}
+            write_jsonl(data / "model_runs.jsonl", [{"run_id": run_id, "cohort_id": "c", "series_id": "v4", "gateway": "deepseek", "requested_model": "deepseek-v4-flash", "status": "invalid", "calls": [{"stage": "war_overview", "raw_response": raw}]}])
+            write_jsonl(data / "cohorts.jsonl", [{"cohort_id": "c", "models": [{"run_id": run_id, "series_id": "v4", "status": "invalid"}]}])
+            write_json(data / "raw" / "cohorts" / "c" / "v4-detail-packet.json", {})
+            with patch("foxhole_forecast.forecasting.DATA_DIR", data):
+                with self.assertRaisesRegex(Exception, "deepseek-flash"):
+                    salvage_invalid_run(Settings.load(), run_id)
+            self.assertEqual(read_ledger("model_runs", data_dir=data)[0]["status"], "invalid")
+
+    def test_deepseek_catalog_preflight_skips_retired_v4_without_generation(self) -> None:
+        models = [
+            {"series_id": "v4", "gateway": "deepseek", "model": "deepseek-v4-flash", "api_key_env": "KEY", "catalog_retirement_skip": True},
+            {"series_id": "v41", "gateway": "deepseek", "model": "deepseek-flash", "api_key_env": "KEY"},
+        ]
+        provider = SimpleNamespace(model_catalog=lambda: {"data": [{"id": "deepseek-flash"}]})
+        with patch.dict("os.environ", {"KEY": "secret"}), patch(
+            "foxhole_forecast.forecasting.ModelProvider", return_value=provider
+        ) as provider_ctor:
+            result = _deepseek_catalogs(Settings.load(), models)
+        self.assertEqual(provider_ctor.call_count, 1)
+        self.assertFalse(result["KEY:deepseek-v4-flash"]["available"])
+        self.assertTrue(result["KEY"]["available"])
+
     def test_delayed_replay_is_append_only_and_accepts_verified_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             data = Path(directory)
@@ -957,6 +1038,27 @@ class ForecastBudgetTests(unittest.TestCase):
         self.assertIs(ledger, state["daily_costs_by_group"]["2026-08-22"])
         self.assertEqual(key, "deepseek-direct")
         self.assertEqual((spent, limit, reserve), (0.0, 0.1, 0.04))
+
+    def test_deepseek_series_do_not_consume_each_others_daily_budget(self) -> None:
+        models = {
+            model["model"]: model
+            for model in load_models()
+            if model["gateway"] == "deepseek"
+        }
+        v4 = models["deepseek-v4-flash"]
+        v41 = models["deepseek-flash"]
+        state = {
+            "daily_costs_by_group": {
+                "2026-08-22": {v4["budget_group"]: v4["max_paid_usd_per_day"]}
+            }
+        }
+
+        _ledger, key, spent, limit, reserve = _budget(
+            Settings.load(), v41, state, "2026-08-22"
+        )
+
+        self.assertEqual(key, v41["budget_group"])
+        self.assertEqual((spent, limit, reserve), (0.0, 0.5, 0.04))
 
 
 if __name__ == "__main__":
