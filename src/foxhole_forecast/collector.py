@@ -5,7 +5,7 @@ from typing import Any
 
 from .config import DATA_DIR, Settings
 from .domain import extract_bases, transition_events
-from .storage import append_jsonl, isoformat, read_json, write_json
+from .storage import append_jsonl, append_jsonl_once, isoformat, read_json, write_json
 from .warapi import WarApiClient
 from .war_lifecycle import (
     should_emit_transitions,
@@ -20,6 +20,12 @@ def collect_once(settings: Settings, now: datetime | None = None) -> dict[str, A
     observed_at = isoformat(timestamp)
     state_path = DATA_DIR / "state.json"
     state = read_json(state_path, default={})
+    pending_appends = state.get("_pending_appends", [])
+    if pending_appends:
+        for pending in pending_appends:
+            append_jsonl_once(DATA_DIR / pending["path"], pending["rows"])
+        state.pop("_pending_appends", None)
+        write_json(state_path, state)
     state.setdefault("maps", {})
     state.setdefault("etag", {})
 
@@ -119,8 +125,6 @@ def collect_once(settings: Settings, now: datetime | None = None) -> dict[str, A
     state["war"] = war
     state["war_active"] = active
     state["last_collected_at"] = observed_at
-    append_jsonl(DATA_DIR / "events.jsonl", all_events)
-
     hour_bucket = timestamp.replace(minute=0, second=0, microsecond=0)
     hour_key = isoformat(hour_bucket)
     sampled = state.get("last_hourly_sample") != hour_key
@@ -138,11 +142,26 @@ def collect_once(settings: Settings, now: datetime | None = None) -> dict[str, A
                 for identifier, base in state["maps"][name].get("bases", {}).items()
             },
         }
-        append_jsonl(
-            DATA_DIR / "observations" / f"{hour_key[:10]}.jsonl",
-            observation,
-        )
         state["last_hourly_sample"] = hour_key
+
+    pending_appends = []
+    if all_events:
+        pending_appends.append({"path": "events.jsonl", "rows": all_events})
+    if sampled:
+        pending_appends.append(
+            {
+                "path": f"observations/{hour_key[:10]}.jsonl",
+                "rows": [observation],
+            }
+        )
+    if pending_appends:
+        # Commit the intended state before appending.  The pending batch makes
+        # the append replayable if the process dies before the final commit.
+        state["_pending_appends"] = pending_appends
+        write_json(state_path, state)
+        for pending in pending_appends:
+            append_jsonl_once(DATA_DIR / pending["path"], pending["rows"])
+        state.pop("_pending_appends", None)
 
     latest = {
         "schema_version": 1,

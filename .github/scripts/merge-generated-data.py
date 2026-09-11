@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import sys
+import base64
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -21,11 +22,42 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
     rows: list[dict[str, Any]] = []
-    with path.open(encoding="utf-8") as handle:
-        for line in handle:
+    quarantined = _quarantined_tail_lines(path)
+    with path.open("rb") as handle:
+        for raw_line in handle:
+            try:
+                line = raw_line.decode("utf-8")
+            except UnicodeDecodeError:
+                if _normalize_jsonl_line(raw_line) in quarantined:
+                    continue
+                raise
             if line.strip():
-                rows.append(json.loads(line))
+                try:
+                    rows.append(json.loads(line))
+                except json.JSONDecodeError:
+                    if _normalize_jsonl_line(raw_line) in quarantined:
+                        continue
+                    raise
     return rows
+
+
+def _normalize_jsonl_line(raw_line: bytes) -> str:
+    return base64.b64encode(raw_line.rstrip(b"\r\n")).decode("ascii")
+
+
+def _quarantine_path(path: Path) -> Path:
+    return path.with_name(f".{path.name}.tail-quarantine.jsonl")
+
+
+def _quarantined_tail_lines(path: Path) -> set[str]:
+    quarantine = _quarantine_path(path)
+    if not quarantine.is_file():
+        return set()
+    return {
+        row["raw_line"]
+        for row in _read_jsonl(quarantine)
+        if row.get("schema_version") == 1 and isinstance(row.get("raw_line"), str)
+    }
 
 
 def _write_json(path: Path, value: Any) -> None:
@@ -67,12 +99,15 @@ def _identity(row: dict[str, Any], name: str) -> str:
 def _merge_jsonl(current: Path, generated: Path, name: str) -> None:
     if not generated.is_file():
         return
+    generated_rows = _read_jsonl(generated)
+    if not generated_rows:
+        return
     merged: dict[str, dict[str, Any]] = {
         _identity(row, name): row for row in _read_jsonl(current)
     }
     # Main wins on an identity collision: the evaluate artifact may have been
     # built from an older checkout, while new rows remain safely additive.
-    for row in _read_jsonl(generated):
+    for row in generated_rows:
         merged.setdefault(_identity(row, name), row)
     rows = list(merged.values())
     if name in {"historical_events.jsonl", "events.jsonl", "recovered_coverage.jsonl"}:
@@ -184,8 +219,21 @@ def _merge_ledgers(generated_root: Path, data_root: Path) -> None:
         _write_jsonl(current_shard, merged)
 
 
+def _merge_quarantine_sidecars(generated_root: Path, data_root: Path) -> None:
+    """Carry append-recovery audit records across the evaluate/persist boundary."""
+    sources = [
+        *generated_root.glob(".*.tail-quarantine.jsonl"),
+        *(generated_root / "observations").glob(".*.tail-quarantine.jsonl"),
+    ]
+    for source in sources:
+        relative = source.relative_to(generated_root)
+        target = data_root / relative
+        _merge_jsonl(target, source, source.name)
+
+
 def merge(generated_root: Path, data_root: Path) -> None:
     _merge_ledgers(generated_root, data_root)
+    _merge_quarantine_sidecars(generated_root, data_root)
     row_names = (
         "collector_runs.jsonl",
         "events.jsonl",
