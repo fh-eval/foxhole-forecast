@@ -125,6 +125,57 @@ test("a recent workflow failure backs off instead of dispatching every five minu
   ], Date.parse("2026-08-22T11:45:00Z"))?.id, 42);
 });
 
+test("workflow run checks query and retain only the configured branch", async () => {
+  const requests = [];
+  const result = await checkAndDispatch(
+    {
+      GITHUB_TOKEN: "test-token",
+      GITHUB_OWNER: "owner",
+      GITHUB_REPO: "repo",
+      GITHUB_REF: "main",
+      STATUS_DATA_URL: "https://example.test/watchdog.json",
+      STALE_AFTER_MINUTES: "14",
+      COLLECT_WORKFLOW: "pipeline.yml",
+    },
+    async (url) => {
+      requests.push(String(url));
+      if (String(url).startsWith("https://example.test/")) {
+        return Response.json({
+          observed_at: "2026-08-22T11:00:00Z",
+          last_forecast_slot: "2026-08-22T12:00:00Z",
+        });
+      }
+      return Response.json({
+        workflow_runs: [
+          {
+            id: 41,
+            status: "completed",
+            conclusion: "success",
+            head_branch: "feature/old",
+            created_at: "2026-08-22T11:50:00Z",
+          },
+          {
+            id: 42,
+            status: "completed",
+            conclusion: "success",
+            head_branch: "main",
+            created_at: "2026-08-22T11:50:00Z",
+          },
+        ],
+      });
+    },
+    now,
+  );
+
+  assert.equal(new URL(requests[1]).searchParams.get("branch"), "main");
+  assert.equal(new URL(requests[1]).searchParams.get("per_page"), "10");
+  assert.deepEqual(result.actions, [{
+    action: "recently_completed",
+    workflow: "pipeline.yml",
+    run_id: 42,
+  }]);
+});
+
 test("an ended war pauses forecasts without triggering an extra collection", async () => {
   const requests = [];
   const result = await checkAndDispatch(
