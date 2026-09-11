@@ -42,6 +42,7 @@ jobs:
           path: |
             data/collector_runs.jsonl
             data/events.jsonl
+            data/.events.jsonl.tail-quarantine.jsonl
             data/ledgers
             data/observations.jsonl
             data/observations
@@ -50,8 +51,10 @@ jobs:
             data/wars.json
             data/recovery_status.json
             data/recovery_audit.jsonl
+            data/observations/.*.tail-quarantine.jsonl
             data/imports/foxholestats-war-*.json
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 1
 
   persist:

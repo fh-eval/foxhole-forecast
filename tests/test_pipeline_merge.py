@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import base64
 import subprocess
 import sys
 import tempfile
@@ -113,6 +114,69 @@ class PipelineMergeTests(unittest.TestCase):
             generated.mkdir()
             subprocess.run([sys.executable, str(SCRIPT), str(generated), str(data)], check=True)
             self.assertFalse((data / "ledgers").exists())
+
+    def test_merge_recovers_quarantined_generated_tail_and_preserves_audit(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "data"
+            generated = root / "generated"
+            events = generated / "events.jsonl"
+            events.parent.mkdir(parents=True, exist_ok=True)
+            events.write_bytes(b'{"event":"truncated')
+            write_jsonl(
+                generated / ".events.jsonl.tail-quarantine.jsonl",
+                [{"schema_version": 1, "source": "jsonl_append_recovery", "source_path": "events.jsonl", "raw_line": "eyJldmVudCI6InRydW5jYXRlZA=="}],
+            )
+
+            # The merge parser skips only the explicitly audited malformed
+            # tail, while propagating that audit record to the checkout.
+            subprocess.run([sys.executable, str(SCRIPT), str(generated), str(data)], check=True)
+
+            self.assertFalse((data / "events.jsonl").exists())
+            audit = data / ".events.jsonl.tail-quarantine.jsonl"
+            self.assertEqual(len(audit.read_text(encoding="utf-8").splitlines()), 1)
+
+    def test_merge_rejects_unquarantined_interior_corruption(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "data"
+            generated = root / "generated"
+            (generated / "events.jsonl").parent.mkdir(parents=True, exist_ok=True)
+            (generated / "events.jsonl").write_bytes(
+                b'{"event":"first"}\n{"event":"broken\n{"event":"last"}\n'
+            )
+
+            completed = subprocess.run(
+                [sys.executable, str(SCRIPT), str(generated), str(data)],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(completed.returncode, 0)
+
+    def test_merge_consumes_audited_invalid_utf8_tail_but_rejects_interior_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "data"
+            generated = root / "generated"
+            tail = b'{"event":"\xe2'
+            (generated / "events.jsonl").parent.mkdir(parents=True, exist_ok=True)
+            (generated / "events.jsonl").write_bytes(tail)
+            write_jsonl(
+                generated / ".events.jsonl.tail-quarantine.jsonl",
+                [{"schema_version": 1, "source": "jsonl_append_recovery", "source_path": "events.jsonl", "raw_line": base64.b64encode(tail).decode("ascii")}],
+            )
+            subprocess.run([sys.executable, str(SCRIPT), str(generated), str(data)], check=True)
+            self.assertTrue((data / ".events.jsonl.tail-quarantine.jsonl").exists())
+
+            broken = root / "broken"
+            (broken / "events.jsonl").parent.mkdir(parents=True, exist_ok=True)
+            (broken / "events.jsonl").write_bytes(b'{"event":"first"}\n{"event":"\xe2\n{"event":"last"}\n')
+            completed = subprocess.run(
+                [sys.executable, str(SCRIPT), str(broken), str(data)],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(completed.returncode, 0)
 
     def test_merge_ledgers_creates_missing_current_shard(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
