@@ -54,6 +54,11 @@ export function failedRunSince(runs, notBefore) {
   );
 }
 
+function relevantWorkflowRuns(runs, ref) {
+  const branch = ref.replace(/^refs\/heads\//, "");
+  return runs.filter((run) => !run.head_branch || run.head_branch === branch);
+}
+
 async function jsonResponse(response, label) {
   if (!response.ok) {
     const body = await response.text();
@@ -71,21 +76,27 @@ async function dispatchIfIdle(
   failureScopeNotBefore = -Infinity,
 ) {
   const workflowUrl = `https://api.github.com/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/actions/workflows/${workflow}`;
-  const runsResponse = await fetchImpl(`${workflowUrl}/runs?per_page=10`, {
+  const ref = env.GITHUB_REF || "main";
+  const branch = ref.replace(/^refs\/heads\//, "");
+  const runsUrl = new URL(`${workflowUrl}/runs`);
+  runsUrl.searchParams.set("branch", branch);
+  runsUrl.searchParams.set("per_page", "10");
+  const runsResponse = await fetchImpl(runsUrl.toString(), {
     headers: githubHeaders(env.GITHUB_TOKEN),
   });
   const runs = await jsonResponse(runsResponse, "Workflow run request");
-  const active = activeRunSince(runs.workflow_runs || [], notBefore);
+  const relevantRuns = relevantWorkflowRuns(runs.workflow_runs || [], ref);
+  const active = activeRunSince(relevantRuns, notBefore);
   if (active) {
     return { action: "already_active", workflow, run_id: active.id };
   }
-  const completed = successfulRunSince(runs.workflow_runs || [], notBefore);
+  const completed = successfulRunSince(relevantRuns, notBefore);
   if (completed) {
     return { action: "recently_completed", workflow, run_id: completed.id };
   }
   const backoffMinutes = Number(env.FAILURE_BACKOFF_MINUTES || 30);
   const failed = failedRunSince(
-    runs.workflow_runs || [],
+    relevantRuns,
     Math.max(failureScopeNotBefore, now - backoffMinutes * 60_000),
   );
   if (failed) {
