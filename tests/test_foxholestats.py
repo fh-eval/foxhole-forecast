@@ -9,6 +9,8 @@ from unittest.mock import patch
 
 from foxhole_forecast.config import Settings
 from foxhole_forecast.foxholestats import (
+    RECOVERY_MAX_SOURCE_BYTES,
+    RecoverySourceError,
     _event_type,
     _in_import_windows,
     _missing_poll_intervals,
@@ -18,7 +20,25 @@ from foxhole_forecast.foxholestats import (
     recover_closed_war_gaps,
     import_foxholestats_html,
 )
+from foxhole_forecast.foxholestats.source import _fetch_recovery_source
 from foxhole_forecast.storage import read_json, read_jsonl, write_json, write_jsonl
+
+
+class _DeclaredLengthResponse:
+    """Minimal urllib response stub for exercising the Content-Length pre-check."""
+
+    def __init__(self, body: bytes, declared_length: str) -> None:
+        self._body = body
+        self.headers = {"Content-Length": declared_length}
+
+    def read(self, size: int = -1) -> bytes:
+        return self._body if size < 0 else self._body[:size]
+
+    def __enter__(self) -> "_DeclaredLengthResponse":
+        return self
+
+    def __exit__(self, *_: object) -> bool:
+        return False
 
 
 class FoxholeStatsTests(unittest.TestCase):
@@ -127,6 +147,20 @@ class FoxholeStatsTests(unittest.TestCase):
             for index, point in enumerate((timestamp - 1800, timestamp, timestamp + 1800))
         )
         return f"<html><body>{events}{ending}".encode()
+
+    def _with_extra_node(self, source: bytes, node: str) -> bytes:
+        return source.replace(b"</body>", node.encode() + b"</body>")
+
+    def _neutral_node(self, timestamp: int = 1767227000) -> str:
+        return (
+            "<li data-icontype=\"38\" title=\"[neutral-1]\">"
+            f"Somehex - Base was Nuked by Someone Game Day 1, {timestamp}</li>"
+        )
+
+    def _padded_source(self, timestamp: int, padding_bytes: int) -> bytes:
+        return self._with_extra_node(
+            self._source(timestamp), f"<!-- {'x' * padding_bytes} -->"
+        )
 
     def test_automatic_recovery_deduplicates_windows_and_round_trips_artifacts(self) -> None:
         temporary, root = self._recovery_fixture()
@@ -306,6 +340,161 @@ class FoxholeStatsTests(unittest.TestCase):
                 self.assertFalse((root / "historical_events.jsonl").exists())
             finally:
                 temporary.cleanup()
+
+    def test_factionless_event_validates_without_becoming_ownership_evidence(self) -> None:
+        with_neutral = self._recovery_fixture()
+        plain = self._recovery_fixture()
+        try:
+            plain_source = self._source(1767227400)
+            neutral_source = self._with_extra_node(plain_source, self._neutral_node())
+            results = []
+            for _, root, source in (
+                (*with_neutral, neutral_source),
+                (*plain, plain_source),
+            ):
+                with patch("foxhole_forecast.foxholestats.paths.DATA_DIR", root):
+                    results.append(
+                        recover_closed_war_gaps(
+                            Settings.load(),
+                            now=datetime(2026, 1, 2, tzinfo=UTC),
+                            fetcher=lambda _, source=source: source,
+                        )
+                    )
+            neutral_result, plain_result = results
+            self.assertEqual(neutral_result["status"], "recovered", neutral_result)
+            self.assertEqual(plain_result["status"], "recovered", plain_result)
+            span = neutral_result["source_span"]
+            self.assertEqual(span["neutral_event_count"], 1)
+            self.assertEqual(plain_result["source_span"]["neutral_event_count"], 0)
+            self.assertEqual(span["parsed_events"], 4)
+            self.assertIn("factionless", span["source_completeness_assumption"])
+            self.assertEqual(neutral_result["import"]["neutral_events"], 1)
+            self.assertEqual(neutral_result["import"]["parse_failures"], 0)
+            self.assertEqual(plain_result["import"]["neutral_events"], 0)
+            # Ownership coverage is unchanged: only the extra node is counted.
+            self.assertEqual(span["current_war_events"], 3)
+            self.assertEqual(
+                neutral_result["import"]["parsed_events"],
+                plain_result["import"]["parsed_events"] + 1,
+            )
+            for key in (
+                "current_war_events",
+                "strategic_events",
+                "canonical_ownership_events",
+                "matched_canonical_events",
+                "synthetic_coverage_points",
+            ):
+                self.assertEqual(
+                    neutral_result["import"][key], plain_result["import"][key], key
+                )
+            # A recognized faction-less node is never modeled: the emitted
+            # artifacts match a page that never contained it.
+            for artifact in ("historical_events.jsonl", "recovered_coverage.jsonl"):
+                self.assertEqual(
+                    read_jsonl(with_neutral[1] / artifact),
+                    read_jsonl(plain[1] / artifact),
+                    artifact,
+                )
+            self.assertNotIn(
+                "neutral-1",
+                {
+                    row["source_event_id"]
+                    for row in read_jsonl(with_neutral[1] / "historical_events.jsonl")
+                },
+            )
+        finally:
+            with_neutral[0].cleanup()
+            plain[0].cleanup()
+
+    def test_unrecognized_event_text_still_fails_source_validation(self) -> None:
+        unrecognized = (
+            "Somehex - Base was Nuked by Somebody Game Day 1, 1767227000",
+            "Somehex - Base was by Someone Game Day 1, 1767227000",
+            "Somehex - Base was Nuked by Someone Game Day 1, 1767227000 trailing",
+            "Somehex Base was Nuked by Someone Game Day 1, 1767227000",
+            "Somehex - Base was Nuked by Someone Game Day one, 1767227000",
+        )
+        for text in unrecognized:
+            temporary, root = self._recovery_fixture()
+            try:
+                source = self._with_extra_node(
+                    self._source(1767227400),
+                    f"<li data-icontype=\"72\" title=\"[unknown-1]\">{text}</li>",
+                )
+                with patch("foxhole_forecast.foxholestats.paths.DATA_DIR", root):
+                    result = recover_closed_war_gaps(
+                        Settings.load(),
+                        now=datetime(2026, 1, 2, tzinfo=UTC),
+                        fetcher=lambda _, source=source: source,
+                    )
+                self.assertEqual(result["status"], "failed", text)
+                self.assertEqual(result["reason"], "source_has_malformed_event", text)
+                self.assertFalse((root / "historical_events.jsonl").exists(), text)
+                self.assertFalse((root / "recovered_coverage.jsonl").exists(), text)
+            finally:
+                temporary.cleanup()
+
+    def test_source_ceiling_accepts_growth_above_old_limit_and_rejects_runaway(self) -> None:
+        grown_temporary, grown_root = self._recovery_fixture()
+        try:
+            grown = self._padded_source(1767227400, 4_200_000)
+            self.assertGreater(len(grown), 4_000_000)
+            self.assertLessEqual(len(grown), RECOVERY_MAX_SOURCE_BYTES)
+            with patch("foxhole_forecast.foxholestats.paths.DATA_DIR", grown_root):
+                accepted = recover_closed_war_gaps(
+                    Settings.load(),
+                    now=datetime(2026, 1, 2, tzinfo=UTC),
+                    fetcher=lambda _: grown,
+                )
+            self.assertEqual(accepted["status"], "recovered", accepted)
+        finally:
+            grown_temporary.cleanup()
+
+        runaway_temporary, runaway_root = self._recovery_fixture()
+        try:
+            runaway = self._padded_source(1767227400, RECOVERY_MAX_SOURCE_BYTES)
+            self.assertGreater(len(runaway), RECOVERY_MAX_SOURCE_BYTES)
+            with patch("foxhole_forecast.foxholestats.paths.DATA_DIR", runaway_root):
+                rejected = recover_closed_war_gaps(
+                    Settings.load(),
+                    now=datetime(2026, 1, 2, tzinfo=UTC),
+                    fetcher=lambda _: runaway,
+                )
+            self.assertEqual(rejected["status"], "failed", rejected)
+            self.assertEqual(rejected["reason"], "source_size_exceeds_limit")
+            self.assertFalse((runaway_root / "historical_events.jsonl").exists())
+        finally:
+            runaway_temporary.cleanup()
+
+    def test_content_length_precheck_uses_the_raised_ceiling(self) -> None:
+        body = self._source(1767227400)
+        with patch(
+            "foxhole_forecast.foxholestats.source.urlopen",
+            return_value=_DeclaredLengthResponse(body, "4200000"),
+        ):
+            fetched = _fetch_recovery_source(
+                "https://example.invalid/",
+                fetcher=None,
+                html_path=None,
+                timeout_seconds=1,
+                max_source_bytes=RECOVERY_MAX_SOURCE_BYTES,
+            )
+        # A declared length above the old 4 MB ceiling no longer aborts the fetch.
+        self.assertEqual(fetched, body)
+
+        with patch(
+            "foxhole_forecast.foxholestats.source.urlopen",
+            return_value=_DeclaredLengthResponse(body, str(RECOVERY_MAX_SOURCE_BYTES + 1)),
+        ):
+            with self.assertRaises(RecoverySourceError) as raised:
+                _fetch_recovery_source(
+                    "https://example.invalid/",
+                    fetcher=None,
+                    html_path=None,
+                    timeout_seconds=1,
+                    max_source_bytes=RECOVERY_MAX_SOURCE_BYTES,
+                )
+        self.assertEqual(str(raised.exception), "source_size_exceeds_limit")
 
     def test_reconstruction_is_invariant_to_exact_source_times(self) -> None:
         latest = {

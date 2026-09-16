@@ -27,6 +27,7 @@ from . import paths
 from .gaps import _in_import_windows, _missing_poll_intervals, _synthetic_coverage_points
 from .parse import (
     EVENT_PATTERN,
+    NEUTRAL_EVENT_PATTERN,
     _event_type,
     _match_base,
     _normalized,
@@ -98,10 +99,17 @@ def import_foxholestats_html(
 
     normalized: list[dict[str, Any]] = []
     parse_failures = 0
+    neutral_events = 0
     for source in parsed:
         match = EVENT_PATTERN.match(source["text"])
         if not match:
-            parse_failures += 1
+            # Recognized-but-unmodeled faction-less events are audited apart
+            # from genuinely unparsable text, so a page that is fine except for
+            # them is not reported as a parse problem.
+            if NEUTRAL_EVENT_PATTERN.match(source["text"]):
+                neutral_events += 1
+            else:
+                parse_failures += 1
             continue
         fields = match.groupdict()
         timestamp = int(fields["timestamp"])
@@ -262,6 +270,7 @@ def import_foxholestats_html(
         "matched_canonical_events": len(matched),
         "synthetic_coverage_points": len(coverage_points),
         "parse_failures": parse_failures,
+        "neutral_events": neutral_events,
         "reconstruction_mode": (
             "cadence_state_v1" if reconstruct_cadence and recovery_windows else None
         ),
