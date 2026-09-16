@@ -327,7 +327,7 @@ class ForecastArtifactMergeTests(unittest.TestCase):
                 [("r1", "valid"), ("r2", "valid"), ("r9", "valid")],
             )
 
-    def test_merge_copies_absent_evidence_and_never_overwrites_existing(self) -> None:
+    def test_merge_never_overwrites_objects_but_replaces_cohort_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             data = root / "data"
@@ -349,33 +349,309 @@ class ForecastArtifactMergeTests(unittest.TestCase):
 
             output = self._merge(generated, data)
 
-            # Existing evidence is never replaced, even when it differs.
+            # Content-addressed objects are never replaced, even when they differ.
             self.assertEqual((data / object_path).read_bytes(), b"checkout-object")
+            # Per-cohort evidence is rewritten in place by retry/replay episodes,
+            # so the artifact's copy is the newer one and wins.
             self.assertEqual(
                 json.loads((data / scout_path).read_text(encoding="utf-8")),
-                {"frozen": "checkout"},
+                {"frozen": "artifact"},
             )
-            # Files the checkout lacks are copied.
+            # Files the checkout lacks are copied in both trees.
             self.assertEqual((data / new_object).read_bytes(), b"new-object")
             self.assertEqual((data / new_evidence).read_bytes(), b"new-evidence")
-            # The collision is reported rather than silently resolved.
+            # Both collisions are reported rather than silently resolved.
             self.assertIn(
                 "objects: copied 1 missing file(s), 0 already identical, 1 left as-is",
                 output,
             )
             self.assertIn(
-                "raw/cohorts: copied 1 missing file(s), 0 already identical, 1 left as-is",
+                "raw/cohorts: copied 1 missing file(s), 0 already identical, "
+                "1 replaced (artifact was the newer episode)",
                 output,
             )
 
-            # A repeat merge is a no-op for copied files and still reports the
-            # file it refuses to overwrite.
+            # A repeat merge changes nothing and the counters stay deterministic.
             second = self._merge(generated, data)
             self.assertIn(
                 "objects: copied 0 missing file(s), 1 already identical, 1 left as-is",
                 second,
             )
+            self.assertIn(
+                "raw/cohorts: copied 0 missing file(s), 2 already identical, 0 replaced",
+                second,
+            )
             self.assertEqual((data / object_path).read_bytes(), b"checkout-object")
+            self.assertEqual(
+                json.loads((data / scout_path).read_text(encoding="utf-8")),
+                {"frozen": "artifact"},
+            )
+
+    def test_merge_replaces_rewritten_cohort_evidence_for_a_retried_cohort(self) -> None:
+        """The reviewer's retried cohort: the retry episode's evidence must land."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "data"
+            generated = root / "generated"
+            cohort = "2026-08-31-a371e26886df"
+            series = "nvidia-nemotron-3-ultra-550b-a55b-event-v4"
+            original = {
+                f"{series}-scout-packet.json.gz": b"original-scout",
+                f"{series}-replay-bundle.json.gz": b'{"source_commit": "aaaaaaaa"}',
+                f"{series}-war-overview.json": b'{"headline": "original"}',
+                f"{series}-detail-packet.json.gz": b"original-detail",
+            }
+            retried = {
+                f"{series}-scout-packet.json.gz": b"retried-scout",
+                f"{series}-replay-bundle.json.gz": b'{"source_commit": "bbbbbbbb"}',
+                f"{series}-war-overview.json": b'{"headline": "retried"}',
+                f"{series}-detail-packet.json.gz": b"retried-detail",
+                f"{series}-spare-overview.json": b"new-in-retry",
+            }
+            for name, payload in original.items():
+                (data / "raw" / "cohorts" / cohort / name).parent.mkdir(
+                    parents=True, exist_ok=True
+                )
+                (data / "raw" / "cohorts" / cohort / name).write_bytes(payload)
+            for name, payload in retried.items():
+                (generated / "raw" / "cohorts" / cohort / name).parent.mkdir(
+                    parents=True, exist_ok=True
+                )
+                (generated / "raw" / "cohorts" / cohort / name).write_bytes(payload)
+
+            output = self._merge(generated, data)
+
+            for name, payload in retried.items():
+                self.assertEqual(
+                    (data / "raw" / "cohorts" / cohort / name).read_bytes(),
+                    payload,
+                    name,
+                )
+            self.assertIn(
+                "raw/cohorts: copied 1 missing file(s), 0 already identical, "
+                "4 replaced (artifact was the newer episode)",
+                output,
+            )
+
+    def test_merge_state_keeps_both_writers_fields(self) -> None:
+        """Neither writer's fields may be dropped, in either ordering."""
+        for artifact_is_newer in (True, False):
+            with self.subTest(artifact_is_newer=artifact_is_newer):
+                with tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary)
+                    data = root / "data"
+                    generated = root / "generated"
+                    checkout = {
+                        "schema_version": 1,
+                        "war": {"warId": "war-140"},
+                        "war_active": False,
+                        "maps": {"home": "checkout-map"},
+                        "etag": "checkout-etag",
+                        "last_hourly_sample": "2026-09-16T11:00:00Z",
+                        "last_collected_at": "2026-09-16T11:30:00Z",
+                        "last_forecast_slot": "2026-09-16T09:00:00Z",
+                        "daily_costs": {"2026-09-16": 1.5},
+                        "daily_costs_by_group": {"2026-09-16": {"group-a": 0.6}},
+                    }
+                    artifact = {
+                        "schema_version": 1,
+                        "war": {"warId": "war-140"},
+                        "war_active": True,
+                        "maps": {"home": "artifact-map"},
+                        "etag": "artifact-etag",
+                        "last_hourly_sample": "2026-09-16T12:00:00Z",
+                        "last_collected_at": (
+                            "2026-09-16T12:30:00Z" if artifact_is_newer else "2026-09-16T10:30:00Z"
+                        ),
+                        "last_forecast_slot": "2026-09-16T12:00:00Z",
+                        "daily_costs": {"2026-09-16": 1.0},
+                        "daily_costs_by_group": {
+                            "2026-09-16": {"group-a": 0.5, "group-b": 0.25}
+                        },
+                    }
+                    write_json(data / "state.json", checkout)
+                    write_json(generated / "state.json", artifact)
+
+                    self._merge(generated, data)
+                    merged = json.loads((data / "state.json").read_text(encoding="utf-8"))
+
+                    newer = artifact if artifact_is_newer else checkout
+                    for key in (
+                        "war_active",
+                        "maps",
+                        "etag",
+                        "last_hourly_sample",
+                        "last_collected_at",
+                    ):
+                        self.assertEqual(merged[key], newer[key], key)
+                    self.assertEqual(merged["war"], {"warId": "war-140"})
+                    # Forecast-owned fields come from neither side's loss.
+                    self.assertEqual(merged["last_forecast_slot"], "2026-09-16T12:00:00Z")
+                    self.assertEqual(merged["daily_costs"]["2026-09-16"], 1.5)
+                    self.assertEqual(
+                        merged["daily_costs_by_group"]["2026-09-16"],
+                        {"group-a": 0.6, "group-b": 0.25},
+                    )
+
+    def test_merge_state_never_regresses_the_forecast_slot(self) -> None:
+        """The reviewer's reproduction: a newer collection state must not clear it."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "data"
+            generated = root / "generated"
+            write_json(
+                data / "state.json",
+                {
+                    "schema_version": 1,
+                    "war": {"warId": "war-140"},
+                    "last_collected_at": "2026-09-16T11:30:00Z",
+                    "last_forecast_slot": "2026-09-16T12:00:00Z",
+                },
+            )
+            # A newer collection artifact that has never written a slot.
+            write_json(
+                generated / "state.json",
+                {
+                    "schema_version": 1,
+                    "war": {"warId": "war-140"},
+                    "last_collected_at": "2026-09-16T12:30:00Z",
+                },
+            )
+            self._merge(generated, data)
+            merged = json.loads((data / "state.json").read_text(encoding="utf-8"))
+            self.assertEqual(merged["last_forecast_slot"], "2026-09-16T12:00:00Z")
+            self.assertEqual(merged["last_collected_at"], "2026-09-16T12:30:00Z")
+
+            # An explicit null in the newer artifact must not clear it either.
+            write_json(
+                generated / "state.json",
+                {
+                    "schema_version": 1,
+                    "war": {"warId": "war-140"},
+                    "last_collected_at": "2026-09-16T13:30:00Z",
+                    "last_forecast_slot": None,
+                },
+            )
+            self._merge(generated, data)
+            merged = json.loads((data / "state.json").read_text(encoding="utf-8"))
+            self.assertEqual(merged["last_forecast_slot"], "2026-09-16T12:00:00Z")
+
+            # A later slot from an older artifact still wins.
+            write_json(
+                generated / "state.json",
+                {
+                    "schema_version": 1,
+                    "war": {"warId": "war-140"},
+                    "last_collected_at": "2026-09-16T09:00:00Z",
+                    "last_forecast_slot": "2026-09-16T15:00:00Z",
+                },
+            )
+            self._merge(generated, data)
+            merged = json.loads((data / "state.json").read_text(encoding="utf-8"))
+            self.assertEqual(merged["last_forecast_slot"], "2026-09-16T15:00:00Z")
+            self.assertEqual(merged["last_collected_at"], "2026-09-16T13:30:00Z")
+
+    def test_merge_state_spend_is_monotonic(self) -> None:
+        for artifact_is_newer in (True, False):
+            with self.subTest(artifact_is_newer=artifact_is_newer):
+                with tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary)
+                    data = root / "data"
+                    generated = root / "generated"
+                    checkout = {
+                        "schema_version": 1,
+                        "last_collected_at": "2026-09-16T11:30:00Z",
+                        "daily_costs": {"2026-09-15": 0.75, "2026-09-16": 1.5},
+                        "daily_costs_by_group": {
+                            "2026-09-16": {"group-a": 0.6, "group-c": 0.1}
+                        },
+                    }
+                    artifact = {
+                        "schema_version": 1,
+                        "last_collected_at": (
+                            "2026-09-16T12:30:00Z" if artifact_is_newer else "2026-09-16T10:30:00Z"
+                        ),
+                        "daily_costs": {"2026-09-16": 1.0, "2026-09-17": 0.2},
+                        "daily_costs_by_group": {
+                            "2026-09-16": {"group-a": 0.5, "group-b": 0.25}
+                        },
+                    }
+                    write_json(data / "state.json", checkout)
+                    write_json(generated / "state.json", artifact)
+
+                    self._merge(generated, data)
+                    merged = json.loads((data / "state.json").read_text(encoding="utf-8"))
+
+                    for source in (checkout, artifact):
+                        for date, total in source["daily_costs"].items():
+                            self.assertGreaterEqual(merged["daily_costs"][date], total, date)
+                        for date, groups in source["daily_costs_by_group"].items():
+                            for group, total in groups.items():
+                                self.assertGreaterEqual(
+                                    merged["daily_costs_by_group"][date][group],
+                                    total,
+                                    f"{date}/{group}",
+                                )
+                    # Every bucket from either side survives the merge.
+                    self.assertEqual(merged["daily_costs"]["2026-09-15"], 0.75)
+                    self.assertEqual(merged["daily_costs"]["2026-09-17"], 0.2)
+                    self.assertEqual(
+                        merged["daily_costs_by_group"]["2026-09-16"],
+                        {"group-a": 0.6, "group-b": 0.25, "group-c": 0.1},
+                    )
+
+                    # A later artifact that replaces the whole state (for example
+                    # after a schema bump) still cannot lower a recorded total.
+                    write_json(
+                        generated / "state.json",
+                        {
+                            "schema_version": 1,
+                            "last_collected_at": "2026-09-16T23:30:00Z",
+                            "daily_costs": {"2026-09-16": 0.5},
+                            "daily_costs_by_group": {"2026-09-16": {"group-a": 0.1}},
+                        },
+                    )
+                    self._merge(generated, data)
+                    preserved = json.loads((data / "state.json").read_text(encoding="utf-8"))
+                    self.assertEqual(preserved["daily_costs"]["2026-09-16"], 1.5)
+                    self.assertEqual(
+                        preserved["daily_costs_by_group"]["2026-09-16"]["group-a"], 0.6
+                    )
+
+    def test_merge_state_merge_is_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "data"
+            generated = root / "generated"
+            write_json(
+                data / "state.json",
+                {
+                    "schema_version": 1,
+                    "war": {"warId": "war-140"},
+                    "last_collected_at": "2026-09-16T12:30:00Z",
+                    "last_forecast_slot": "2026-09-16T09:00:00Z",
+                    "daily_costs": {"2026-09-16": 1.0},
+                },
+            )
+            write_json(
+                generated / "state.json",
+                {
+                    "schema_version": 1,
+                    "war": {"warId": "war-140"},
+                    "last_collected_at": "2026-09-16T11:30:00Z",
+                    "last_forecast_slot": "2026-09-16T12:00:00Z",
+                    "daily_costs": {"2026-09-16": 1.5},
+                    "daily_costs_by_group": {"2026-09-16": {"group-a": 0.6}},
+                },
+            )
+            self._merge(generated, data)
+            first = (data / "state.json").read_text(encoding="utf-8")
+            self._merge(generated, data)
+            self.assertEqual((data / "state.json").read_text(encoding="utf-8"), first)
+            merged = json.loads(first)
+            self.assertEqual(merged["last_forecast_slot"], "2026-09-16T12:00:00Z")
+            self.assertEqual(merged["daily_costs"], {"2026-09-16": 1.5})
+
 
     def test_forecast_artifact_merge_loses_no_row_from_either_side(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
