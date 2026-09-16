@@ -32,6 +32,10 @@ class ModelIdentityMismatch(RuntimeError):
     """The provider answered with a model other than the one requested."""
 
 
+class ProviderBodyError(RuntimeError):
+    """The provider answered with an error envelope instead of a completion."""
+
+
 _PRIVATE_ERROR_FIELDS = frozenset(
     {
         "access_token",
@@ -99,6 +103,61 @@ def _redact_provider_error(detail: str, api_key: str | None = None) -> str:
         return item
 
     return json.dumps(scrub(value), separators=(",", ":"), ensure_ascii=False)
+
+
+def _provider_body_error_detail(raw: Any, api_key: str | None = None) -> str | None:
+    """Describe a body-level provider failure, or return None for a completion.
+
+    Gateways can answer with an error envelope in the body (``{"error": {...}}``)
+    or without a usable ``choices`` list. Such bodies contain no model output, so
+    report the upstream failure instead of failing later with a parser or
+    model-identity symptom.
+    """
+    if not isinstance(raw, dict):
+        return f"upstream error: response body is not an object ({type(raw).__name__})"
+    error = raw.get("error")
+    choices = raw.get("choices")
+    if not isinstance(error, (dict, str)) and isinstance(choices, list) and choices:
+        return None
+    if not isinstance(error, (dict, str)):
+        if choices is None:
+            return "upstream error: response contained no choices"
+        if isinstance(choices, list):
+            return "upstream error: response contained an empty choices list"
+        return (
+            "upstream error: response contained a non-list choices value "
+            f"({type(choices).__name__})"
+        )
+    return _provider_error_envelope_detail(error, api_key)
+
+
+def _provider_error_envelope_detail(error: dict[str, Any] | str, api_key: str | None) -> str:
+    """Render a redacted ``error`` envelope as one triage-readable line."""
+    if isinstance(error, str):
+        detail = _redact_provider_error(error, api_key).strip()
+        return f"upstream error: {detail[:1000]}" if detail else "upstream error"
+    try:
+        # Reuse the shared redactor so key-named secrets never reach stored text.
+        envelope = json.loads(_redact_provider_error(json.dumps(error), api_key))
+    except (TypeError, ValueError):
+        return f"upstream error: {_redact_provider_error(str(error), api_key)[:1000]}"
+    code = envelope.get("code")
+    kind = envelope.get("type")
+    metadata = envelope.get("metadata")
+    if not isinstance(kind, str) and isinstance(metadata, dict):
+        metadata_kind = metadata.get("error_type")
+        kind = metadata_kind if isinstance(metadata_kind, str) else None
+    message = envelope.get("message")
+    head = (
+        f"upstream error {code}"
+        if isinstance(code, (int, str)) and str(code)
+        else "upstream error"
+    )
+    if isinstance(kind, str) and kind.strip():
+        head += f" ({kind.strip()})"
+    if isinstance(message, str) and message.strip():
+        return f"{head}: {message.strip()[:1000]}"
+    return f"{head}: {json.dumps(envelope, separators=(',', ':'))[:1000]}"
 
 
 class ModelProvider:
@@ -190,11 +249,13 @@ class ModelProvider:
             },
         )
         raw = self._request_with_retry(request)
-        usage = raw.get("usage", {})
+        body_error = _provider_body_error_detail(raw, self.api_key)
+        payload = raw if isinstance(raw, dict) else {}
+        usage = payload.get("usage", {})
         cost = _cost(self.config["model"], usage)
         self.accumulated_cost += cost
         prompt = json.dumps(messages, separators=(",", ":"), ensure_ascii=False)
-        response_message = (raw.get("choices") or [{}])[0].get("message", {})
+        response_message = (payload.get("choices") or [{}])[0].get("message", {})
         reasoning_trace_returned = any(
             response_message.get(key) not in (None, "", [])
             for key in ("reasoning", "reasoning_content", "reasoning_details")
@@ -204,8 +265,8 @@ class ModelProvider:
             "stage": schema_name.removeprefix("foxhole_"),
             "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
             "requested_model": self.config["model"],
-            "returned_model": raw.get("model"),
-            "upstream_provider": raw.get("provider"),
+            "returned_model": payload.get("model"),
+            "upstream_provider": payload.get("provider"),
             "usage": usage,
             "cost_usd": cost,
             "request_max_tokens": body["max_tokens"],
@@ -220,6 +281,9 @@ class ModelProvider:
             "raw_response": raw,
         }
         self.attempts.append(attempt)
+        if body_error is not None:
+            attempt["error"] = f"ProviderBodyError: {body_error}"
+            raise ProviderBodyError(body_error)
         if (
             gateway == "deepseek"
             and self.config.get("series_id")
@@ -232,7 +296,7 @@ class ModelProvider:
                 f"got {raw.get('model')}"
             )
             raise ModelIdentityMismatch(attempt["error"])
-        content = raw["choices"][0]["message"]["content"]
+        content = payload["choices"][0]["message"]["content"]
         if isinstance(content, list):
             content = "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
         try:
@@ -246,8 +310,8 @@ class ModelProvider:
             parsed=parsed,
             raw=raw,
             requested_model=self.config["model"],
-            returned_model=raw.get("model"),
-            upstream_provider=raw.get("provider"),
+            returned_model=payload.get("model"),
+            upstream_provider=payload.get("provider"),
             usage=usage,
             cost_usd=cost,
         )

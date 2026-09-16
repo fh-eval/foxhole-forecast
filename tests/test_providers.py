@@ -8,6 +8,7 @@ from foxhole_forecast.config import Settings, load_models
 from foxhole_forecast.providers import (
     ModelProvider,
     ModelIdentityMismatch,
+    ProviderBodyError,
     _cost,
     _parse_json_content,
     _redact_provider_error,
@@ -57,6 +58,22 @@ class _MalformedPaidResponse:
                 "usage": {"prompt_tokens": 1_000_000, "completion_tokens": 1_000_000},
             }
         ).encode()
+
+
+class _StaticResponse:
+    """Stub HTTP response carrying one arbitrary JSON body."""
+
+    def __init__(self, payload: object) -> None:
+        self.payload = payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def read(self) -> bytes:
+        return json.dumps(self.payload).encode()
 
 
 class ProviderTests(unittest.TestCase):
@@ -490,6 +507,265 @@ class ProviderTests(unittest.TestCase):
             '{"unfinished":',
         )
         self.assertIn("JSONDecodeError", provider.attempts[0]["error"])
+
+    def test_openrouter_timeout_envelope_raises_typed_provider_error(self) -> None:
+        config = {
+            "gateway": "openrouter",
+            "model": "google/gemini-3.8-flash",
+            "api_key_env": "TEST_OPENROUTER_KEY",
+        }
+        envelope = {
+            "error": {
+                "code": 504,
+                "message": "A Timeout Occurred",
+                "metadata": {"error_type": "timeout"},
+            }
+        }
+        with patch.dict("os.environ", {"TEST_OPENROUTER_KEY": "secret"}), patch(
+            "urllib.request.urlopen", return_value=_StaticResponse(envelope)
+        ):
+            provider = ModelProvider(config, Settings.load())
+            with self.assertRaises(ProviderBodyError) as raised:
+                provider.complete_json(
+                    [{"role": "user", "content": "Return JSON"}],
+                    "test",
+                    {"type": "object"},
+                )
+
+        message = str(raised.exception)
+        self.assertIn("upstream error 504", message)
+        self.assertIn("A Timeout Occurred", message)
+        self.assertIn("timeout", message)
+        self.assertNotIn("KeyError", message)
+        self.assertEqual(provider.attempts[0]["raw_response"], envelope)
+        self.assertEqual(provider.attempts[0]["error"], f"ProviderBodyError: {message}")
+
+    def test_deepseek_timeout_envelope_raises_typed_provider_error(self) -> None:
+        config = {
+            "gateway": "deepseek",
+            "model": "deepseek-flash",
+            "series_id": "deepseek-v4-flash-direct-json-event-v5",
+            "api_key_env": "TEST_DEEPSEEK_KEY",
+        }
+        envelope = {
+            "error": {
+                "message": (
+                    "We were unable to start processing your request within the "
+                    "900-second timeout limit. Please try again later."
+                )
+            }
+        }
+        with patch.dict("os.environ", {"TEST_DEEPSEEK_KEY": "secret"}), patch(
+            "urllib.request.urlopen", return_value=_StaticResponse(envelope)
+        ):
+            provider = ModelProvider(config, Settings.load())
+            with self.assertRaises(ProviderBodyError) as raised:
+                provider.complete_json(
+                    [{"role": "user", "content": "Return JSON"}],
+                    "test",
+                    {"type": "object"},
+                )
+
+        message = str(raised.exception)
+        self.assertIn("900-second timeout limit", message)
+        self.assertIn("Please try again later.", message)
+        self.assertNotIn("ModelIdentityMismatch", message)
+        self.assertNotIn("got None", message)
+        self.assertEqual(provider.attempts[0]["raw_response"], envelope)
+        self.assertEqual(provider.attempts[0]["error"], f"ProviderBodyError: {message}")
+
+    def test_empty_choices_body_raises_typed_provider_error(self) -> None:
+        config = {
+            "gateway": "deepseek",
+            "model": "deepseek-flash",
+            "series_id": "deepseek-v4-flash-direct-json-event-v5",
+            "api_key_env": "TEST_DEEPSEEK_KEY",
+        }
+        payload = {"choices": [], "model": "deepseek-flash"}
+        with patch.dict("os.environ", {"TEST_DEEPSEEK_KEY": "secret"}), patch(
+            "urllib.request.urlopen", return_value=_StaticResponse(payload)
+        ):
+            provider = ModelProvider(config, Settings.load())
+            with self.assertRaises(ProviderBodyError) as raised:
+                provider.complete_json(
+                    [{"role": "user", "content": "Return JSON"}],
+                    "test",
+                    {"type": "object"},
+                )
+
+        message = str(raised.exception)
+        self.assertIn("empty choices list", message)
+        self.assertNotIn("ModelIdentityMismatch", message)
+        self.assertEqual(provider.attempts[0]["error"], f"ProviderBodyError: {message}")
+        self.assertEqual(provider.attempts[0]["returned_model"], "deepseek-flash")
+
+    def test_error_envelope_with_choices_present_still_raises_typed_error(self) -> None:
+        config = {
+            "gateway": "openrouter",
+            "model": "google/gemini-3.8-flash",
+            "api_key_env": "TEST_OPENROUTER_KEY",
+        }
+        payload = {
+            "error": {"code": 429, "message": "Rate limit exceeded"},
+            "choices": [{"message": {"content": "{\"ok\":true}"}}],
+            "model": "google/gemini-3.8-flash",
+        }
+        with patch.dict("os.environ", {"TEST_OPENROUTER_KEY": "secret"}), patch(
+            "urllib.request.urlopen", return_value=_StaticResponse(payload)
+        ):
+            provider = ModelProvider(config, Settings.load())
+            with self.assertRaises(ProviderBodyError) as raised:
+                provider.complete_json(
+                    [{"role": "user", "content": "Return JSON"}],
+                    "test",
+                    {"type": "object"},
+                )
+
+        message = str(raised.exception)
+        self.assertIn("upstream error 429", message)
+        self.assertIn("Rate limit exceeded", message)
+        self.assertEqual(len(provider.attempts), 1)
+        self.assertEqual(provider.attempts[0]["raw_response"], payload)
+
+    def test_deepseek_wrong_model_with_valid_body_still_raises_identity_mismatch(self) -> None:
+        config = {
+            "gateway": "deepseek",
+            "model": "deepseek-flash",
+            "series_id": "deepseek-v4-flash-direct-json-event-v5",
+            "api_key_env": "TEST_DEEPSEEK_KEY",
+        }
+        valid_body = {
+            "choices": [{"message": {"content": "{\"ok\":true}"}}],
+            "model": "deepseek-v4-flash",
+            "usage": {},
+        }
+        with patch.dict("os.environ", {"TEST_DEEPSEEK_KEY": "secret"}), patch(
+            "urllib.request.urlopen", return_value=_StaticResponse(valid_body)
+        ):
+            provider = ModelProvider(config, Settings.load())
+            with self.assertRaises(ModelIdentityMismatch) as raised:
+                provider.complete_json(
+                    [{"role": "user", "content": "Return JSON"}],
+                    "test",
+                    {"type": "object"},
+                )
+
+        self.assertEqual(
+            str(raised.exception),
+            "ModelIdentityMismatch: expected deepseek-flash, got deepseek-v4-flash",
+        )
+        self.assertEqual(provider.attempts[0]["error"], str(raised.exception))
+        self.assertEqual(provider.attempts[0]["raw_response"], valid_body)
+
+    def test_non_object_body_raises_typed_provider_error(self) -> None:
+        config = {
+            "gateway": "openrouter",
+            "model": "google/gemini-3.8-flash",
+            "api_key_env": "TEST_OPENROUTER_KEY",
+        }
+        payload = ["unexpected"]
+        with patch.dict("os.environ", {"TEST_OPENROUTER_KEY": "secret"}), patch(
+            "urllib.request.urlopen", return_value=_StaticResponse(payload)
+        ):
+            provider = ModelProvider(config, Settings.load())
+            with self.assertRaises(ProviderBodyError) as raised:
+                provider.complete_json(
+                    [{"role": "user", "content": "Return JSON"}],
+                    "test",
+                    {"type": "object"},
+                )
+
+        message = str(raised.exception)
+        self.assertIn("not an object (list)", message)
+        self.assertNotIn("AttributeError", message)
+        self.assertEqual(provider.attempts[0]["raw_response"], payload)
+
+    def test_provider_error_envelope_redacts_private_metadata(self) -> None:
+        config = {
+            "gateway": "openrouter",
+            "model": "google/gemini-3.8-flash",
+            "api_key_env": "TEST_OPENROUTER_KEY",
+        }
+        envelope = {
+            "error": {
+                "code": 403,
+                "message": "Account user_private needs confirmation",
+                "metadata": {"user_id": "user_private", "token": "token_private"},
+            }
+        }
+        with patch.dict("os.environ", {"TEST_OPENROUTER_KEY": "secret"}), patch(
+            "urllib.request.urlopen", return_value=_StaticResponse(envelope)
+        ):
+            provider = ModelProvider(config, Settings.load())
+            with self.assertRaises(ProviderBodyError) as raised:
+                provider.complete_json(
+                    [{"role": "user", "content": "Return JSON"}],
+                    "test",
+                    {"type": "object"},
+                )
+
+        message = str(raised.exception)
+        self.assertIn("upstream error 403", message)
+        self.assertIn("Account [REDACTED] needs confirmation", message)
+        self.assertNotIn("user_private", message)
+        self.assertNotIn("token_private", message)
+        self.assertEqual(provider.attempts[0]["raw_response"], envelope)
+
+    def test_valid_response_is_recorded_without_a_typed_error(self) -> None:
+        config = {
+            "gateway": "openrouter",
+            "model": "google/gemini-3.8-flash",
+            "api_key_env": "TEST_OPENROUTER_KEY",
+        }
+        with patch.dict("os.environ", {"TEST_OPENROUTER_KEY": "secret"}), patch(
+            "urllib.request.urlopen", return_value=_Response()
+        ):
+            provider = ModelProvider(config, Settings.load())
+            response = provider.complete_json(
+                [{"role": "user", "content": "Return JSON"}],
+                "test",
+                {"type": "object"},
+            )
+
+        self.assertEqual(response.parsed, {"ok": True})
+        self.assertEqual(response.requested_model, "google/gemini-3.8-flash")
+        self.assertEqual(response.returned_model, "test/model")
+        self.assertEqual(response.usage, {})
+        self.assertEqual(response.cost_usd, 0.0)
+        self.assertEqual(provider.accumulated_cost, 0.0)
+        self.assertNotIn("error", provider.attempts[0])
+        self.assertNotIn("json_salvaged", provider.attempts[0])
+        self.assertEqual(
+            provider.attempts[0]["raw_response"]["choices"][0]["message"]["content"],
+            "{\"ok\":true}",
+        )
+
+    def test_json_salvaged_response_is_unchanged(self) -> None:
+        config = {
+            "gateway": "openrouter",
+            "model": "google/gemini-3.8-flash",
+            "api_key_env": "TEST_OPENROUTER_KEY",
+        }
+        payload = {
+            "choices": [
+                {"message": {"content": "Here you go:\n```json\n{\"ok\":true}\n```"}}
+            ],
+            "model": "test/model",
+            "usage": {},
+        }
+        with patch.dict("os.environ", {"TEST_OPENROUTER_KEY": "secret"}), patch(
+            "urllib.request.urlopen", return_value=_StaticResponse(payload)
+        ):
+            provider = ModelProvider(config, Settings.load())
+            response = provider.complete_json(
+                [{"role": "user", "content": "Return JSON"}],
+                "test",
+                {"type": "object"},
+            )
+
+        self.assertEqual(response.parsed, {"ok": True})
+        self.assertIs(provider.attempts[0]["json_salvaged"], True)
+        self.assertNotIn("error", provider.attempts[0])
 
 
 if __name__ == "__main__":
