@@ -230,9 +230,22 @@ jobs:
           path: /tmp/foxhole-forecast-data
       - name: Restore generated data at its repository paths
         run: |
-          test -f /tmp/foxhole-forecast-data/cohorts.jsonl
-          test -f /tmp/foxhole-forecast-data/raw/latest.json
-          python3 .github/scripts/merge-generated-data.py /tmp/foxhole-forecast-data data
+          # `upload-artifact` roots the archive at the least common ancestor of
+          # its path list. This workflow uploads `data/...` *and* `.workflow/...`,
+          # so the least common ancestor is the repository root and the archive
+          # keeps the `data/` prefix; the collection workflow uploads only
+          # `data/...` and therefore has it stripped. Resolve either layout, and
+          # fail loudly with the tree instead of a silent non-zero exit.
+          artifact=/tmp/foxhole-forecast-data
+          if [ -f "$artifact/data/cohorts.jsonl" ]; then
+            artifact="$artifact/data"
+          fi
+          if ! test -f "$artifact/cohorts.jsonl" || ! test -f "$artifact/raw/latest.json"; then
+            echo "Generated forecast data is missing under $artifact" >&2
+            find /tmp/foxhole-forecast-data -maxdepth 3 | head -60 >&2
+            exit 1
+          fi
+          python3 .github/scripts/merge-generated-data.py "$artifact" data
       - name: Rebuild scores and dashboard with the checked-out source
         run: |
           PYTHONPATH=src python3 -m foxhole_forecast score >/dev/null
