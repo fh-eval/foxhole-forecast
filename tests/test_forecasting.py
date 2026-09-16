@@ -26,6 +26,7 @@ from foxhole_forecast.forecasting import (
     _drop_invalid_predictions,
     _deepseek_catalogs,
     _previous_model_summary,
+    _replay_bundle_path,
     _settings_payload,
     _transient_provider_failure,
     recover_invalid_runs,
@@ -300,6 +301,8 @@ class ForecastBudgetTests(unittest.TestCase):
             self.assertEqual(rows[0], original)
             self.assertEqual(rows[1]["replay_of"], run_id)
             self.assertEqual(rows[1]["status"], "invalid")
+            # An incident-authorized replay carries no automatic trigger.
+            self.assertNotIn("retry_trigger", rows[1])
             self.assertEqual(rows[2]["run_id"], f"{run_id}:replay-2")
             self.assertEqual(rows[2]["status"], "invalid")
             self.assertTrue(rows[2]["manual_replay_authorized"])
@@ -371,10 +374,33 @@ class ForecastBudgetTests(unittest.TestCase):
                 "ProviderBodyError: upstream error (timeout): request aborted",
                 True,
             ),
-            "plain timeout wording": (
+            "code-less prose that merely says timed out": (
                 "ProviderBodyError: upstream error: the upstream request "
                 "timed out after 600 seconds",
-                True,
+                False,
+            ),
+            "authentication failure mentioning a timeout": (
+                "ProviderBodyError: upstream error 403 (authentication_error): "
+                "Your session timed out. Please sign in again.",
+                False,
+            ),
+            "key-plan failure mentioning the timeout limit": (
+                "ProviderBodyError: upstream error 401: Invalid API key for the "
+                "900-second timeout limit plan.",
+                False,
+            ),
+            "payment required with a timeout type": (
+                "ProviderBodyError: upstream error 402 (timeout): "
+                "Add credits to continue",
+                False,
+            ),
+            "validation error quoting provider text": (
+                "ValidationError: Unknown or duplicate base_id: upstream error 429",
+                False,
+            ),
+            "provider text quoted without the exception prefix": (
+                "upstream error 429 (rate_limit_exceeded): Provider returned error",
+                False,
             ),
             "absent code without a timeout marker": (
                 "ProviderBodyError: upstream error: Provider returned error",
@@ -1377,6 +1403,9 @@ class AutomaticTransientRecoveryTests(unittest.TestCase):
             self.assertEqual(rows[1]["submission_mode"], "delayed_replay")
             self.assertEqual(rows[1]["replay_of"], run_id)
             self.assertEqual(rows[1]["status"], "valid")
+            self.assertEqual(
+                rows[1]["retry_trigger"], "automatic_transient_recovery"
+            )
 
     def test_automatic_recovery_keeps_a_replayed_paid_failure_visible(self) -> None:
         """A paid replay that fails still names its trigger, because it spent."""
@@ -1532,6 +1561,7 @@ class AutomaticTransientRecoveryTests(unittest.TestCase):
             rows = read_ledger("model_runs", data_dir=data)
             self.assertEqual(len(rows), 2)
             self.assertEqual(rows[1]["replay_of"], run_id)
+            self.assertNotIn("retry_trigger", rows[1])
 
     def test_automatic_recovery_retries_an_unparseable_paid_run_from_its_bundle(
         self,
@@ -1571,6 +1601,9 @@ class AutomaticTransientRecoveryTests(unittest.TestCase):
             self.assertEqual(len(rows), 2)
             self.assertEqual(rows[1]["status"], "valid")
             self.assertEqual(rows[1]["replay_of"], run_id)
+            self.assertEqual(
+                rows[1]["retry_trigger"], "automatic_transient_recovery"
+            )
 
     def test_automatic_recovery_blocks_a_spent_budget_for_an_unparseable_paid_run(
         self,
@@ -1695,6 +1728,94 @@ class AutomaticTransientRecoveryTests(unittest.TestCase):
             self.assertEqual(
                 read_jsonl(data / "model_runs.jsonl")[0]["status"], "valid"
             )
+
+    def test_automatic_recovery_retries_a_paid_run_without_a_bundle(self) -> None:
+        """A bundle-less paid run retries on the snapshot path, unguarded.
+
+        This path has no paid authorization of its own (only the daily cap
+        inside ``_run_model`` binds it), so the spend is proxied by asserting
+        that the paid model run happens exactly once and the action says so.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            run_id = self._invalid_run_with_frozen_bundle(
+                data,
+                "ConnectionResetError: reset by peer",
+            )
+            _replay_bundle_path(
+                data / "raw" / "cohorts" / "cohort-1", "model-1"
+            ).unlink()
+            replacement = {
+                "run_id": run_id,
+                "cohort_id": "cohort-1",
+                "series_id": "model-1",
+                "status": "valid",
+                "forecast": {"predictions": [{"base_id": "base-1"}]},
+                "calls": [],
+            }
+
+            with patch("foxhole_forecast.forecasting.DATA_DIR", data), patch(
+                "foxhole_forecast.forecasting.load_models",
+                return_value=[{"series_id": "model-1", "paid": True}],
+            ), patch(
+                "foxhole_forecast.forecasting._run_model", return_value=replacement
+            ) as run_model:
+                result = recover_invalid_runs(
+                    Settings.load(), "cohort-1", data / "snapshot.json"
+                )
+
+            action = result["actions"][0]
+            self.assertEqual(result["status"], "recovered")
+            self.assertEqual(action["action"], "retried")
+            self.assertTrue(action["paid_retry"])
+            self.assertEqual(run_model.call_count, 1)
+            # The audit trigger belongs to the frozen-replay path only.
+            self.assertNotIn("retry_trigger", action)
+            rows = read_ledger("model_runs", data_dir=data)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["status"], "valid")
+            self.assertEqual(rows[0]["retried_from_frozen_cutoff"], self.cutoff)
+
+    def test_automatic_recovery_records_a_failed_paid_retry_without_a_bundle(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            run_id = self._invalid_run_with_frozen_bundle(
+                data,
+                "ProviderBodyError: upstream error 500: internal server error",
+            )
+            _replay_bundle_path(
+                data / "raw" / "cohorts" / "cohort-1", "model-1"
+            ).unlink()
+            failed = {
+                "run_id": run_id,
+                "cohort_id": "cohort-1",
+                "series_id": "model-1",
+                "status": "invalid",
+                "error": (
+                    "ProviderBodyError: upstream error 500: internal server error"
+                ),
+                "calls": [],
+            }
+
+            with patch("foxhole_forecast.forecasting.DATA_DIR", data), patch(
+                "foxhole_forecast.forecasting.load_models",
+                return_value=[{"series_id": "model-1", "paid": True}],
+            ), patch(
+                "foxhole_forecast.forecasting._run_model", return_value=failed
+            ) as run_model:
+                result = recover_invalid_runs(
+                    Settings.load(), "cohort-1", data / "snapshot.json"
+                )
+
+            action = result["actions"][0]
+            self.assertEqual(result["status"], "unresolved")
+            self.assertEqual(action["action"], "retry_failed")
+            self.assertTrue(action["paid_retry"])
+            self.assertEqual(run_model.call_count, 1)
+            self.assertIn("error", action)
+            self.assertEqual(len(read_ledger("model_runs", data_dir=data)), 1)
 
     def test_automatic_recovery_escalates_rejections_and_other_value_errors(
         self,

@@ -593,6 +593,21 @@ class ProviderTests(unittest.TestCase):
                 },
                 True,
             ),
+            "authentication envelope that mentions a timeout": (
+                {
+                    "gateway": "openrouter",
+                    "model": "google/gemini-3.8-flash",
+                    "api_key_env": "TEST_OPENROUTER_KEY",
+                },
+                {
+                    "error": {
+                        "code": 403,
+                        "message": "Your session timed out. Please sign in again.",
+                        "metadata": {"error_type": "authentication_error"},
+                    }
+                },
+                False,
+            ),
             "code-less queue timeout": (
                 {
                     "gateway": "deepseek",

@@ -44,19 +44,33 @@ _TRANSIENT_ERROR_TYPES = (
 # A body-level failure (ProviderBodyError) arrives as text: providers raises the
 # exception without code/type attributes and run rows store only
 # ``f"{type(error).__name__}: {error}"``.  providers renders such an envelope as
-# ``upstream error[ <code>][ (<type>)]: <message>``, so that prefix is the
-# marker that identifies a body-level failure in stored text.
-_BODY_ERROR_MARKER = "upstream error"
-# Timeout wording that names no retryable HTTP status; DeepSeek's queue timeout
-# ("... within the 900-second timeout limit") is the live example.
-_BODY_TIMEOUT_MARKERS = ("(timeout)", "timeout limit", "timed out")
+# ``upstream error[ <code>][ (<type>)]: <message>``, so the anchored form below
+# identifies a body-level failure.  Anchoring matters: a validation error that
+# merely quotes untrusted provider text ("Unknown or duplicate base_id:
+# upstream error 429") must not classify as a provider failure.
+_BODY_ERROR_PREFIX = "ProviderBodyError: upstream error"
+# Upstream statuses a retry can plausibly survive, shared with the
+# transport-level rule.
+_RETRYABLE_BODY_CODES = ("408", "429", "500", "502", "503", "504")
+# Code-less envelopes are retryable only on the queue-timeout phrasing
+# (DeepSeek's "... within the 900-second timeout limit") or the structural
+# parenthesised type the renderer copies verbatim.  Generic prose is not a
+# signal: provider messages mention timeouts in authentication, key-plan, and
+# payment-required failures too.
+_BODY_TIMEOUT_MARKERS = ("timeout limit", "(timeout)")
 
-# Parse-layer failures: the model answered, but its own content could not be
-# turned into a JSON object.  providers raises these from
-# _parse_json_content_with_metadata and the run row stores the rendered text.
-# Any JSONDecodeError means the content was not JSON at all, which includes
-# empty content, where json.loads("") reports
-# "Expecting value: line 1 column 1 (char 0)".
+# Parse-layer failures.  The stored text "JSONDecodeError: ..." has three
+# producers, only two of which are model-output problems:
+#   * providers._parse_json_content_with_metadata rejects the model's own
+#     content (including empty content: json.loads("") reports "Expecting
+#     value: line 1 column 1 (char 0)");
+#   * providers._request_with_retry rejects a 2xx HTTP body that is not JSON at
+#     all -- a genuine provider fault, whose retry is deliberate;
+#   * storage.read_json / read_jsonl reject a corrupt local file.  That one is a
+#     known mislabel and is kept deliberately: it cannot spend, because the
+#     retry re-reads the same corrupt input and reaches no provider call, and a
+#     corrupt ledger row makes recover_invalid_runs raise before it classifies
+#     anything.
 _PARSE_ERROR_PREFIX = "JSONDecodeError:"
 # The parser's single non-decoder refusal, matched on its exact stored text so
 # that unrelated ValueError text (configuration, gateway, budget, validation)
@@ -67,18 +81,22 @@ _MODEL_OUTPUT_NOT_OBJECT = "ValueError: Model output must be a JSON object"
 def _transient_body_failure(error: str) -> bool:
     """Return whether a body-level provider failure is a retryable transport one.
 
-    Only a retryable upstream status or an explicit timeout marker counts, so a
-    body failure classifies exactly like its transport-level twin.  Everything
-    else a gateway can put in a 200 body stays permanent: malformed content
-    ("response contained no choices", an empty or non-list ``choices``, a
-    missing completion message), a non-object body, and identity, schema, or
-    validation failures.  An automatic retry of a paid series spends money, so
-    missing a transient failure is the cheaper mistake.
+    An envelope that carries an explicit upstream code is decided by that code
+    alone: only the retryable statuses count, so a 401, 403, or 402 envelope
+    stays permanent even when its provider prose mentions a timeout.  A
+    code-less envelope is retryable only on the queue-timeout wording or the
+    structural ``(timeout)`` type.  Everything else a gateway can put in a 200
+    body stays permanent: malformed content ("response contained no choices",
+    an empty or non-list ``choices``, a missing completion message), a
+    non-object body, and identity, schema, or validation failures.  An
+    automatic retry of a paid series spends money, so missing a transient
+    failure is the cheaper mistake.
     """
-    if _BODY_ERROR_MARKER not in error:
+    if not error.startswith(_BODY_ERROR_PREFIX):
         return False
-    if re.search(rf"{_BODY_ERROR_MARKER} (?:408|429|500|502|503|504)\b", error):
-        return True
+    head = error[len(_BODY_ERROR_PREFIX) :].split(":", 1)[0].strip()
+    if head and not head.startswith("("):
+        return head.split(" ", 1)[0] in _RETRYABLE_BODY_CODES
     return any(marker in error for marker in _BODY_TIMEOUT_MARKERS)
 
 
@@ -86,10 +104,12 @@ def _retryable_parse_failure(error: str) -> bool:
     """Return whether stored text is a model-output parse failure.
 
     Two shapes qualify: the model's content was not JSON at all (any
-    ``JSONDecodeError``, empty content included), or it parsed to something
-    other than an object, which the parser reports with one exact message.
-    Validation-rejected content, identity mismatches, and unrecognised
-    ``ValueError`` text stay permanent.
+    ``JSONDecodeError``, empty content included, and the 2xx-body case above),
+    or it parsed to something other than an object, which the parser reports
+    with one exact message.  The corrupt-local-file producer of
+    ``JSONDecodeError`` is accepted here as a documented mislabel: it costs no
+    provider call (see the block comment above).  Validation-rejected content,
+    identity mismatches, and unrecognised ``ValueError`` text stay permanent.
     """
     if error.startswith(_PARSE_ERROR_PREFIX):
         return True
