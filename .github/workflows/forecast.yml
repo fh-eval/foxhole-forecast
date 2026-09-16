@@ -38,10 +38,6 @@ on:
 
 permissions: {}
 
-concurrency:
-  group: foxhole-data-pipeline
-  cancel-in-progress: false
-
 jobs:
   evaluate:
     runs-on: ubuntu-latest
@@ -176,6 +172,16 @@ jobs:
     needs: evaluate
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # `data/` write lock: the fetch/rebase/push in persist-data.sh must stay
+    # mutually exclusive, so this group is a single-writer lock — but it only
+    # needs to cover this commit, not the model calls before it. A forecast
+    # cohort can spend tens of minutes in provider latency; holding the group
+    # for that whole phase cancelled scheduled polls and operator-dispatched
+    # replays, because GitHub keeps at most one *pending* run per group and a
+    # newer queued run replaces the older pending one.
+    concurrency:
+      group: foxhole-data-pipeline
+      cancel-in-progress: false
     permissions:
       contents: read
     steps:
@@ -461,6 +467,20 @@ jobs:
             } catch (error) {
               if (error.status !== 422) throw error;
             }
+            // One state at a time: a successful replay must not leave
+            // `agent-recovery-failed` behind, and a failed attempt must not
+            // leave `agent-recovered` behind. 404 means the label is absent.
+            const stale = succeeded ? 'agent-recovery-failed' : 'agent-recovered';
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                name: stale,
+              });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -522,6 +542,19 @@ jobs:
               });
             } catch (error) {
               if (error.status !== 422) throw error;
+            }
+            // Keep the two recovery outcomes mutually exclusive: a failed
+            // workflow must not leave `agent-recovered` behind from an earlier
+            // success. 404 means the label is absent.
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                name: 'agent-recovered',
+              });
+            } catch (error) {
+              if (error.status !== 404) throw error;
             }
             await github.rest.issues.addLabels({
               owner: context.repo.owner,

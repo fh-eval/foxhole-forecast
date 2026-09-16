@@ -86,5 +86,59 @@ class WorkflowAuthenticationTests(unittest.TestCase):
                 self.assertEqual(result.returncode, expected, result.stderr)
 
 
+class DataWriteLockTests(unittest.TestCase):
+    """The `data/` single-writer lock covers the commit, not the whole run."""
+
+    WRITERS = (
+        ("pipeline.yml", "persist"),
+        ("forecast.yml", "persist"),
+        ("archive-maintenance.yml", "maintain"),
+    )
+
+    def test_only_the_committing_job_holds_the_data_write_lock(self) -> None:
+        block = (
+            "    concurrency:\n"
+            "      group: foxhole-data-pipeline\n"
+            "      cancel-in-progress: false\n"
+        )
+        for filename, job in self.WRITERS:
+            workflow = (WORKFLOWS / filename).read_text(encoding="utf-8")
+            self.assertEqual(
+                workflow.count("group: foxhole-data-pipeline"),
+                1,
+                f"{filename} must declare the write lock exactly once",
+            )
+            self.assertNotIn(
+                "\nconcurrency:\n",
+                workflow,
+                f"{filename} must not hold the write lock at workflow level",
+            )
+            before_job, _, after_job = workflow.partition(f"\n  {job}:\n")
+            self.assertTrue(after_job, f"{filename} has no '{job}' job")
+            self.assertNotIn(block, before_job, f"{filename} locks a job other than '{job}'")
+            self.assertIn(block, after_job, f"{filename} must lock the '{job}' job")
+
+
+class RecoveryLabelTests(unittest.TestCase):
+    """`agent-recovered` and `agent-recovery-failed` must never both be present."""
+
+    def test_recovery_report_clears_the_opposite_label(self) -> None:
+        workflow = (WORKFLOWS / "forecast.yml").read_text(encoding="utf-8")
+        report, failure = workflow.split("- name: Report recovery workflow failure", 1)
+        for body in (report, failure):
+            self.assertIn("github.rest.issues.removeLabel", body)
+            self.assertLess(
+                body.index("github.rest.issues.removeLabel"),
+                body.index("github.rest.issues.addLabels"),
+                "the opposite label must be removed before the new one is added",
+            )
+            self.assertIn("if (error.status !== 404) throw error;", body)
+        self.assertIn(
+            "const stale = succeeded ? 'agent-recovery-failed' : 'agent-recovered';",
+            report,
+        )
+        self.assertIn("name: 'agent-recovered',", failure)
+
+
 if __name__ == "__main__":
     unittest.main()

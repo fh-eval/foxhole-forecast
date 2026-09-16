@@ -10,10 +10,6 @@ on:
 
 permissions: {}
 
-concurrency:
-  group: foxhole-data-pipeline
-  cancel-in-progress: false
-
 jobs:
   evaluate:
     runs-on: ubuntu-latest
@@ -61,6 +57,16 @@ jobs:
     needs: evaluate
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # `data/` write lock: the fetch/rebase/push in persist-data.sh must stay
+    # mutually exclusive, so this group is a single-writer lock — but it only
+    # needs to cover this commit, not the collection phase before it. Held at
+    # workflow level it also serialised the multi-minute collection, and GitHub
+    # keeps at most one *pending* run per group: a newer queued run cancels the
+    # older pending one, which is how scheduled polls and dispatched replays
+    # were lost.
+    concurrency:
+      group: foxhole-data-pipeline
+      cancel-in-progress: false
     permissions:
       contents: read
     steps:
