@@ -20,11 +20,13 @@ jobs:
     # This workflow's only job both maintains archives and commits them, so the
     # `data/` write lock covers the whole run. The group is shared with the
     # collection and forecast writers: it is a single-writer lock for `data/`,
-    # and must never be held by a job that is not about to commit there, since
-    # pending runs in the group are cancelled when a newer run queues.
+    # so it must never be held by a job that is not about to commit there.
+    # `queue: max` lets a pending maintenance run wait its turn instead of being
+    # displaced by a newer run.
     concurrency:
       group: foxhole-data-pipeline
       cancel-in-progress: false
+      queue: max
     permissions:
       contents: read
     steps:

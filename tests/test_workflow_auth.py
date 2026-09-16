@@ -100,6 +100,7 @@ class DataWriteLockTests(unittest.TestCase):
             "    concurrency:\n"
             "      group: foxhole-data-pipeline\n"
             "      cancel-in-progress: false\n"
+            "      queue: max\n"
         )
         for filename, job in self.WRITERS:
             workflow = (WORKFLOWS / filename).read_text(encoding="utf-8")
@@ -109,7 +110,7 @@ class DataWriteLockTests(unittest.TestCase):
                 f"{filename} must declare the write lock exactly once",
             )
             self.assertNotIn(
-                "\nconcurrency:\n",
+                "concurrency:\n  group: foxhole-data-pipeline",
                 workflow,
                 f"{filename} must not hold the write lock at workflow level",
             )
@@ -117,6 +118,33 @@ class DataWriteLockTests(unittest.TestCase):
             self.assertTrue(after_job, f"{filename} has no '{job}' job")
             self.assertNotIn(block, before_job, f"{filename} locks a job other than '{job}'")
             self.assertIn(block, after_job, f"{filename} must lock the '{job}' job")
+
+    def test_forecast_runs_queue_on_their_own_group(self) -> None:
+        workflow = (WORKFLOWS / "forecast.yml").read_text(encoding="utf-8")
+        self.assertIn(
+            "concurrency:\n"
+            "  group: foxhole-forecast-cohort\n"
+            "  cancel-in-progress: false\n"
+            "  queue: max\n",
+            workflow,
+        )
+        # The serialising group must not be the shared write lock, and no other
+        # workflow may take it, so only forecast and replay runs contend there
+        # while collection runs stay free to proceed.
+        for filename in (
+            "pipeline.yml",
+            "archive-maintenance.yml",
+            "ci.yml",
+            "pages.yml",
+            "watchdog.yml",
+            "model-triage.yml",
+            "notification-test.yml",
+        ):
+            self.assertNotIn(
+                "foxhole-forecast-cohort",
+                (WORKFLOWS / filename).read_text(encoding="utf-8"),
+                f"{filename} must not take the forecast serialising group",
+            )
 
 
 class RecoveryLabelTests(unittest.TestCase):

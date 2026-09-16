@@ -38,6 +38,19 @@ on:
 
 permissions: {}
 
+# Serialise this workflow's own runs against each other. The three-hour slot
+# check compares the wall-clock slot against `state.json#last_forecast_slot`,
+# and that value only becomes visible to another run once `persist` commits it:
+# without this group, two runs whose evaluates overlap both read a stale state
+# and both call the paid providers. The group name is deliberately NOT
+# `foxhole-data-pipeline`, so it never contends with the shared `data/` write
+# lock; collection workflows never take it. `queue: max` keeps a waiting replay
+# queued instead of letting a newer run cancel it.
+concurrency:
+  group: foxhole-forecast-cohort
+  cancel-in-progress: false
+  queue: max
+
 jobs:
   evaluate:
     runs-on: ubuntu-latest
@@ -177,11 +190,12 @@ jobs:
     # needs to cover this commit, not the model calls before it. A forecast
     # cohort can spend tens of minutes in provider latency; holding the group
     # for that whole phase cancelled scheduled polls and operator-dispatched
-    # replays, because GitHub keeps at most one *pending* run per group and a
-    # newer queued run replaces the older pending one.
+    # replays. `queue: max` lets every pending persist wait its turn (up to 100
+    # runs) instead of displacing the older pending one.
     concurrency:
       group: foxhole-data-pipeline
       cancel-in-progress: false
+      queue: max
     permissions:
       contents: read
     steps:
