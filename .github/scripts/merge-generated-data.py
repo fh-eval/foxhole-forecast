@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 import base64
 from datetime import datetime
@@ -219,6 +220,72 @@ def _merge_ledgers(generated_root: Path, data_root: Path) -> None:
         _write_jsonl(current_shard, merged)
 
 
+def _merge_cohorts(current: Path, generated: Path) -> None:
+    """Merge ``cohorts.jsonl`` without dropping a cohort a concurrent run added.
+
+    The file is append-written, one row per cohort keyed by ``cohort_id``; a
+    salvage/retry/replay episode later rewrites that cohort's row in place to
+    update ``models[].status``. The rule is a keyed union in which the artifact's
+    row replaces the checkout's row for the same ``cohort_id``:
+
+    * every cohort present in the checkout survives, so a row appended by a
+      run that persisted while this artifact was in flight can never be
+      dropped -- the artifact simply does not contain that cohort;
+    * the artifact's row for its own cohort still lands, which is how a run
+      publishes the cohort it just created (or the replay state it just wrote).
+
+    If two episodes ever rewrite the *same* cohort row, the later persist wins
+    that row; no per-run record is lost by that, because the same episodes also
+    write the ``model_runs`` ledger, which merges per ``run_id``.
+    """
+    if not generated.is_file():
+        return
+    generated_rows = _read_jsonl(generated)
+    if not generated_rows:
+        return
+    merged: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+    for row in [*_read_jsonl(current), *generated_rows]:
+        key = row.get("cohort_id")
+        if not isinstance(key, str) or not key:
+            key = _canonical(row)
+        if key not in merged:
+            order.append(key)
+        merged[key] = row
+    _write_jsonl(current, [merged[key] for key in order])
+
+
+def _copy_absent_tree(generated_root: Path, data_root: Path, relative: str) -> tuple[int, int, int]:
+    """Copy immutable evidence files that are missing; never overwrite one.
+
+    ``objects/**`` is content-addressed (a sha256 path is its own content) and
+    ``raw/cohorts/**`` holds per-cohort evidence frozen at the cohort's cutoff,
+    so an artifact built on an older checkout must not replace a file the
+    checkout already has. Files absent from the checkout are copied; existing
+    files are compared and left untouched, and the counts are reported so a
+    genuine name collision is visible instead of silently clobbering evidence.
+    """
+    source_root = generated_root / relative
+    if not source_root.is_dir():
+        return (0, 0, 0)
+    added = identical = differing = 0
+    for source in sorted(path for path in source_root.rglob("*") if path.is_file()):
+        target = data_root / source.relative_to(generated_root)
+        if target.exists():
+            if (
+                target.stat().st_size == source.stat().st_size
+                and target.read_bytes() == source.read_bytes()
+            ):
+                identical += 1
+            else:
+                differing += 1
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+        added += 1
+    return (added, identical, differing)
+
+
 def _merge_quarantine_sidecars(generated_root: Path, data_root: Path) -> None:
     """Carry append-recovery audit records across the evaluate/persist boundary."""
     sources = [
@@ -244,6 +311,14 @@ def merge(generated_root: Path, data_root: Path) -> None:
     )
     for name in row_names:
         _merge_jsonl(data_root / name, generated_root / name, name)
+    _merge_cohorts(data_root / "cohorts.jsonl", generated_root / "cohorts.jsonl")
+    for relative in ("objects", "raw/cohorts"):
+        added, identical, differing = _copy_absent_tree(generated_root, data_root, relative)
+        if added or identical or differing:
+            print(
+                f"{relative}: copied {added} missing file(s), {identical} already identical, "
+                f"{differing} left as-is (existing file differs; nothing overwritten)"
+            )
     for name in ("raw/latest.json", "state.json", "wars.json"):
         generated = generated_root / name
         if generated.is_file():

@@ -120,24 +120,30 @@ class DataWriteLockTests(unittest.TestCase):
 
 
 class RecoveryLabelTests(unittest.TestCase):
-    """`agent-recovered` and `agent-recovery-failed` must never both be present."""
+    """Recovery labels must express one state, never a contradictory pair."""
 
-    def test_recovery_report_clears_the_opposite_label(self) -> None:
+    def test_recovery_report_clears_the_opposite_and_dispatch_labels(self) -> None:
         workflow = (WORKFLOWS / "forecast.yml").read_text(encoding="utf-8")
-        report, failure = workflow.split("- name: Report recovery workflow failure", 1)
+        report = workflow.split("- name: Report the exact recovered run", 1)[1].split(
+            "- name: Report recovery workflow failure", 1
+        )[0]
+        failure = workflow.split("- name: Report recovery workflow failure", 1)[1]
         for body in (report, failure):
             self.assertIn("github.rest.issues.removeLabel", body)
             self.assertLess(
                 body.index("github.rest.issues.removeLabel"),
                 body.index("github.rest.issues.addLabels"),
-                "the opposite label must be removed before the new one is added",
+                "stale labels must be removed before the new one is added",
             )
             self.assertIn("if (error.status !== 404) throw error;", body)
+        # Both transitions clear the opposite outcome and the dispatch marker
+        # that the triage workflow set.
+        self.assertIn("? ['agent-recovery-failed', 'agent-recovery-dispatched']", report)
+        self.assertIn(": ['agent-recovered', 'agent-recovery-dispatched'];", report)
         self.assertIn(
-            "const stale = succeeded ? 'agent-recovery-failed' : 'agent-recovered';",
-            report,
+            "for (const stale of ['agent-recovered', 'agent-recovery-dispatched'])",
+            failure,
         )
-        self.assertIn("name: 'agent-recovered',", failure)
 
 
 if __name__ == "__main__":

@@ -209,7 +209,16 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: foxhole-forecast-data
-          path: .
+          # Keep the artifact out of the checkout: it may have been built on an
+          # older base, so it must be merged into `data/` rather than overlaid
+          # on top of it. Overlaying reverted the rows of a run that persisted
+          # while this one was evaluating.
+          path: /tmp/foxhole-forecast-data
+      - name: Restore generated data at its repository paths
+        run: |
+          test -f /tmp/foxhole-forecast-data/cohorts.jsonl
+          test -f /tmp/foxhole-forecast-data/raw/latest.json
+          python3 .github/scripts/merge-generated-data.py /tmp/foxhole-forecast-data data
       - name: Rebuild scores and dashboard with the checked-out source
         run: |
           PYTHONPATH=src python3 -m foxhole_forecast score >/dev/null
@@ -467,19 +476,23 @@ jobs:
             } catch (error) {
               if (error.status !== 422) throw error;
             }
-            // One state at a time: a successful replay must not leave
-            // `agent-recovery-failed` behind, and a failed attempt must not
-            // leave `agent-recovered` behind. 404 means the label is absent.
-            const stale = succeeded ? 'agent-recovery-failed' : 'agent-recovered';
-            try {
-              await github.rest.issues.removeLabel({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                name: stale,
-              });
-            } catch (error) {
-              if (error.status !== 404) throw error;
+            // One state at a time: applying a terminal outcome clears both the
+            // opposite outcome and the dispatch marker the triage workflow set.
+            // 404 means the label is absent.
+            const staleLabels = succeeded
+              ? ['agent-recovery-failed', 'agent-recovery-dispatched']
+              : ['agent-recovered', 'agent-recovery-dispatched'];
+            for (const stale of staleLabels) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  name: stale,
+                });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+              }
             }
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
@@ -543,18 +556,20 @@ jobs:
             } catch (error) {
               if (error.status !== 422) throw error;
             }
-            // Keep the two recovery outcomes mutually exclusive: a failed
-            // workflow must not leave `agent-recovered` behind from an earlier
-            // success. 404 means the label is absent.
-            try {
-              await github.rest.issues.removeLabel({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                name: 'agent-recovered',
-              });
-            } catch (error) {
-              if (error.status !== 404) throw error;
+            // Keep the recovery state single-valued: a failed workflow clears
+            // an earlier success and the dispatch marker the triage workflow
+            // set. 404 means the label is absent.
+            for (const stale of ['agent-recovered', 'agent-recovery-dispatched']) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  name: stale,
+                });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+              }
             }
             await github.rest.issues.addLabels({
               owner: context.repo.owner,

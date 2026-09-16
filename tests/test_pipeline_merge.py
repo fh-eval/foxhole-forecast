@@ -193,5 +193,362 @@ class PipelineMergeTests(unittest.TestCase):
             self.assertEqual(json.loads(shard.read_text().splitlines()[0])["run_id"], "r9")
 
 
+class ForecastArtifactMergeTests(unittest.TestCase):
+    """A forecast artifact may be older than the checkout it is merged into."""
+
+    def _cohort(self, cohort_id: str, status: str, slot: str) -> dict:
+        return {
+            "schema_version": 1,
+            "cohort_id": cohort_id,
+            "slot": slot,
+            "cutoff": slot,
+            "war_id": "war-140",
+            "war_number": 140,
+            "history_hours_available": 1.0,
+            "strategic_base_ids": ["base-1"],
+            "models": [
+                {"run_id": f"{cohort_id}:model-a", "series_id": "model-a", "status": status}
+            ],
+        }
+
+    def _rows(self, path: Path) -> dict[str, dict]:
+        return {
+            json.loads(line)["cohort_id"]: json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        }
+
+    def _merge(self, generated: Path, data: Path) -> str:
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPT), str(generated), str(data)],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return completed.stdout
+
+    def test_merge_cohorts_keeps_checkout_rows_and_lands_the_artifact_row(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "data"
+            generated = root / "generated"
+            # The checkout already holds a cohort a concurrent run persisted.
+            concurrent = self._cohort("2026-09-16-ccc", "valid", "2026-09-16T12:00:00Z")
+            write_jsonl(
+                data / "cohorts.jsonl",
+                [self._cohort("2026-09-16-aaa", "invalid", "2026-09-16T09:00:00Z"), concurrent],
+            )
+            # The artifact was built earlier: its row for `aaa` records the
+            # replay state it wrote, and its own new cohort `bbb` is absent
+            # from the checkout.
+            write_jsonl(
+                generated / "cohorts.jsonl",
+                [
+                    self._cohort("2026-09-16-aaa", "valid", "2026-09-16T09:00:00Z"),
+                    self._cohort("2026-09-16-bbb", "valid", "2026-09-16T11:00:00Z"),
+                ],
+            )
+            self._merge(generated, data)
+
+            rows = self._rows(data / "cohorts.jsonl")
+            self.assertEqual(
+                sorted(rows),
+                ["2026-09-16-aaa", "2026-09-16-bbb", "2026-09-16-ccc"],
+            )
+            # The artifact's own newer row for its own cohort lands.
+            self.assertEqual(rows["2026-09-16-aaa"]["models"][0]["status"], "valid")
+            # The concurrently persisted cohort survives untouched.
+            self.assertEqual(rows["2026-09-16-ccc"], concurrent)
+
+    def test_merge_cohorts_survives_a_row_appended_after_the_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "data"
+            generated = root / "generated"
+            write_jsonl(
+                data / "cohorts.jsonl",
+                [self._cohort("2026-09-16-aaa", "invalid", "2026-09-16T09:00:00Z")],
+            )
+            write_jsonl(
+                generated / "cohorts.jsonl",
+                [self._cohort("2026-09-16-bbb", "valid", "2026-09-16T11:00:00Z")],
+            )
+            self._merge(generated, data)
+            first = self._rows(data / "cohorts.jsonl")
+            self.assertEqual(sorted(first), ["2026-09-16-aaa", "2026-09-16-bbb"])
+
+            # A concurrent persist appends its cohort to the checkout while the
+            # same artifact is merged again; repeat merges must stay stable.
+            later = self._cohort("2026-09-16-ddd", "valid", "2026-09-16T13:00:00Z")
+            with (data / "cohorts.jsonl").open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(later, separators=(",", ":")) + "\n")
+            self._merge(generated, data)
+
+            rows = self._rows(data / "cohorts.jsonl")
+            self.assertEqual(
+                sorted(rows),
+                ["2026-09-16-aaa", "2026-09-16-bbb", "2026-09-16-ddd"],
+            )
+            self.assertEqual(rows["2026-09-16-ddd"], later)
+            self.assertEqual(rows["2026-09-16-bbb"]["models"][0]["status"], "valid")
+
+    def test_forecast_artifact_supersedes_model_runs_without_dropping_others(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "data"
+            generated = root / "generated"
+            shard = "ledgers/model_runs/war-140/2026-09-16.jsonl"
+            write_jsonl(
+                data / shard,
+                [
+                    {"run_id": "r1", "status": "invalid"},
+                    {"run_id": "r9", "status": "valid"},
+                ],
+            )
+            write_jsonl(
+                generated / shard,
+                [
+                    {"run_id": "r1", "status": "valid"},
+                    {"run_id": "r2", "status": "valid"},
+                ],
+            )
+            write_jsonl(
+                generated / "cohorts.jsonl",
+                [self._cohort("2026-09-16-bbb", "valid", "2026-09-16T11:00:00Z")],
+            )
+            self._merge(generated, data)
+
+            runs = [
+                json.loads(line)
+                for line in (data / shard).read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertEqual(
+                sorted((row["run_id"], row["status"]) for row in runs),
+                [("r1", "valid"), ("r2", "valid"), ("r9", "valid")],
+            )
+
+    def test_merge_copies_absent_evidence_and_never_overwrites_existing(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "data"
+            generated = root / "generated"
+            object_path = "objects/sha256/aa/aaaa.json.gz"
+            scout_path = "raw/cohorts/2026-09-16-aaa/scout-packet.json"
+            (data / object_path).parent.mkdir(parents=True, exist_ok=True)
+            (data / object_path).write_bytes(b"checkout-object")
+            write_json(data / scout_path, {"frozen": "checkout"})
+            (generated / object_path).parent.mkdir(parents=True, exist_ok=True)
+            (generated / object_path).write_bytes(b"artifact-object")
+            write_json(generated / scout_path, {"frozen": "artifact"})
+            new_object = "objects/sha256/bb/bbbb.json.gz"
+            new_evidence = "raw/cohorts/2026-09-16-aaa/model-a-replay-bundle.json.gz"
+            (generated / new_object).parent.mkdir(parents=True, exist_ok=True)
+            (generated / new_object).write_bytes(b"new-object")
+            (generated / new_evidence).parent.mkdir(parents=True, exist_ok=True)
+            (generated / new_evidence).write_bytes(b"new-evidence")
+
+            output = self._merge(generated, data)
+
+            # Existing evidence is never replaced, even when it differs.
+            self.assertEqual((data / object_path).read_bytes(), b"checkout-object")
+            self.assertEqual(
+                json.loads((data / scout_path).read_text(encoding="utf-8")),
+                {"frozen": "checkout"},
+            )
+            # Files the checkout lacks are copied.
+            self.assertEqual((data / new_object).read_bytes(), b"new-object")
+            self.assertEqual((data / new_evidence).read_bytes(), b"new-evidence")
+            # The collision is reported rather than silently resolved.
+            self.assertIn(
+                "objects: copied 1 missing file(s), 0 already identical, 1 left as-is",
+                output,
+            )
+            self.assertIn(
+                "raw/cohorts: copied 1 missing file(s), 0 already identical, 1 left as-is",
+                output,
+            )
+
+            # A repeat merge is a no-op for copied files and still reports the
+            # file it refuses to overwrite.
+            second = self._merge(generated, data)
+            self.assertIn(
+                "objects: copied 0 missing file(s), 1 already identical, 1 left as-is",
+                second,
+            )
+            self.assertEqual((data / object_path).read_bytes(), b"checkout-object")
+
+    def test_forecast_artifact_merge_loses_no_row_from_either_side(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "data"
+            generated = root / "generated"
+            shard = "ledgers/model_runs/war-140/2026-09-16.jsonl"
+            write_jsonl(
+                data / "cohorts.jsonl",
+                [
+                    self._cohort("2026-09-16-aaa", "invalid", "2026-09-16T09:00:00Z"),
+                    self._cohort("2026-09-16-ccc", "valid", "2026-09-16T12:00:00Z"),
+                ],
+            )
+            write_jsonl(
+                generated / "cohorts.jsonl",
+                [
+                    self._cohort("2026-09-16-aaa", "valid", "2026-09-16T09:00:00Z"),
+                    self._cohort("2026-09-16-bbb", "valid", "2026-09-16T11:00:00Z"),
+                ],
+            )
+            write_jsonl(
+                data / shard,
+                [{"run_id": "r1", "status": "invalid"}, {"run_id": "r9", "status": "valid"}],
+            )
+            write_jsonl(
+                generated / shard,
+                [{"run_id": "r1", "status": "valid"}, {"run_id": "r2", "status": "valid"}],
+            )
+            write_json(data / "raw/latest.json", {"observed_at": "2026-09-16T12:00:00Z", "war": 140})
+            write_json(
+                generated / "raw/latest.json",
+                {"observed_at": "2026-09-16T11:00:00Z", "war": 140},
+            )
+            write_json(
+                data / "state.json",
+                {"schema_version": 1, "last_collected_at": "2026-09-16T12:10:00Z"},
+            )
+            write_json(
+                generated / "state.json",
+                {"schema_version": 1, "last_collected_at": "2026-09-16T11:10:00Z"},
+            )
+            write_json(data / "wars.json", {"wars": {"war-140": {"last_observed_at": "2026-09-16T12:05:00Z"}}})
+            write_json(
+                generated / "wars.json",
+                {"wars": {"war-140": {"last_observed_at": "2026-09-16T11:05:00Z"}}},
+            )
+            (generated / "objects/sha256/bb/bbbb.json.gz").parent.mkdir(parents=True, exist_ok=True)
+            (generated / "objects/sha256/bb/bbbb.json.gz").write_bytes(b"object")
+            (generated / "raw/cohorts/2026-09-16-bbb/scout-packet.json").parent.mkdir(
+                parents=True, exist_ok=True
+            )
+            write_json(
+                generated / "raw/cohorts/2026-09-16-bbb/scout-packet.json", {"frozen": "artifact"}
+            )
+
+            self._merge(generated, data)
+
+            self.assertEqual(
+                sorted(self._rows(data / "cohorts.jsonl")),
+                ["2026-09-16-aaa", "2026-09-16-bbb", "2026-09-16-ccc"],
+            )
+            self.assertEqual(
+                self._rows(data / "cohorts.jsonl")["2026-09-16-aaa"]["models"][0]["status"],
+                "valid",
+            )
+            runs = [
+                json.loads(line)
+                for line in (data / shard).read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertEqual(
+                sorted((row["run_id"], row["status"]) for row in runs),
+                [("r1", "valid"), ("r2", "valid"), ("r9", "valid")],
+            )
+            # Newer checkout snapshots win; the artifact must not revert them.
+            self.assertEqual(
+                json.loads((data / "raw/latest.json").read_text(encoding="utf-8"))["observed_at"],
+                "2026-09-16T12:00:00Z",
+            )
+            self.assertEqual(
+                json.loads((data / "state.json").read_text(encoding="utf-8"))["last_collected_at"],
+                "2026-09-16T12:10:00Z",
+            )
+            self.assertEqual(
+                json.loads((data / "wars.json").read_text(encoding="utf-8"))["wars"]["war-140"][
+                    "last_observed_at"
+                ],
+                "2026-09-16T12:05:00Z",
+            )
+            self.assertTrue((data / "objects/sha256/bb/bbbb.json.gz").is_file())
+            self.assertTrue(
+                (data / "raw/cohorts/2026-09-16-bbb/scout-packet.json").is_file()
+            )
+
+    def test_collection_artifact_never_touches_forecast_paths(self) -> None:
+        """The collection recipe must behave exactly as before."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "data"
+            generated = root / "generated"
+            cohort = self._cohort("2026-09-16-aaa", "valid", "2026-09-16T09:00:00Z")
+            write_jsonl(data / "cohorts.jsonl", [cohort])
+            write_jsonl(
+                data / "observations.jsonl",
+                [{"observed_at": "2026-09-16T12:00:00Z", "war_id": "war-140"}],
+            )
+            write_jsonl(
+                generated / "observations.jsonl",
+                [{"observed_at": "2026-09-16T12:15:00Z", "war_id": "war-140"}],
+            )
+            write_jsonl(generated / "collector_runs.jsonl", [{"war_id": "war-140", "observed_at": "2026-09-16T12:15:00Z", "status": "ok"}])
+            write_jsonl(
+                generated / "ledgers/model_runs/war-140/2026-09-16.jsonl",
+                [{"run_id": "r1", "status": "valid"}],
+            )
+            write_json(data / "raw/latest.json", {"observed_at": "2026-09-16T12:00:00Z"})
+            write_json(generated / "raw/latest.json", {"observed_at": "2026-09-16T12:15:00Z"})
+
+            output = self._merge(generated, data)
+
+            # Forecast-only paths are untouched by a collection artifact.
+            self.assertEqual(self._rows(data / "cohorts.jsonl"), {"2026-09-16-aaa": cohort})
+            self.assertFalse((data / "objects").exists())
+            self.assertFalse((data / "raw/cohorts").exists())
+            self.assertEqual(output, "")
+            # Collection behaviour is unchanged: rows append, newest wins.
+            self.assertEqual(
+                sorted(
+                    json.loads(line)["observed_at"]
+                    for line in (data / "observations.jsonl").read_text(encoding="utf-8").splitlines()
+                ),
+                ["2026-09-16T12:00:00Z", "2026-09-16T12:15:00Z"],
+            )
+            self.assertEqual(
+                json.loads((data / "raw/latest.json").read_text(encoding="utf-8"))["observed_at"],
+                "2026-09-16T12:15:00Z",
+            )
+
+
+class ForecastPersistWorkflowTests(unittest.TestCase):
+    WORKFLOWS = Path(__file__).parents[1] / ".github" / "workflows"
+
+    def test_forecast_persist_merges_the_artifact_instead_of_overlaying_it(self) -> None:
+        workflow = (self.WORKFLOWS / "forecast.yml").read_text(encoding="utf-8")
+        persist = workflow.split("\n  persist:\n", 1)[1].split("\n  audit:\n", 1)[0]
+        self.assertIn("path: /tmp/foxhole-forecast-data", persist)
+        self.assertNotIn("path: .\n", persist)
+        self.assertIn("test -f /tmp/foxhole-forecast-data/cohorts.jsonl", persist)
+        self.assertIn("test -f /tmp/foxhole-forecast-data/raw/latest.json", persist)
+        self.assertIn(
+            "python3 .github/scripts/merge-generated-data.py /tmp/foxhole-forecast-data data",
+            persist,
+        )
+        self.assertLess(
+            persist.index("merge-generated-data.py"),
+            persist.index("Rebuild scores and dashboard"),
+        )
+        self.assertLess(
+            persist.index("Rebuild scores and dashboard"),
+            persist.index(
+                '.github/scripts/persist-data.sh "data: update forecasts and scores"'
+            ),
+        )
+
+    def test_collection_persist_recipe_is_unchanged(self) -> None:
+        workflow = (self.WORKFLOWS / "pipeline.yml").read_text(encoding="utf-8")
+        persist = workflow.split("\n  persist:\n", 1)[1]
+        self.assertIn("path: /tmp/foxhole-collection-data", persist)
+        self.assertIn(
+            "python3 .github/scripts/merge-generated-data.py /tmp/foxhole-collection-data data",
+            persist,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
