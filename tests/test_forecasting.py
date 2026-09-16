@@ -4,6 +4,7 @@ import copy
 import json
 import tempfile
 import unittest
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -37,7 +38,7 @@ from foxhole_forecast.ledger import read_ledger
 from foxhole_forecast.packets import cohort_evidence_path
 from foxhole_forecast.providers import ProviderResponse
 from foxhole_forecast.schemas import forecast_schema
-from foxhole_forecast.storage import read_jsonl, write_json, write_jsonl
+from foxhole_forecast.storage import read_json, read_jsonl, write_json, write_jsonl
 from foxhole_forecast.validation import ValidationError
 
 
@@ -334,6 +335,95 @@ class ForecastBudgetTests(unittest.TestCase):
             "cutoff": "2026-08-31T09:00:00Z",
         }
         self.assertTrue(_transient_provider_failure(failed, [recent, failed]))
+
+    def test_body_level_provider_failures_classify_like_transport_failures(self) -> None:
+        """A 200-body failure must classify exactly like its HTTP twin."""
+        cases = {
+            "openrouter 504 with a timeout type": (
+                "ProviderBodyError: upstream error 504 (timeout): A Timeout Occurred",
+                True,
+            ),
+            "openrouter 429 with a rate-limit type": (
+                "ProviderBodyError: upstream error 429 (rate_limit_exceeded): "
+                "Provider returned error",
+                True,
+            ),
+            "openrouter 504 with a nested code": (
+                "ProviderBodyError: upstream error 504: error code: 504",
+                True,
+            ),
+            "deepseek queue timeout without a code": (
+                "ProviderBodyError: upstream error: We were unable to start "
+                "processing your request within the 900-second timeout limit. "
+                "Please try again later.",
+                True,
+            ),
+            "upstream 503 body": (
+                "ProviderBodyError: upstream error 503 (unavailable): "
+                "upstream connect error",
+                True,
+            ),
+            "upstream 500 body": (
+                "ProviderBodyError: upstream error 500: internal server error",
+                True,
+            ),
+            "code-less timeout type": (
+                "ProviderBodyError: upstream error (timeout): request aborted",
+                True,
+            ),
+            "plain timeout wording": (
+                "ProviderBodyError: upstream error: the upstream request "
+                "timed out after 600 seconds",
+                True,
+            ),
+            "absent code without a timeout marker": (
+                "ProviderBodyError: upstream error: Provider returned error",
+                False,
+            ),
+            "unknown code": (
+                "ProviderBodyError: upstream error 402 (insufficient_credits): "
+                "Add credits to continue",
+                False,
+            ),
+            "missing choices": (
+                "ProviderBodyError: upstream error: response contained no choices",
+                False,
+            ),
+            "empty choices": (
+                "ProviderBodyError: upstream error: response contained an "
+                "empty choices list",
+                False,
+            ),
+            "non-list choices": (
+                "ProviderBodyError: upstream error: response contained a "
+                "non-list choices value (str)",
+                False,
+            ),
+            "missing completion content": (
+                "ProviderBodyError: upstream error: response contained no "
+                "completion message content",
+                False,
+            ),
+            "non-object body": (
+                "ProviderBodyError: upstream error: response body is not an "
+                "object (list)",
+                False,
+            ),
+            "identity mismatch": (
+                "ModelIdentityMismatch: expected google/gemini-3.8-flash, got None",
+                False,
+            ),
+            "validation failure": (
+                "ValidationError: forecast must contain at least one valid prediction",
+                False,
+            ),
+        }
+        for label, (error, expected) in cases.items():
+            with self.subTest(error=label):
+                self.assertEqual(
+                    _transient_provider_failure({"error": error}),
+                    expected,
+                )
 
     def test_automatic_recovery_retries_one_free_transient_failure(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1059,6 +1149,343 @@ class ForecastBudgetTests(unittest.TestCase):
 
         self.assertEqual(key, v41["budget_group"])
         self.assertEqual((spent, limit, reserve), (0.0, 0.5, 0.04))
+
+
+class AutomaticTransientRecoveryTests(unittest.TestCase):
+    """One automatic retry for a clearly transient failure, free or paid."""
+
+    cutoff = "2026-01-02T00:00:00Z"
+
+    def _invalid_run_with_frozen_bundle(
+        self,
+        data: Path,
+        error: str,
+        *,
+        paid: bool = True,
+        retry_history: bool = False,
+    ) -> str:
+        """Write one invalid run plus the cutoff-exact bundle it can replay."""
+        run_id = "cohort-1:model-1"
+        run = {
+            "run_id": run_id,
+            "cohort_id": "cohort-1",
+            "series_id": "model-1",
+            "label": "Model 1",
+            "gateway": "nvidia_nim",
+            "requested_model": "provider/model-1",
+            "war_id": "war-1",
+            "cutoff": self.cutoff,
+            "created_at": self.cutoff,
+            "status": "invalid",
+            "error": error,
+            "calls": [],
+        }
+        if retry_history:
+            run["retry_history"] = [{"run_id": run_id, "status": "invalid"}]
+        write_jsonl(data / "model_runs.jsonl", [run])
+        write_json(
+            data / "wars.json",
+            {"wars": {"war-1": {"war_id": "war-1", "war_number": 1}}},
+        )
+        write_jsonl(
+            data / "cohorts.jsonl",
+            [
+                {
+                    "cohort_id": "cohort-1",
+                    "models": [
+                        {"run_id": run_id, "series_id": "model-1", "status": "invalid"}
+                    ],
+                }
+            ],
+        )
+        cohort = data / "raw" / "cohorts" / "cohort-1"
+        scout = {"cutoff": self.cutoff, "war": {"warId": "war-1"}}
+        source = {
+            "packet_version": 2,
+            "packet_type": "detail_source",
+            "cutoff": self.cutoff,
+            "war": {"warId": "war-1"},
+            "data_dictionary": {},
+            "regions": {},
+            "limits": {},
+        }
+        detail = {
+            "packet_version": 2,
+            "packet_type": "detail",
+            "cutoff": self.cutoff,
+            "war": {"warId": "war-1"},
+            "selected_regions": [],
+            "data_dictionary": {},
+            "strategic_bases": [],
+            "selected_metrics": [],
+            "selected_region_hourly_series": {},
+            "recent_events": [],
+            "limits": {},
+        }
+        scout_path = cohort_evidence_path(cohort, "model-1-scout-packet")
+        source_path = cohort_evidence_path(cohort, "replay-detail-source")
+        detail_path = cohort_evidence_path(cohort, "model-1-detail-packet")
+        write_json(scout_path, scout)
+        write_json(source_path, source)
+        write_json(detail_path, detail)
+        write_json(
+            cohort_evidence_path(cohort, "model-1-replay-bundle"),
+            {
+                "schema_version": 1,
+                "bundle_type": "forecast_replay",
+                "source_commit": "abc123",
+                "series_id": "model-1",
+                "cutoff": self.cutoff,
+                "war_id": "war-1",
+                "model_config": {
+                    "series_id": "model-1",
+                    "label": "Model 1",
+                    "gateway": "nvidia_nim",
+                    "model": "provider/model-1",
+                    "api_key_env": "TEST_KEY",
+                    "paid": paid,
+                    "budget_group": "test-paid",
+                    "max_paid_usd_per_day": 0.5,
+                    "budget_reserve_usd": 0.04,
+                },
+                "settings": _settings_payload(Settings.load()),
+                "prompts": {
+                    "scout": "scout",
+                    "forecast": "forecast",
+                    "correction": "{error}",
+                },
+                "schemas": {"scout": {}, "forecast": {}},
+                "overview": {
+                    "headline": "Frozen headline",
+                    "war_summary": "Frozen summary",
+                    "selected_regions": [],
+                },
+                "inputs": {
+                    "scout_packet": scout_path.name,
+                    "scout_packet_sha256": _canonical_hash(scout),
+                    "detail_source": source_path.name,
+                    "detail_source_sha256": _canonical_hash(source),
+                    "detail_packet": detail_path.name,
+                    "detail_packet_sha256": _canonical_hash(detail),
+                },
+                "stage": "forecast",
+            },
+        )
+        write_json(
+            data / "snapshot.json",
+            {"observed_at": self.cutoff, "war": {"warId": "war-1"}},
+        )
+        return run_id
+
+    def _replay_service(self) -> tuple[SimpleNamespace, SimpleNamespace, dict]:
+        provider = SimpleNamespace(
+            config={"validation_attempts": 1}, attempts=[], accumulated_cost=0.0
+        )
+        response = SimpleNamespace(
+            returned_model="provider/model-1", upstream_provider="NVIDIA"
+        )
+        forecast = {"predictions": [{"base_id": "base-1"}]}
+        return provider, response, forecast
+
+    def test_automatic_recovery_replays_a_transient_paid_failure_from_its_bundle(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            run_id = self._invalid_run_with_frozen_bundle(
+                data,
+                "ProviderBodyError: upstream error 504 (timeout): A Timeout Occurred",
+            )
+            provider, response, forecast = self._replay_service()
+
+            with patch("foxhole_forecast.forecasting.DATA_DIR", data), patch(
+                "foxhole_forecast.forecasting.load_models",
+                return_value=[{"series_id": "model-1", "paid": True}],
+            ), patch(
+                "foxhole_forecast.forecasting.ModelProvider", return_value=provider
+            ), patch(
+                "foxhole_forecast.forecasting._call_validated",
+                return_value=(response, forecast),
+            ), patch(
+                "foxhole_forecast.forecasting._freeze_evidence",
+                return_value=forecast,
+            ):
+                result = recover_invalid_runs(
+                    Settings.load(), "cohort-1", data / "snapshot.json"
+                )
+
+            action = result["actions"][0]
+            self.assertEqual(result["status"], "recovered")
+            self.assertEqual(action["action"], "replayed")
+            self.assertTrue(action["paid_retry"])
+            self.assertEqual(action["retry_trigger"], "automatic_transient_recovery")
+            self.assertEqual(action["replay_of"], run_id)
+            self.assertEqual(
+                action["salvage_error"], "No stored forecast response is available"
+            )
+            self.assertNotIn(
+                "paid_replay_requires_incident_authorization", json.dumps(result)
+            )
+            rows = read_ledger("model_runs", data_dir=data)
+            self.assertEqual(len(rows), 2)
+            self.assertEqual(rows[1]["submission_mode"], "delayed_replay")
+            self.assertEqual(rows[1]["replay_of"], run_id)
+            self.assertEqual(rows[1]["status"], "valid")
+
+    def test_automatic_recovery_keeps_a_replayed_paid_failure_visible(self) -> None:
+        """A paid replay that fails still names its trigger, because it spent."""
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            self._invalid_run_with_frozen_bundle(
+                data,
+                "ProviderBodyError: upstream error 429 (rate_limit_exceeded): "
+                "Provider returned error",
+            )
+            provider, _response, _forecast = self._replay_service()
+
+            with patch("foxhole_forecast.forecasting.DATA_DIR", data), patch(
+                "foxhole_forecast.forecasting.load_models",
+                return_value=[{"series_id": "model-1", "paid": True}],
+            ), patch(
+                "foxhole_forecast.forecasting.ModelProvider", return_value=provider
+            ), patch(
+                "foxhole_forecast.forecasting._call_validated",
+                side_effect=RuntimeError("Provider refused the replay"),
+            ):
+                result = recover_invalid_runs(
+                    Settings.load(), "cohort-1", data / "snapshot.json"
+                )
+
+            action = result["actions"][0]
+            self.assertEqual(result["status"], "unresolved")
+            self.assertEqual(action["action"], "retry_failed")
+            self.assertTrue(action["paid_retry"])
+            self.assertEqual(action["retry_trigger"], "automatic_transient_recovery")
+
+    def test_automatic_recovery_keeps_a_nontransient_paid_failure_unresolved(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            self._invalid_run_with_frozen_bundle(
+                data,
+                "ProviderBodyError: upstream error: response contained no choices",
+            )
+
+            with patch("foxhole_forecast.forecasting.DATA_DIR", data), patch(
+                "foxhole_forecast.forecasting.load_models",
+                return_value=[{"series_id": "model-1", "paid": True}],
+            ), patch("foxhole_forecast.forecasting.ModelProvider") as provider_cls:
+                result = recover_invalid_runs(
+                    Settings.load(), "cohort-1", data / "snapshot.json"
+                )
+
+            provider_cls.assert_not_called()
+            action = result["actions"][0]
+            self.assertEqual(result["status"], "unresolved")
+            self.assertEqual(action["action"], "unresolved")
+            self.assertEqual(action["reason"], "non_transient_failure")
+            self.assertNotIn("retry_trigger", action)
+            self.assertEqual(len(read_ledger("model_runs", data_dir=data)), 1)
+
+    def test_automatic_recovery_short_circuits_a_paid_run_with_retry_history(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            self._invalid_run_with_frozen_bundle(
+                data,
+                "ProviderBodyError: upstream error 503 (unavailable): upstream error",
+                retry_history=True,
+            )
+
+            with patch("foxhole_forecast.forecasting.DATA_DIR", data), patch(
+                "foxhole_forecast.forecasting.load_models",
+                return_value=[{"series_id": "model-1", "paid": True}],
+            ), patch("foxhole_forecast.forecasting.ModelProvider") as provider_cls:
+                result = recover_invalid_runs(
+                    Settings.load(), "cohort-1", data / "snapshot.json"
+                )
+
+            provider_cls.assert_not_called()
+            action = result["actions"][0]
+            self.assertEqual(result["status"], "unresolved")
+            self.assertEqual(action["reason"], "automatic_retry_already_attempted")
+            self.assertNotIn("retry_trigger", action)
+            self.assertEqual(len(read_ledger("model_runs", data_dir=data)), 1)
+
+    def test_automatic_recovery_blocks_a_spent_paid_budget_without_spending(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            self._invalid_run_with_frozen_bundle(
+                data,
+                "ProviderBodyError: upstream error 504: error code: 504",
+            )
+            state = {
+                "daily_costs_by_group": {
+                    datetime.now(UTC).date().isoformat(): {"test-paid": 0.5}
+                }
+            }
+            write_json(data / "state.json", state)
+
+            with patch("foxhole_forecast.forecasting.DATA_DIR", data), patch(
+                "foxhole_forecast.forecasting.load_models",
+                return_value=[{"series_id": "model-1", "paid": True}],
+            ), patch("foxhole_forecast.forecasting.ModelProvider") as provider_cls:
+                result = recover_invalid_runs(
+                    Settings.load(), "cohort-1", data / "snapshot.json"
+                )
+
+            provider_cls.assert_not_called()
+            action = result["actions"][0]
+            self.assertEqual(result["status"], "unresolved")
+            self.assertEqual(action["action"], "unresolved")
+            self.assertEqual(action["reason"], "paid_retry_budget_exceeded")
+            self.assertTrue(action["paid_retry"])
+            self.assertEqual(action["retry_trigger"], "automatic_transient_recovery")
+            self.assertEqual(
+                action["salvage_error"], "No stored forecast response is available"
+            )
+            self.assertIn("daily budget guard", action["replay_error"])
+            self.assertEqual(read_json(data / "state.json"), state)
+            self.assertEqual(len(read_ledger("model_runs", data_dir=data)), 1)
+
+    def test_automatic_recovery_keeps_a_free_bundled_replay_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            run_id = self._invalid_run_with_frozen_bundle(
+                data,
+                "ConnectionResetError: reset by peer",
+                paid=False,
+            )
+            provider, response, forecast = self._replay_service()
+
+            with patch("foxhole_forecast.forecasting.DATA_DIR", data), patch(
+                "foxhole_forecast.forecasting.load_models",
+                return_value=[{"series_id": "model-1", "paid": False}],
+            ), patch(
+                "foxhole_forecast.forecasting.ModelProvider", return_value=provider
+            ), patch(
+                "foxhole_forecast.forecasting._call_validated",
+                return_value=(response, forecast),
+            ), patch(
+                "foxhole_forecast.forecasting._freeze_evidence",
+                return_value=forecast,
+            ):
+                result = recover_invalid_runs(
+                    Settings.load(), "cohort-1", data / "snapshot.json"
+                )
+
+            action = result["actions"][0]
+            self.assertEqual(result["status"], "recovered")
+            self.assertEqual(action["action"], "replayed")
+            self.assertFalse(action["paid_retry"])
+            self.assertNotIn("retry_trigger", action)
+            rows = read_ledger("model_runs", data_dir=data)
+            self.assertEqual(len(rows), 2)
+            self.assertEqual(rows[1]["replay_of"], run_id)
 
 
 if __name__ == "__main__":

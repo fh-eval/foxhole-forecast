@@ -41,6 +41,34 @@ _TRANSIENT_ERROR_TYPES = (
     "URLError",
 )
 
+# A body-level failure (ProviderBodyError) arrives as text: providers raises the
+# exception without code/type attributes and run rows store only
+# ``f"{type(error).__name__}: {error}"``.  providers renders such an envelope as
+# ``upstream error[ <code>][ (<type>)]: <message>``, so that prefix is the
+# marker that identifies a body-level failure in stored text.
+_BODY_ERROR_MARKER = "upstream error"
+# Timeout wording that names no retryable HTTP status; DeepSeek's queue timeout
+# ("... within the 900-second timeout limit") is the live example.
+_BODY_TIMEOUT_MARKERS = ("(timeout)", "timeout limit", "timed out")
+
+
+def _transient_body_failure(error: str) -> bool:
+    """Return whether a body-level provider failure is a retryable transport one.
+
+    Only a retryable upstream status or an explicit timeout marker counts, so a
+    body failure classifies exactly like its transport-level twin.  Everything
+    else a gateway can put in a 200 body stays permanent: malformed content
+    ("response contained no choices", an empty or non-list ``choices``, a
+    missing completion message), a non-object body, and identity, schema, or
+    validation failures.  An automatic retry of a paid series spends money, so
+    missing a transient failure is the cheaper mistake.
+    """
+    if _BODY_ERROR_MARKER not in error:
+        return False
+    if re.search(rf"{_BODY_ERROR_MARKER} (?:408|429|500|502|503|504)\b", error):
+        return True
+    return any(marker in error for marker in _BODY_TIMEOUT_MARKERS)
+
 
 def _transient_provider_failure(
     run: dict[str, Any], runs: list[dict[str, Any]] | None = None
@@ -50,6 +78,8 @@ def _transient_provider_failure(
     if error.startswith(tuple(f"{name}:" for name in _TRANSIENT_ERROR_TYPES)):
         return True
     if re.search(r"Provider returned HTTP (?:408|429|500|502|503|504)\b", error):
+        return True
+    if _transient_body_failure(error):
         return True
     if (
         "Provider returned HTTP 404" in error

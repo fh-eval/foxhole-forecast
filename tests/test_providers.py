@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from foxhole_forecast.config import Settings, load_models
+from foxhole_forecast.forecasting import _transient_provider_failure
 from foxhole_forecast.providers import (
     ModelProvider,
     ModelIdentityMismatch,
@@ -573,6 +574,71 @@ class ProviderTests(unittest.TestCase):
         self.assertNotIn("got None", message)
         self.assertEqual(provider.attempts[0]["raw_response"], envelope)
         self.assertEqual(provider.attempts[0]["error"], f"ProviderBodyError: {message}")
+
+    def test_stored_body_errors_drive_the_transient_retry_rule(self) -> None:
+        """The stored text of a real envelope classifies like its HTTP twin."""
+        cases = {
+            "timeout envelope": (
+                {
+                    "gateway": "openrouter",
+                    "model": "google/gemini-3.8-flash",
+                    "api_key_env": "TEST_OPENROUTER_KEY",
+                },
+                {
+                    "error": {
+                        "code": 504,
+                        "message": "A Timeout Occurred",
+                        "metadata": {"error_type": "timeout"},
+                    }
+                },
+                True,
+            ),
+            "code-less queue timeout": (
+                {
+                    "gateway": "deepseek",
+                    "model": "deepseek-flash",
+                    "api_key_env": "TEST_DEEPSEEK_KEY",
+                },
+                {
+                    "error": {
+                        "message": (
+                            "We were unable to start processing your request within "
+                            "the 900-second timeout limit. Please try again later."
+                        )
+                    }
+                },
+                True,
+            ),
+            "empty choices body": (
+                {
+                    "gateway": "openrouter",
+                    "model": "google/gemini-3.8-flash",
+                    "api_key_env": "TEST_OPENROUTER_KEY",
+                },
+                {"choices": []},
+                False,
+            ),
+        }
+        for label, (config, envelope, expected) in cases.items():
+            with self.subTest(envelope=label):
+                with patch.dict(
+                    "os.environ", {config["api_key_env"]: "secret"}
+                ), patch(
+                    "urllib.request.urlopen", return_value=_StaticResponse(envelope)
+                ):
+                    provider = ModelProvider(config, Settings.load())
+                    with self.assertRaises(ProviderBodyError) as raised:
+                        provider.complete_json(
+                            [{"role": "user", "content": "Return JSON"}],
+                            "test",
+                            {"type": "object"},
+                        )
+                stored = provider.attempts[0]["error"]
+                self.assertEqual(stored, f"ProviderBodyError: {raised.exception}")
+                self.assertEqual(
+                    _transient_provider_failure({"error": stored}),
+                    expected,
+                )
 
     def test_empty_choices_body_raises_typed_provider_error(self) -> None:
         config = {
