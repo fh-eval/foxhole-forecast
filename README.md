@@ -80,7 +80,7 @@ Dashboard builds and all-time score aggregation merge verified archive records w
 
 `prune-archived-war` is a dry run unless `--apply` is supplied. It verifies the archive first, refuses to remove unarchived cohort files, and deletes provider-response objects only when no remaining live run references them. The war registry and generated all-time scores stay in live storage.
 
-The daily archive-maintenance workflow serializes with collection and forecasting. It automatically creates and verifies archives only after the later of an ended war's end time and last observation has been quiet for 24 hours. Pruning is never scheduled: it requires a manual workflow dispatch with `apply_prune` enabled, and proceeds only when every live record family, frozen packet, response object, and import matches the archive. Each run retains a machine-readable maintenance report for 30 days.
+The daily archive-maintenance workflow takes the same single-writer lock on the `data/` commit that collection and forecasting use, so only one of the three can push to `data/` at a time; their collection and model-call phases may overlap. It automatically creates and verifies archives only after the later of an ended war's end time and last observation has been quiet for 24 hours. Pruning is never scheduled: it requires a manual workflow dispatch with `apply_prune` enabled, and proceeds only when every live record family, frozen packet, response object, and import matches the archive. Each run retains a machine-readable maintenance report for 30 days.
 
 ### Optional FoxholeStats import
 

@@ -86,5 +86,93 @@ class WorkflowAuthenticationTests(unittest.TestCase):
                 self.assertEqual(result.returncode, expected, result.stderr)
 
 
+class DataWriteLockTests(unittest.TestCase):
+    """The `data/` single-writer lock covers the commit, not the whole run."""
+
+    WRITERS = (
+        ("pipeline.yml", "persist"),
+        ("forecast.yml", "persist"),
+        ("archive-maintenance.yml", "maintain"),
+    )
+
+    def test_only_the_committing_job_holds_the_data_write_lock(self) -> None:
+        block = (
+            "    concurrency:\n"
+            "      group: foxhole-data-pipeline\n"
+            "      cancel-in-progress: false\n"
+            "      queue: max\n"
+        )
+        for filename, job in self.WRITERS:
+            workflow = (WORKFLOWS / filename).read_text(encoding="utf-8")
+            self.assertEqual(
+                workflow.count("group: foxhole-data-pipeline"),
+                1,
+                f"{filename} must declare the write lock exactly once",
+            )
+            self.assertNotIn(
+                "concurrency:\n  group: foxhole-data-pipeline",
+                workflow,
+                f"{filename} must not hold the write lock at workflow level",
+            )
+            before_job, _, after_job = workflow.partition(f"\n  {job}:\n")
+            self.assertTrue(after_job, f"{filename} has no '{job}' job")
+            self.assertNotIn(block, before_job, f"{filename} locks a job other than '{job}'")
+            self.assertIn(block, after_job, f"{filename} must lock the '{job}' job")
+
+    def test_forecast_runs_queue_on_their_own_group(self) -> None:
+        workflow = (WORKFLOWS / "forecast.yml").read_text(encoding="utf-8")
+        self.assertIn(
+            "concurrency:\n"
+            "  group: foxhole-forecast-cohort\n"
+            "  cancel-in-progress: false\n"
+            "  queue: max\n",
+            workflow,
+        )
+        # The serialising group must not be the shared write lock, and no other
+        # workflow may take it, so only forecast and replay runs contend there
+        # while collection runs stay free to proceed.
+        for filename in (
+            "pipeline.yml",
+            "archive-maintenance.yml",
+            "ci.yml",
+            "pages.yml",
+            "watchdog.yml",
+            "model-triage.yml",
+            "notification-test.yml",
+        ):
+            self.assertNotIn(
+                "foxhole-forecast-cohort",
+                (WORKFLOWS / filename).read_text(encoding="utf-8"),
+                f"{filename} must not take the forecast serialising group",
+            )
+
+
+class RecoveryLabelTests(unittest.TestCase):
+    """Recovery labels must express one state, never a contradictory pair."""
+
+    def test_recovery_report_clears_the_opposite_and_dispatch_labels(self) -> None:
+        workflow = (WORKFLOWS / "forecast.yml").read_text(encoding="utf-8")
+        report = workflow.split("- name: Report the exact recovered run", 1)[1].split(
+            "- name: Report recovery workflow failure", 1
+        )[0]
+        failure = workflow.split("- name: Report recovery workflow failure", 1)[1]
+        for body in (report, failure):
+            self.assertIn("github.rest.issues.removeLabel", body)
+            self.assertLess(
+                body.index("github.rest.issues.removeLabel"),
+                body.index("github.rest.issues.addLabels"),
+                "stale labels must be removed before the new one is added",
+            )
+            self.assertIn("if (error.status !== 404) throw error;", body)
+        # Both transitions clear the opposite outcome and the dispatch marker
+        # that the triage workflow set.
+        self.assertIn("? ['agent-recovery-failed', 'agent-recovery-dispatched']", report)
+        self.assertIn(": ['agent-recovered', 'agent-recovery-dispatched'];", report)
+        self.assertIn(
+            "for (const stale of ['agent-recovered', 'agent-recovery-dispatched'])",
+            failure,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

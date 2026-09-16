@@ -38,9 +38,18 @@ on:
 
 permissions: {}
 
+# Serialise this workflow's own runs against each other. The three-hour slot
+# check compares the wall-clock slot against `state.json#last_forecast_slot`,
+# and that value only becomes visible to another run once `persist` commits it:
+# without this group, two runs whose evaluates overlap both read a stale state
+# and both call the paid providers. The group name is deliberately NOT
+# `foxhole-data-pipeline`, so it never contends with the shared `data/` write
+# lock; collection workflows never take it. `queue: max` keeps a waiting replay
+# queued instead of letting a newer run cancel it.
 concurrency:
-  group: foxhole-data-pipeline
+  group: foxhole-forecast-cohort
   cancel-in-progress: false
+  queue: max
 
 jobs:
   evaluate:
@@ -176,6 +185,17 @@ jobs:
     needs: evaluate
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # `data/` write lock: the fetch/rebase/push in persist-data.sh must stay
+    # mutually exclusive, so this group is a single-writer lock — but it only
+    # needs to cover this commit, not the model calls before it. A forecast
+    # cohort can spend tens of minutes in provider latency; holding the group
+    # for that whole phase cancelled scheduled polls and operator-dispatched
+    # replays. `queue: max` lets every pending persist wait its turn (up to 100
+    # runs) instead of displacing the older pending one.
+    concurrency:
+      group: foxhole-data-pipeline
+      cancel-in-progress: false
+      queue: max
     permissions:
       contents: read
     steps:
@@ -203,7 +223,16 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: foxhole-forecast-data
-          path: .
+          # Keep the artifact out of the checkout: it may have been built on an
+          # older base, so it must be merged into `data/` rather than overlaid
+          # on top of it. Overlaying reverted the rows of a run that persisted
+          # while this one was evaluating.
+          path: /tmp/foxhole-forecast-data
+      - name: Restore generated data at its repository paths
+        run: |
+          test -f /tmp/foxhole-forecast-data/cohorts.jsonl
+          test -f /tmp/foxhole-forecast-data/raw/latest.json
+          python3 .github/scripts/merge-generated-data.py /tmp/foxhole-forecast-data data
       - name: Rebuild scores and dashboard with the checked-out source
         run: |
           PYTHONPATH=src python3 -m foxhole_forecast score >/dev/null
@@ -461,6 +490,24 @@ jobs:
             } catch (error) {
               if (error.status !== 422) throw error;
             }
+            // One state at a time: applying a terminal outcome clears both the
+            // opposite outcome and the dispatch marker the triage workflow set.
+            // 404 means the label is absent.
+            const staleLabels = succeeded
+              ? ['agent-recovery-failed', 'agent-recovery-dispatched']
+              : ['agent-recovered', 'agent-recovery-dispatched'];
+            for (const stale of staleLabels) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  name: stale,
+                });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+              }
+            }
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -522,6 +569,21 @@ jobs:
               });
             } catch (error) {
               if (error.status !== 422) throw error;
+            }
+            // Keep the recovery state single-valued: a failed workflow clears
+            // an earlier success and the dispatch marker the triage workflow
+            // set. 404 means the label is absent.
+            for (const stale of ['agent-recovered', 'agent-recovery-dispatched']) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  name: stale,
+                });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+              }
             }
             await github.rest.issues.addLabels({
               owner: context.repo.owner,

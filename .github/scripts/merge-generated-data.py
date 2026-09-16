@@ -4,11 +4,17 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 import base64
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+# ``state.json`` fields owned by the forecasting writer; every other field keeps
+# following the newer collection write (see ``_merge_state``).
+_SLOT_FIELD = "last_forecast_slot"
+_SPEND_FIELDS = ("daily_costs", "daily_costs_by_group")
 
 
 def _read_json(path: Path, default: Any) -> Any:
@@ -219,6 +225,270 @@ def _merge_ledgers(generated_root: Path, data_root: Path) -> None:
         _write_jsonl(current_shard, merged)
 
 
+def _merge_cohorts(current: Path, generated: Path) -> None:
+    """Merge ``cohorts.jsonl`` without dropping a cohort a concurrent run added.
+
+    The file is append-written, one row per cohort keyed by ``cohort_id``; a
+    salvage/retry/replay episode later rewrites that cohort's row in place to
+    update ``models[].status``. The rule is a keyed union in which the artifact's
+    row replaces the checkout's row for the same ``cohort_id``:
+
+    * every cohort present in the checkout survives, so a cohort appended by a
+      run that persisted while this artifact was in flight is never lost -- the
+      artifact simply does not contain that cohort;
+    * the artifact's row for its own cohort still lands, which is how a run
+      publishes the cohort it just created (or the replay state it just wrote).
+
+    Rows that share a ``cohort_id`` collapse to one; that matches the read
+    semantics, where ``scoring.py`` builds ``{row["cohort_id"]: row}`` and the
+    last row wins, and ``data/cohorts.jsonl`` already contains such a pair
+    (byte-identical duplicates from an early war). If two episodes ever rewrite
+    the *same* cohort row, the later persist wins that row; no per-run record is
+    lost by that, because the same episodes also write the ``model_runs``
+    ledger, which merges per ``run_id``.
+    """
+    if not generated.is_file():
+        return
+    generated_rows = _read_jsonl(generated)
+    if not generated_rows:
+        return
+    merged: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+    for row in [*_read_jsonl(current), *generated_rows]:
+        key = row.get("cohort_id")
+        if not isinstance(key, str) or not key:
+            key = _canonical(row)
+        if key not in merged:
+            order.append(key)
+        merged[key] = row
+    _write_jsonl(current, [merged[key] for key in order])
+
+
+def _copy_absent_tree(generated_root: Path, data_root: Path, relative: str) -> tuple[int, int, int]:
+    """Copy content-addressed evidence that is missing; never overwrite one.
+
+    Only ``objects/**`` uses this rule: an object's sha256 path *is* its
+    content, so a differing file under the same name would be corruption and is
+    never overwritten. ``raw/cohorts/**`` is deliberately *not* handled here --
+    see ``_replace_cohort_evidence`` for that asymmetry. Files absent from the
+    checkout are copied; existing files are compared and left untouched, and the
+    counts are reported so a genuine name collision is visible instead of
+    silently clobbering evidence.
+    """
+    source_root = generated_root / relative
+    if not source_root.is_dir():
+        return (0, 0, 0)
+    added = identical = differing = 0
+    for source in sorted(path for path in source_root.rglob("*") if path.is_file()):
+        target = data_root / source.relative_to(generated_root)
+        if target.exists():
+            if (
+                target.stat().st_size == source.stat().st_size
+                and target.read_bytes() == source.read_bytes()
+            ):
+                identical += 1
+            else:
+                differing += 1
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+        added += 1
+    return (added, identical, differing)
+
+
+def _replace_cohort_evidence(
+    generated_root: Path, data_root: Path, relative: str = "raw/cohorts"
+) -> tuple[int, int, int]:
+    """Copy per-cohort evidence from the artifact, replacing older episodes.
+
+    This is the deliberate asymmetry with ``objects/**``. An object is
+    content-addressed, so its name is its content. The packet files under
+    ``raw/cohorts/**`` are *rewritten in place* for the same cohort when a run is
+    retried or replayed: ``retry-run`` and ``replay-run`` write the same
+    ``<series>-scout-packet`` / ``-replay-bundle`` / ``-war-overview`` /
+    ``-detail-packet`` names again (orchestration.py:310-318, provider_call.py:136-192),
+    and a replay bundle embeds ``source_commit``, so its bytes always differ.
+    Forecast runs are serialised by the ``foxhole-forecast-cohort`` group, and
+    collection and archive maintenance never write these trees, so a differing
+    file already in the checkout was written by an *earlier* episode: the
+    artifact's copy is the newer one and wins. Files are replaced whole, never
+    merged, and every count is reported.
+    """
+    source_root = generated_root / relative
+    if not source_root.is_dir():
+        return (0, 0, 0)
+    added = identical = replaced = 0
+    for source in sorted(path for path in source_root.rglob("*") if path.is_file()):
+        target = data_root / source.relative_to(generated_root)
+        if target.exists():
+            if (
+                target.stat().st_size == source.stat().st_size
+                and target.read_bytes() == source.read_bytes()
+            ):
+                identical += 1
+                continue
+            replaced += 1
+        else:
+            added += 1
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+    return (added, identical, replaced)
+
+
+def _number(value: Any) -> float | None:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    return None
+
+
+def _max_spend(prior: Any, candidate: Any, *, grouped: bool) -> dict[str, Any]:
+    """Element-wise maximum of two accumulated spend maps.
+
+    ``daily_costs`` maps a date to the paid spend recorded for that date and
+    ``daily_costs_by_group`` maps a date to ``{budget group: total}``. Both are
+    written back as ``spent + this run's cost`` (provider_call.py:221,240, with
+    ``spent`` read by ``_budget`` at provider_call.py:332-352), so every value is
+    an accumulated total for its bucket and the larger total is the correct
+    merged value. In this topology the maximum is exact, not merely bounded:
+    spend maps are written only by the forecasting paths -- every
+    ``ModelProvider``/``_run_model`` construction lives inside ``forecast.yml``,
+    which the ``foxhole-forecast-cohort`` group fully serialises -- so the
+    collection side never carries spend of its own and ``max(forecast,
+    collection)`` is the forecaster's own value. If a spending writer is ever
+    added outside that group the rule degrades from exact to bounded: an
+    overlapping pair would then under-count by at most the smaller run's own
+    increment, because neither side observed the other's addition. Keeping the
+    maximum is still monotonic in either case: no merge can hand ``_budget`` a
+    smaller ``spent`` than either writer recorded, so the daily cap cannot be
+    widened by a merge.
+
+    The winning side's original value is kept, so an int stays an int and repeat
+    merges are byte-stable.
+    """
+    merged: dict[str, Any] = {}
+    for source in (prior, candidate):
+        if not isinstance(source, dict):
+            continue
+        for date, value in source.items():
+            if grouped:
+                if not isinstance(value, dict):
+                    continue
+                totals = merged.setdefault(date, {})
+                for group, amount in value.items():
+                    number = _number(amount)
+                    if number is None:
+                        continue
+                    if number > (_number(totals.get(group)) or -1.0):
+                        totals[group] = amount
+            else:
+                number = _number(value)
+                if number is None:
+                    continue
+                if number > (_number(merged.get(date)) or -1.0):
+                    merged[date] = value
+    return merged
+
+
+def _war_id(state: dict[str, Any]) -> str | None:
+    """Return the war identifier the state document describes, if any."""
+    war = state.get("war")
+    if isinstance(war, dict):
+        war_id = war.get("warId")
+        if isinstance(war_id, str) and war_id:
+            return war_id
+    return None
+
+
+def _later_slot(current: Any, candidate: Any) -> Any:
+    """Return the later of two ``last_forecast_slot`` values.
+
+    The slot only ever moves forward: it is the wall-clock slot a forecast ran
+    in, written with the spend ledger (orchestration.py:132). A stale artifact
+    must therefore never regress it, because the slot guard
+    (orchestration.py:40-44) reads this value to decide whether the current slot
+    is already forecast -- a reverted slot reports a forecast slot as due, and a
+    manual ``force_forecast=false`` dispatch inside it could run a second paid
+    cohort. Missing or unparseable values lose to a parseable one; if neither
+    parses, the first argument (the side chosen by ``last_collected_at``) is
+    kept. Callers must pass slots that belong to the war being merged: see
+    ``_merge_state``, which drops the slot of a side that describes a different
+    war.
+    """
+    current_time, candidate_time = _time(current), _time(candidate)
+    if current_time and candidate_time:
+        return candidate if candidate_time > current_time else current
+    if candidate_time and not current_time:
+        return candidate
+    return current
+
+
+def _merge_state(current: Path, generated: Path) -> None:
+    """Merge ``state.json`` field by field instead of replacing the whole file.
+
+    ``state.json`` has two writers with different ownership: collection owns
+    ``war``, ``war_active``, ``maps``, ``etag``, ``last_hourly_sample`` and
+    ``last_collected_at``; forecasting owns ``last_forecast_slot`` and the
+    ``daily_costs`` / ``daily_costs_by_group`` ledgers it accumulates during a
+    paid run (provider_call.py:221,240 -> orchestration.py:133). Picking one side
+    by ``last_collected_at`` and writing that document wholesale dropped the
+    other writer's fields in both directions. Here the side with the newer
+    ``last_collected_at`` still supplies the base, so collection-owned keys (and
+    any key neither writer reserves) keep following the newer collection write,
+    while the forecast-owned fields are merged with rules that cannot regress
+    them: the later slot wins and each spend bucket keeps the larger total. Keys
+    present on only one side are carried over on either path, so no field can
+    disappear merely because the base side lacks it.
+    """
+    if not generated.is_file():
+        return
+    candidate = _read_json(generated, {})
+    if not isinstance(candidate, dict):
+        return
+    existing = _read_json(current, {})
+    if not isinstance(existing, dict):
+        existing = {}
+    candidate_time = _time(candidate.get("observed_at")) or _time(candidate.get("last_collected_at"))
+    current_time = _time(existing.get("observed_at")) or _time(existing.get("last_collected_at"))
+    if not current_time or (candidate_time and candidate_time >= current_time):
+        base, other = candidate, existing
+    else:
+        base, other = existing, candidate
+    merged = dict(base)
+    for key, value in other.items():
+        merged.setdefault(key, value)
+    if _SLOT_FIELD in existing or _SLOT_FIELD in candidate:
+        existing_slot = existing.get(_SLOT_FIELD)
+        candidate_slot = candidate.get(_SLOT_FIELD)
+        merged_war = _war_id(merged)
+        if merged_war is not None:
+            # A slot describes only the war the run forecast. The collector
+            # deliberately clears it when the war changes (collector.py:44-49),
+            # so a slot carried by the side describing a different war must not
+            # be claimed by a document describing the new war: the slot guard
+            # (orchestration.py:40-44) would keep reporting the new war as
+            # already forecast and delay its first cohort by up to one slot.
+            if _war_id(existing) not in (None, merged_war):
+                existing_slot = None
+            if _war_id(candidate) not in (None, merged_war):
+                candidate_slot = None
+        merged[_SLOT_FIELD] = _later_slot(existing_slot, candidate_slot)
+    for field in _SPEND_FIELDS:
+        if field in existing or field in candidate:
+            merged[field] = _max_spend(
+                existing.get(field),
+                candidate.get(field),
+                grouped=field == "daily_costs_by_group",
+            )
+    versions = [
+        value
+        for value in (existing.get("schema_version"), candidate.get("schema_version"))
+        if isinstance(value, int) and not isinstance(value, bool)
+    ]
+    if versions:
+        merged["schema_version"] = max(versions)
+    _write_json(current, merged)
+
+
 def _merge_quarantine_sidecars(generated_root: Path, data_root: Path) -> None:
     """Carry append-recovery audit records across the evaluate/persist boundary."""
     sources = [
@@ -244,7 +514,21 @@ def merge(generated_root: Path, data_root: Path) -> None:
     )
     for name in row_names:
         _merge_jsonl(data_root / name, generated_root / name, name)
-    for name in ("raw/latest.json", "state.json", "wars.json"):
+    _merge_cohorts(data_root / "cohorts.jsonl", generated_root / "cohorts.jsonl")
+    added, identical, differing = _copy_absent_tree(generated_root, data_root, "objects")
+    if added or identical or differing:
+        print(
+            f"objects: copied {added} missing file(s), {identical} already identical, "
+            f"{differing} left as-is (existing file differs; nothing overwritten)"
+        )
+    added, identical, replaced = _replace_cohort_evidence(generated_root, data_root)
+    if added or identical or replaced:
+        print(
+            f"raw/cohorts: copied {added} missing file(s), {identical} already identical, "
+            f"{replaced} replaced (artifact was the newer episode)"
+        )
+    _merge_state(data_root / "state.json", generated_root / "state.json")
+    for name in ("raw/latest.json", "wars.json"):
         generated = generated_root / name
         if generated.is_file():
             target = data_root / name

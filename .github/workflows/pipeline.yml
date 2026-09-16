@@ -10,10 +10,6 @@ on:
 
 permissions: {}
 
-concurrency:
-  group: foxhole-data-pipeline
-  cancel-in-progress: false
-
 jobs:
   evaluate:
     runs-on: ubuntu-latest
@@ -61,6 +57,17 @@ jobs:
     needs: evaluate
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # `data/` write lock: the fetch/rebase/push in persist-data.sh must stay
+    # mutually exclusive, so this group is a single-writer lock — but it only
+    # needs to cover this commit, not the collection phase before it. Held at
+    # workflow level it also serialised the multi-minute collection, and
+    # cancelling queued work is how scheduled polls and dispatched replays were
+    # lost. `queue: max` lets every pending persist wait its turn instead of
+    # displacing the older pending one.
+    concurrency:
+      group: foxhole-data-pipeline
+      cancel-in-progress: false
+      queue: max
     permissions:
       contents: read
     steps:
