@@ -870,10 +870,19 @@ class ForecastPersistWorkflowTests(unittest.TestCase):
         persist = workflow.split("\n  persist:\n", 1)[1].split("\n  audit:\n", 1)[0]
         self.assertIn("path: /tmp/foxhole-forecast-data", persist)
         self.assertNotIn("path: .\n", persist)
-        self.assertIn("test -f /tmp/foxhole-forecast-data/cohorts.jsonl", persist)
-        self.assertIn("test -f /tmp/foxhole-forecast-data/raw/latest.json", persist)
+        # `upload-artifact` roots the archive at the least common ancestor of its
+        # path list.  This workflow uploads `data/...` and `.workflow/...`, so the
+        # artifact keeps its `data/` prefix (unlike the collection artifact).  The
+        # step must therefore resolve the layout before merging, and a missing
+        # root must fail loudly with the tree rather than a bare non-zero exit.
+        self.assertIn("artifact=/tmp/foxhole-forecast-data", persist)
+        self.assertIn('if [ -f "$artifact/data/cohorts.jsonl" ]; then', persist)
+        self.assertIn('artifact="$artifact/data"', persist)
+        self.assertIn('test -f "$artifact/cohorts.jsonl"', persist)
+        self.assertIn('test -f "$artifact/raw/latest.json"', persist)
+        self.assertIn("find /tmp/foxhole-forecast-data -maxdepth 3", persist)
         self.assertIn(
-            "python3 .github/scripts/merge-generated-data.py /tmp/foxhole-forecast-data data",
+            'python3 .github/scripts/merge-generated-data.py "$artifact" data',
             persist,
         )
         self.assertLess(
