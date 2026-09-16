@@ -117,9 +117,11 @@ def _provider_body_error_detail(raw: Any, api_key: str | None = None) -> str | N
         return f"upstream error: response body is not an object ({type(raw).__name__})"
     error = raw.get("error")
     choices = raw.get("choices")
-    if not isinstance(error, (dict, str)) and isinstance(choices, list) and choices:
-        return None
-    if not isinstance(error, (dict, str)):
+    if not error:
+        # A falsy ``error`` (absent, null, "", {}, []) is not an envelope; the
+        # ordinary choices check decides. Any truthy value still signals failure.
+        if isinstance(choices, list) and choices:
+            return None
         if choices is None:
             return "upstream error: response contained no choices"
         if isinstance(choices, list):
@@ -131,16 +133,21 @@ def _provider_body_error_detail(raw: Any, api_key: str | None = None) -> str | N
     return _provider_error_envelope_detail(error, api_key)
 
 
-def _provider_error_envelope_detail(error: dict[str, Any] | str, api_key: str | None) -> str:
+def _provider_error_envelope_detail(error: Any, api_key: str | None) -> str:
     """Render a redacted ``error`` envelope as one triage-readable line."""
     if isinstance(error, str):
         detail = _redact_provider_error(error, api_key).strip()
-        return f"upstream error: {detail[:1000]}" if detail else "upstream error"
+        return (f"upstream error: {detail}" if detail else "upstream error")[:1000]
+    if not isinstance(error, dict):
+        # Any other truthy value (number, boolean, list) still signals failure;
+        # JSON-derived values always serialize.
+        detail = _redact_provider_error(json.dumps(error, separators=(",", ":")), api_key)
+        return f"upstream error: {detail}"[:1000]
     try:
         # Reuse the shared redactor so key-named secrets never reach stored text.
         envelope = json.loads(_redact_provider_error(json.dumps(error), api_key))
     except (TypeError, ValueError):
-        return f"upstream error: {_redact_provider_error(str(error), api_key)[:1000]}"
+        return f"upstream error: {_redact_provider_error(str(error), api_key)}"[:1000]
     code = envelope.get("code")
     kind = envelope.get("type")
     metadata = envelope.get("metadata")
@@ -156,8 +163,11 @@ def _provider_error_envelope_detail(error: dict[str, Any] | str, api_key: str | 
     if isinstance(kind, str) and kind.strip():
         head += f" ({kind.strip()})"
     if isinstance(message, str) and message.strip():
-        return f"{head}: {message.strip()[:1000]}"
-    return f"{head}: {json.dumps(envelope, separators=(',', ':'))[:1000]}"
+        detail = f"{head}: {message.strip()}"
+    else:
+        detail = f"{head}: {json.dumps(envelope, separators=(',', ':'))}"
+    # Provider-controlled fields must never produce an unbounded stored error.
+    return detail[:1000]
 
 
 class ModelProvider:
