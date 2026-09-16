@@ -4,7 +4,12 @@ import json
 import unittest
 from unittest.mock import patch
 
-from foxhole_forecast.config import Settings, load_models
+from foxhole_forecast.config import (
+    Settings,
+    load_dashboard_hidden_series,
+    load_dashboard_series_aliases,
+    load_models,
+)
 from foxhole_forecast.forecasting import _transient_provider_failure
 from foxhole_forecast.providers import (
     ModelProvider,
@@ -210,6 +215,40 @@ class ProviderTests(unittest.TestCase):
             models["deepseek-v4-flash"]["budget_group"],
             models["deepseek-flash"]["budget_group"],
         )
+
+    def test_retired_deepseek_v4_flash_series_is_configured_but_disabled(self) -> None:
+        """Pin the retirement so re-enabling is a deliberate, reviewed edit."""
+        models = load_models()
+        retired = next(
+            model
+            for model in models
+            if model["series_id"] == "deepseek-v4-flash-direct-json-event-v5"
+        )
+
+        self.assertIs(retired.get("enabled"), False)
+        self.assertEqual(retired["model"], "deepseek-v4-flash")
+        self.assertEqual(retired["expected_returned_model"], "deepseek-v4-flash")
+        self.assertEqual(retired["budget_group"], "deepseek-v4-flash-direct")
+        self.assertEqual(retired["max_paid_usd_per_day"], 0.5)
+        self.assertIs(retired.get("catalog_retirement_skip"), True)
+        self.assertEqual(
+            load_dashboard_series_aliases().get(
+                "deepseek-v4-flash-direct-json-event-v4"
+            ),
+            "deepseek-v4-flash-direct-json-event-v5",
+        )
+        self.assertIn(
+            "deepseek-v4-flash-direct-json-event-v4", load_dashboard_hidden_series()
+        )
+        enabled_series = {
+            model["series_id"] for model in models if model.get("enabled", True)
+        }
+        self.assertNotIn("deepseek-v4-flash-direct-json-event-v5", enabled_series)
+        enabled_models = {
+            model["model"] for model in models if model.get("enabled", True)
+        }
+        self.assertNotIn("deepseek-v4-flash", enabled_models)
+        self.assertIn("deepseek-flash", enabled_models)
 
     def test_gemini_fallback_cost_uses_current_openrouter_rate(self) -> None:
         cost = _cost(

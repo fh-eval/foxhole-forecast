@@ -123,6 +123,132 @@ class ForecastBudgetTests(unittest.TestCase):
         self.assertFalse(result["KEY:deepseek-v4-flash"]["available"])
         self.assertTrue(result["KEY"]["available"])
 
+    def test_real_config_cohort_excludes_the_disabled_v4_flash_series(self) -> None:
+        models = [model for model in load_models() if model["gateway"] == "deepseek"]
+        series_ids = {model["series_id"] for model in models}
+        self.assertIn("deepseek-v4-flash-direct-json-event-v5", series_ids)
+        self.assertIn("deepseek-v4.1-flash-direct-json-event-v1", series_ids)
+        packet = {
+            "cutoff": "2026-08-22T03:10:00Z",
+            "war": {"warId": "war", "warNumber": 1},
+            "history_hours_available": 5,
+            "regions": [{"map_name": "TestHex"}],
+        }
+        calls = []
+        catalog_payload = {"data": [{"id": "deepseek-flash"}]}
+
+        class ProviderStub:
+            def __init__(self, config, _settings):
+                self.config = config
+                self.attempts = []
+                self.accumulated_cost = 0.0
+
+            def model_catalog(self):
+                return catalog_payload
+
+            def complete_json(self, _messages, schema_name, _schema):
+                calls.append(self.config["model"])
+                parsed = (
+                    {
+                        "headline": "h",
+                        "war_summary": "s",
+                        "selected_regions": ["TestHex"],
+                    }
+                    if schema_name == "foxhole_war_overview"
+                    else {"predictions": [], "strategic_advice": []}
+                )
+                raw = {
+                    "model": self.config["model"],
+                    "choices": [{"message": {"content": json.dumps(parsed)}}],
+                    "usage": {},
+                }
+                self.attempts.append(
+                    {
+                        "stage": schema_name,
+                        "raw_response": raw,
+                        "requested_model": self.config["model"],
+                        "returned_model": self.config["model"],
+                        "usage": {},
+                        "cost_usd": 0.0,
+                    }
+                )
+                return ProviderResponse(
+                    parsed,
+                    raw,
+                    self.config["model"],
+                    self.config["model"],
+                    None,
+                    {},
+                    0.0,
+                )
+
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            "os.environ", {"DEEPSEEK_KEY": "secret"}
+        ), patch(
+            "foxhole_forecast.forecasting.DATA_DIR", Path(directory)
+        ), patch(
+            "foxhole_forecast.forecasting.read_json",
+            return_value={
+                "packet_type": "detail_source",
+                "cutoff": packet["cutoff"],
+                "war": packet["war"],
+            },
+        ), patch(
+            "foxhole_forecast.forecasting.forecast_due", return_value=(True, "slot")
+        ), patch(
+            "foxhole_forecast.forecasting.load_models", return_value=models
+        ), patch(
+            "foxhole_forecast.forecasting.build_scout_packet", return_value=packet
+        ), patch(
+            "foxhole_forecast.forecasting.build_detail_source",
+            return_value={
+                "packet_type": "detail_source",
+                "cutoff": packet["cutoff"],
+                "war": packet["war"],
+            },
+        ), patch(
+            "foxhole_forecast.forecasting.current_strategic_base_ids", return_value=[]
+        ), patch(
+            "foxhole_forecast.forecasting.ModelProvider", ProviderStub
+        ), patch(
+            "foxhole_forecast.forecasting.validate_scout", return_value=None
+        ), patch(
+            "foxhole_forecast.forecasting.validate_forecast", return_value=None
+        ), patch(
+            "foxhole_forecast.forecasting.build_detail_packet",
+            return_value={
+                "regions": {},
+                "selected_region_hourly_series": {},
+                "selected_regions": ["TestHex"],
+                "war": packet["war"],
+                "cutoff": packet["cutoff"],
+            },
+        ), patch(
+            "foxhole_forecast.forecasting._drop_invalid_predictions",
+            side_effect=lambda value, _packet: (value, []),
+        ), patch(
+            "foxhole_forecast.forecasting._filter_forecast_output",
+            side_effect=lambda value, _packet, _settings: (value, [], []),
+        ), patch(
+            "foxhole_forecast.forecasting._freeze_evidence",
+            side_effect=lambda value, *_args: value,
+        ), patch(
+            "foxhole_forecast.forecasting.orchestration.war_is_active",
+            return_value=True,
+        ):
+            result = run_forecast_cohort(Settings.load(), force=True)
+            ledger = read_ledger("model_runs", data_dir=Path(directory))
+
+        self.assertEqual(set(calls), {"deepseek-flash"})
+        self.assertEqual(
+            [entry["series_id"] for entry in result["models"]],
+            ["deepseek-v4.1-flash-direct-json-event-v1"],
+        )
+        self.assertEqual(
+            {row["series_id"] for row in ledger},
+            {"deepseek-v4.1-flash-direct-json-event-v1"},
+        )
+
     def test_delayed_replay_is_append_only_and_accepts_verified_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             data = Path(directory)
