@@ -425,6 +425,52 @@ class ForecastBudgetTests(unittest.TestCase):
                     expected,
                 )
 
+    def test_parse_layer_failures_retry_but_rejections_and_other_errors_do_not(
+        self,
+    ) -> None:
+        """Unparseable model content retries; validation and other errors do not."""
+        cases = {
+            "empty content": (
+                "JSONDecodeError: Expecting value: line 1 column 1 (char 0)",
+                True,
+            ),
+            "truncated content": (
+                "JSONDecodeError: Unterminated string starting at: line 1 "
+                "column 3 (char 2)",
+                True,
+            ),
+            "content past the first object": (
+                "JSONDecodeError: Extra data: line 1 column 12 (char 11)",
+                True,
+            ),
+            "json that is not an object": (
+                "ValueError: Model output must be a JSON object",
+                True,
+            ),
+            "validation rejection": (
+                "ValidationError: unknown base: base-9",
+                False,
+            ),
+            "unrelated value error": (
+                "ValueError: Unsupported gateway: mystery",
+                False,
+            ),
+            "near miss on the object message": (
+                "ValueError: Model output must be a JSON object or array",
+                False,
+            ),
+            "identity mismatch": (
+                "ModelIdentityMismatch: expected google/gemini-3.8-flash, got None",
+                False,
+            ),
+        }
+        for label, (error, expected) in cases.items():
+            with self.subTest(error=label):
+                self.assertEqual(
+                    _transient_provider_failure({"error": error}),
+                    expected,
+                )
+
     def test_automatic_recovery_retries_one_free_transient_failure(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             data = Path(directory)
@@ -1486,6 +1532,196 @@ class AutomaticTransientRecoveryTests(unittest.TestCase):
             rows = read_ledger("model_runs", data_dir=data)
             self.assertEqual(len(rows), 2)
             self.assertEqual(rows[1]["replay_of"], run_id)
+
+    def test_automatic_recovery_retries_an_unparseable_paid_run_from_its_bundle(
+        self,
+    ) -> None:
+        """The empty-content shape behind the 2026-09-14 incident retries."""
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            run_id = self._invalid_run_with_frozen_bundle(
+                data,
+                "JSONDecodeError: Expecting value: line 1 column 1 (char 0)",
+            )
+            provider, response, forecast = self._replay_service()
+
+            with patch("foxhole_forecast.forecasting.DATA_DIR", data), patch(
+                "foxhole_forecast.forecasting.load_models",
+                return_value=[{"series_id": "model-1", "paid": True}],
+            ), patch(
+                "foxhole_forecast.forecasting.ModelProvider", return_value=provider
+            ), patch(
+                "foxhole_forecast.forecasting._call_validated",
+                return_value=(response, forecast),
+            ), patch(
+                "foxhole_forecast.forecasting._freeze_evidence",
+                return_value=forecast,
+            ):
+                result = recover_invalid_runs(
+                    Settings.load(), "cohort-1", data / "snapshot.json"
+                )
+
+            action = result["actions"][0]
+            self.assertEqual(result["status"], "recovered")
+            self.assertEqual(action["action"], "replayed")
+            self.assertTrue(action["paid_retry"])
+            self.assertEqual(action["retry_trigger"], "automatic_transient_recovery")
+            self.assertEqual(action["replay_of"], run_id)
+            rows = read_ledger("model_runs", data_dir=data)
+            self.assertEqual(len(rows), 2)
+            self.assertEqual(rows[1]["status"], "valid")
+            self.assertEqual(rows[1]["replay_of"], run_id)
+
+    def test_automatic_recovery_blocks_a_spent_budget_for_an_unparseable_paid_run(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            self._invalid_run_with_frozen_bundle(
+                data,
+                "JSONDecodeError: Extra data: line 1 column 12 (char 11)",
+            )
+            state = {
+                "daily_costs_by_group": {
+                    datetime.now(UTC).date().isoformat(): {"test-paid": 0.5}
+                }
+            }
+            write_json(data / "state.json", state)
+
+            with patch("foxhole_forecast.forecasting.DATA_DIR", data), patch(
+                "foxhole_forecast.forecasting.load_models",
+                return_value=[{"series_id": "model-1", "paid": True}],
+            ), patch("foxhole_forecast.forecasting.ModelProvider") as provider_cls:
+                result = recover_invalid_runs(
+                    Settings.load(), "cohort-1", data / "snapshot.json"
+                )
+
+            provider_cls.assert_not_called()
+            action = result["actions"][0]
+            self.assertEqual(result["status"], "unresolved")
+            self.assertEqual(action["reason"], "paid_retry_budget_exceeded")
+            self.assertTrue(action["paid_retry"])
+            self.assertEqual(action["retry_trigger"], "automatic_transient_recovery")
+            self.assertEqual(read_json(data / "state.json"), state)
+            self.assertEqual(len(read_ledger("model_runs", data_dir=data)), 1)
+
+    def test_automatic_recovery_short_circuits_an_unparseable_paid_run(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            self._invalid_run_with_frozen_bundle(
+                data,
+                "ValueError: Model output must be a JSON object",
+                retry_history=True,
+            )
+
+            with patch("foxhole_forecast.forecasting.DATA_DIR", data), patch(
+                "foxhole_forecast.forecasting.load_models",
+                return_value=[{"series_id": "model-1", "paid": True}],
+            ), patch("foxhole_forecast.forecasting.ModelProvider") as provider_cls:
+                result = recover_invalid_runs(
+                    Settings.load(), "cohort-1", data / "snapshot.json"
+                )
+
+            provider_cls.assert_not_called()
+            action = result["actions"][0]
+            self.assertEqual(result["status"], "unresolved")
+            self.assertEqual(action["reason"], "automatic_retry_already_attempted")
+            self.assertNotIn("retry_trigger", action)
+            self.assertEqual(len(read_ledger("model_runs", data_dir=data)), 1)
+
+    def test_automatic_recovery_retries_an_unparseable_free_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            run_id = "cohort-1:model-1"
+            original = {
+                "run_id": run_id,
+                "cohort_id": "cohort-1",
+                "series_id": "model-1",
+                "status": "invalid",
+                "created_at": "2026-01-02T00:05:00Z",
+                "error": (
+                    "JSONDecodeError: Unterminated string starting at: line 1 "
+                    "column 3 (char 2)"
+                ),
+                "calls": [],
+            }
+            write_jsonl(data / "model_runs.jsonl", [original])
+            write_jsonl(
+                data / "cohorts.jsonl",
+                [
+                    {
+                        "cohort_id": "cohort-1",
+                        "models": [{"run_id": run_id, "status": "invalid"}],
+                    }
+                ],
+            )
+            scout = {
+                "cutoff": "2026-01-02T00:00:00Z",
+                "war": {"warId": "war-1"},
+            }
+            write_json(
+                cohort_evidence_path(
+                    data / "raw" / "cohorts" / "cohort-1", "model-1-scout-packet"
+                ),
+                scout,
+            )
+            snapshot = data / "frozen-latest.json"
+            write_json(
+                snapshot,
+                {"observed_at": scout["cutoff"], "war": {"warId": "war-1"}},
+            )
+            replacement = {
+                **original,
+                "status": "valid",
+                "forecast": {"predictions": [{"base_id": "base-1"}]},
+            }
+            replacement.pop("error")
+
+            with patch("foxhole_forecast.forecasting.DATA_DIR", data), patch(
+                "foxhole_forecast.forecasting.load_models",
+                return_value=[{"series_id": "model-1", "paid": False}],
+            ), patch(
+                "foxhole_forecast.forecasting._run_model", return_value=replacement
+            ) as run_model:
+                result = recover_invalid_runs(Settings.load(), "cohort-1", snapshot)
+
+            action = result["actions"][0]
+            self.assertEqual(result["status"], "recovered")
+            self.assertEqual(action["action"], "retried")
+            self.assertFalse(action["paid_retry"])
+            self.assertEqual(run_model.call_count, 1)
+            self.assertEqual(
+                read_jsonl(data / "model_runs.jsonl")[0]["status"], "valid"
+            )
+
+    def test_automatic_recovery_escalates_rejections_and_other_value_errors(
+        self,
+    ) -> None:
+        for label, error in {
+            "validation rejection": "ValidationError: unknown base: base-9",
+            "unrelated value error": "ValueError: Unsupported gateway: mystery",
+        }.items():
+            with self.subTest(error=label), tempfile.TemporaryDirectory() as directory:
+                data = Path(directory)
+                self._invalid_run_with_frozen_bundle(data, error)
+
+                with patch("foxhole_forecast.forecasting.DATA_DIR", data), patch(
+                    "foxhole_forecast.forecasting.load_models",
+                    return_value=[{"series_id": "model-1", "paid": True}],
+                ), patch("foxhole_forecast.forecasting.ModelProvider") as provider_cls:
+                    result = recover_invalid_runs(
+                        Settings.load(), "cohort-1", data / "snapshot.json"
+                    )
+
+                provider_cls.assert_not_called()
+                action = result["actions"][0]
+                self.assertEqual(result["status"], "unresolved")
+                self.assertEqual(action["action"], "unresolved")
+                self.assertEqual(action["reason"], "non_transient_failure")
+                self.assertNotIn("retry_trigger", action)
+                self.assertEqual(len(read_ledger("model_runs", data_dir=data)), 1)
 
 
 if __name__ == "__main__":

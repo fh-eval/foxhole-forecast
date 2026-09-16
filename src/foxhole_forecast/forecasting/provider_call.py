@@ -51,6 +51,18 @@ _BODY_ERROR_MARKER = "upstream error"
 # ("... within the 900-second timeout limit") is the live example.
 _BODY_TIMEOUT_MARKERS = ("(timeout)", "timeout limit", "timed out")
 
+# Parse-layer failures: the model answered, but its own content could not be
+# turned into a JSON object.  providers raises these from
+# _parse_json_content_with_metadata and the run row stores the rendered text.
+# Any JSONDecodeError means the content was not JSON at all, which includes
+# empty content, where json.loads("") reports
+# "Expecting value: line 1 column 1 (char 0)".
+_PARSE_ERROR_PREFIX = "JSONDecodeError:"
+# The parser's single non-decoder refusal, matched on its exact stored text so
+# that unrelated ValueError text (configuration, gateway, budget, validation)
+# stays non-retryable.
+_MODEL_OUTPUT_NOT_OBJECT = "ValueError: Model output must be a JSON object"
+
 
 def _transient_body_failure(error: str) -> bool:
     """Return whether a body-level provider failure is a retryable transport one.
@@ -70,6 +82,20 @@ def _transient_body_failure(error: str) -> bool:
     return any(marker in error for marker in _BODY_TIMEOUT_MARKERS)
 
 
+def _retryable_parse_failure(error: str) -> bool:
+    """Return whether stored text is a model-output parse failure.
+
+    Two shapes qualify: the model's content was not JSON at all (any
+    ``JSONDecodeError``, empty content included), or it parsed to something
+    other than an object, which the parser reports with one exact message.
+    Validation-rejected content, identity mismatches, and unrecognised
+    ``ValueError`` text stay permanent.
+    """
+    if error.startswith(_PARSE_ERROR_PREFIX):
+        return True
+    return error == _MODEL_OUTPUT_NOT_OBJECT
+
+
 def _transient_provider_failure(
     run: dict[str, Any], runs: list[dict[str, Any]] | None = None
 ) -> bool:
@@ -80,6 +106,8 @@ def _transient_provider_failure(
     if re.search(r"Provider returned HTTP (?:408|429|500|502|503|504)\b", error):
         return True
     if _transient_body_failure(error):
+        return True
+    if _retryable_parse_failure(error):
         return True
     if (
         "Provider returned HTTP 404" in error

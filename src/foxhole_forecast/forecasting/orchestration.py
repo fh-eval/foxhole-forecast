@@ -619,9 +619,11 @@ def recover_invalid_runs(
     """Attempt deterministic salvage and one retry for one cohort.
 
     A retry stays automatic for a clearly transient failure with no retry
-    history.  With a frozen replay bundle the model's own paid configuration
-    does not force the incident path: the replay runs under the existing daily
-    budget guard and the record carries ``retry_trigger``.
+    history: a transport- or body-level provider failure, or model output that
+    could not be parsed into a JSON object.  With a frozen replay bundle the
+    model's own paid configuration does not force the incident path: the replay
+    runs under the existing daily budget guard and the record carries
+    ``retry_trigger``.
     """
     models = {model["series_id"]: model for model in _pkg.load_models()}
     cohorts = _pkg.read_jsonl(_pkg.DATA_DIR / "cohorts.jsonl")

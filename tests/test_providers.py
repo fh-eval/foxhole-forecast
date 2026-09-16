@@ -640,6 +640,49 @@ class ProviderTests(unittest.TestCase):
                     expected,
                 )
 
+    def test_stored_parse_errors_drive_the_transient_retry_rule(self) -> None:
+        """Real parse failures must classify as retryable from their stored text."""
+        config = {
+            "gateway": "openrouter",
+            "model": "google/gemini-3.8-flash",
+            "api_key_env": "TEST_OPENROUTER_KEY",
+        }
+        cases = {
+            "empty content": ("", True),
+            "prose without json": ("No bets are warranted this round.", True),
+            "json that is not an object": ("[1, 2, 3]", True),
+        }
+        for label, (content, expected) in cases.items():
+            with self.subTest(content=label):
+                payload = {
+                    "choices": [{"message": {"content": content}}],
+                    "model": "google/gemini-3.8-flash",
+                    "usage": {"prompt_tokens": 12, "completion_tokens": 3},
+                }
+                with patch.dict(
+                    "os.environ", {"TEST_OPENROUTER_KEY": "secret"}
+                ), patch(
+                    "urllib.request.urlopen", return_value=_StaticResponse(payload)
+                ):
+                    provider = ModelProvider(config, Settings.load())
+                    with self.assertRaises(
+                        (json.JSONDecodeError, ValueError)
+                    ) as raised:
+                        provider.complete_json(
+                            [{"role": "user", "content": "Return JSON"}],
+                            "test",
+                            {"type": "object"},
+                        )
+                stored = provider.attempts[0]["error"]
+                self.assertEqual(
+                    stored,
+                    f"{type(raised.exception).__name__}: {raised.exception}",
+                )
+                self.assertEqual(
+                    _transient_provider_failure({"error": stored}),
+                    expected,
+                )
+
     def test_empty_choices_body_raises_typed_provider_error(self) -> None:
         config = {
             "gateway": "deepseek",
