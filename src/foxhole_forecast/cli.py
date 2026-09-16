@@ -70,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     recover = subcommands.add_parser(
         "recover-model-runs",
-        help="Attempt safe salvage and one free-model retry for a cohort",
+        help="Attempt safe salvage and one deterministic retry for a cohort",
     )
     recover.add_argument("--cohort-id", required=True)
     recover.add_argument("--snapshot", type=Path, required=True)

@@ -37,6 +37,16 @@ from .replay import _canonical_hash, _replay_bundle_path, _settings_from_payload
 import foxhole_forecast.forecasting as _pkg
 
 
+# replay_invalid_run refuses a paid replay that would push its ledger past the
+# daily cap with this phrase.  recover_invalid_runs matches it to record a
+# budget refusal as an unresolved action instead of aborting the recovery step.
+_PAID_REPLAY_BUDGET_GUARD = "The paid replay would exceed its daily budget guard"
+# Marks a replay this workflow authorized itself for a clearly transient
+# failure.  It is recorded on the recovery action and, additively, on the replay
+# ledger row, so a paid spend is never mistaken for an incident-authorized one.
+_AUTOMATIC_TRANSIENT_RECOVERY = "automatic_transient_recovery"
+
+
 def forecast_due(state: dict[str, Any], settings: Settings, now: datetime | None = None) -> tuple[bool, str]:
     current = (now or datetime.now(UTC)).astimezone(UTC)
     slot_hour = current.hour - current.hour % settings.forecast_interval_hours
@@ -352,8 +362,14 @@ def replay_invalid_run(
     allow_paid: bool = False,
     allow_manual_replay: bool = False,
     max_tokens_override: int | None = None,
+    retry_trigger: str | None = None,
 ) -> dict[str, Any]:
-    """Append a delayed replay that can observe only its frozen cutoff bundle."""
+    """Append a delayed replay that can observe only its frozen cutoff bundle.
+
+    ``retry_trigger`` is additive audit metadata: callers that do not pass one
+    produce the same row as before, and the automatic recovery path uses it to
+    record why a paid replay ran without an incident dispatch.
+    """
     runs = _pkg.read_ledger("model_runs", data_dir=_pkg.DATA_DIR)
     original = next((row for row in runs if row.get("run_id") == run_id), None)
     if original is None:
@@ -437,7 +453,9 @@ def replay_invalid_run(
             replay_settings, model_config, state, generated_at.date().isoformat()
         )
         if replay_spent + reserve > daily_limit:
-            raise ValueError("The paid replay would exceed its daily budget guard")
+            # Verbatim phrase: recover_invalid_runs matches it to tell a budget
+            # refusal apart from a bundle problem and record the former.
+            raise ValueError(_PAID_REPLAY_BUDGET_GUARD)
     base = {
         "schema_version": 1,
         "run_id": replay_id,
@@ -461,6 +479,9 @@ def replay_invalid_run(
         "replay_bundle_sha256": _canonical_hash(bundle),
         "replay_input_hashes": copy.deepcopy(inputs),
         "replay_config_overrides": replay_config_overrides,
+        # Additive audit marker, absent from every caller that does not pass
+        # one, so incident-authorized replays keep their existing row shape.
+        **({"retry_trigger": retry_trigger} if retry_trigger else {}),
         **(
             {
                 "manual_replay_authorized": True,
@@ -608,7 +629,16 @@ def _has_stored_forecast_response(run: dict[str, Any]) -> bool:
 def recover_invalid_runs(
     settings: Settings, cohort_id: str, snapshot_path: Path
 ) -> dict[str, Any]:
-    """Attempt deterministic salvage and one free-model retry for one cohort."""
+    """Attempt deterministic salvage and one retry for one cohort.
+
+    A retry stays automatic for a clearly transient failure with no retry
+    history: a transport- or body-level provider failure, or model output that
+    could not be parsed into a JSON object.  With a frozen replay bundle the
+    model's own paid configuration does not force the incident path: the replay
+    runs under the existing daily budget guard, and the trigger is recorded on
+    both the returned action and the appended replay row so the spend stays
+    auditable after the workflow artifact expires.
+    """
     models = {model["series_id"]: model for model in _pkg.load_models()}
     cohorts = _pkg.read_jsonl(_pkg.DATA_DIR / "cohorts.jsonl")
     cohort = next((row for row in cohorts if row.get("cohort_id") == cohort_id), None)
@@ -659,21 +689,55 @@ def recover_invalid_runs(
                 _pkg.DATA_DIR / "raw" / "cohorts" / run["cohort_id"],
                 run["series_id"],
             )
-            if bundle_path.exists() and model.get("paid", False):
-                actions.append(
-                    {
-                        "run_id": run_id,
-                        "action": "unresolved",
-                        "reason": "paid_replay_requires_incident_authorization",
-                        "salvage_error": salvage_error,
-                    }
-                )
-                continue
-            result = (
-                replay_invalid_run(settings, run_id)
-                if bundle_path.exists()
-                else retry_invalid_run(settings, run_id, snapshot_path)
+            bundled = bundle_path.exists()
+            paid = bool(model.get("paid", False))
+            # A paid frozen replay is normally held back for an incident and an
+            # authorized dispatch.  This automatic path is the one exception,
+            # so the audit record names the trigger and a paid spend is never
+            # mistaken for an incident-authorized replay.
+            trigger = (
+                {"retry_trigger": _AUTOMATIC_TRANSIENT_RECOVERY}
+                if bundled and paid
+                else {}
             )
+            if not bundled:
+                result = retry_invalid_run(settings, run_id, snapshot_path)
+            elif not paid:
+                result = replay_invalid_run(settings, run_id)
+            else:
+                # A clearly transient failure with no retry history replays
+                # from its cutoff-exact frozen bundle without waiting for an
+                # incident and a paid triage report.  replay_invalid_run keeps
+                # enforcing its own per-series/gateway daily budget guard, and
+                # the trigger it records is what distinguishes this spend from
+                # an incident-authorized replay.
+                try:
+                    result = replay_invalid_run(
+                        settings,
+                        run_id,
+                        allow_paid=True,
+                        retry_trigger=_AUTOMATIC_TRANSIENT_RECOVERY,
+                    )
+                except ValueError as error:
+                    # A refused automatic replay stays unresolved for the
+                    # incident path.  The budget guard raises before any
+                    # provider call, so a refusal never spends.
+                    actions.append(
+                        {
+                            "run_id": run_id,
+                            "action": "unresolved",
+                            "reason": (
+                                "paid_retry_budget_exceeded"
+                                if _PAID_REPLAY_BUDGET_GUARD in str(error)
+                                else "replay_rejected"
+                            ),
+                            "paid_retry": paid,
+                            **trigger,
+                            "salvage_error": salvage_error,
+                            "replay_error": f"{type(error).__name__}: {error}",
+                        }
+                    )
+                    continue
             actions.append(
                 {
                     "run_id": run_id,
@@ -686,8 +750,9 @@ def recover_invalid_runs(
                         if result["status"] == "valid"
                         else "retry_failed"
                     ),
-                    "paid_retry": bool(model.get("paid", False)),
+                    "paid_retry": paid,
                     "salvage_error": salvage_error,
+                    **trigger,
                     **result,
                 }
             )

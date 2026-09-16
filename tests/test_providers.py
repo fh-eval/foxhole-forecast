@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from foxhole_forecast.config import Settings, load_models
+from foxhole_forecast.forecasting import _transient_provider_failure
 from foxhole_forecast.providers import (
     ModelProvider,
     ModelIdentityMismatch,
@@ -573,6 +574,129 @@ class ProviderTests(unittest.TestCase):
         self.assertNotIn("got None", message)
         self.assertEqual(provider.attempts[0]["raw_response"], envelope)
         self.assertEqual(provider.attempts[0]["error"], f"ProviderBodyError: {message}")
+
+    def test_stored_body_errors_drive_the_transient_retry_rule(self) -> None:
+        """The stored text of a real envelope classifies like its HTTP twin."""
+        cases = {
+            "timeout envelope": (
+                {
+                    "gateway": "openrouter",
+                    "model": "google/gemini-3.8-flash",
+                    "api_key_env": "TEST_OPENROUTER_KEY",
+                },
+                {
+                    "error": {
+                        "code": 504,
+                        "message": "A Timeout Occurred",
+                        "metadata": {"error_type": "timeout"},
+                    }
+                },
+                True,
+            ),
+            "authentication envelope that mentions a timeout": (
+                {
+                    "gateway": "openrouter",
+                    "model": "google/gemini-3.8-flash",
+                    "api_key_env": "TEST_OPENROUTER_KEY",
+                },
+                {
+                    "error": {
+                        "code": 403,
+                        "message": "Your session timed out. Please sign in again.",
+                        "metadata": {"error_type": "authentication_error"},
+                    }
+                },
+                False,
+            ),
+            "code-less queue timeout": (
+                {
+                    "gateway": "deepseek",
+                    "model": "deepseek-flash",
+                    "api_key_env": "TEST_DEEPSEEK_KEY",
+                },
+                {
+                    "error": {
+                        "message": (
+                            "We were unable to start processing your request within "
+                            "the 900-second timeout limit. Please try again later."
+                        )
+                    }
+                },
+                True,
+            ),
+            "empty choices body": (
+                {
+                    "gateway": "openrouter",
+                    "model": "google/gemini-3.8-flash",
+                    "api_key_env": "TEST_OPENROUTER_KEY",
+                },
+                {"choices": []},
+                False,
+            ),
+        }
+        for label, (config, envelope, expected) in cases.items():
+            with self.subTest(envelope=label):
+                with patch.dict(
+                    "os.environ", {config["api_key_env"]: "secret"}
+                ), patch(
+                    "urllib.request.urlopen", return_value=_StaticResponse(envelope)
+                ):
+                    provider = ModelProvider(config, Settings.load())
+                    with self.assertRaises(ProviderBodyError) as raised:
+                        provider.complete_json(
+                            [{"role": "user", "content": "Return JSON"}],
+                            "test",
+                            {"type": "object"},
+                        )
+                stored = provider.attempts[0]["error"]
+                self.assertEqual(stored, f"ProviderBodyError: {raised.exception}")
+                self.assertEqual(
+                    _transient_provider_failure({"error": stored}),
+                    expected,
+                )
+
+    def test_stored_parse_errors_drive_the_transient_retry_rule(self) -> None:
+        """Real parse failures must classify as retryable from their stored text."""
+        config = {
+            "gateway": "openrouter",
+            "model": "google/gemini-3.8-flash",
+            "api_key_env": "TEST_OPENROUTER_KEY",
+        }
+        cases = {
+            "empty content": ("", True),
+            "prose without json": ("No bets are warranted this round.", True),
+            "json that is not an object": ("[1, 2, 3]", True),
+        }
+        for label, (content, expected) in cases.items():
+            with self.subTest(content=label):
+                payload = {
+                    "choices": [{"message": {"content": content}}],
+                    "model": "google/gemini-3.8-flash",
+                    "usage": {"prompt_tokens": 12, "completion_tokens": 3},
+                }
+                with patch.dict(
+                    "os.environ", {"TEST_OPENROUTER_KEY": "secret"}
+                ), patch(
+                    "urllib.request.urlopen", return_value=_StaticResponse(payload)
+                ):
+                    provider = ModelProvider(config, Settings.load())
+                    with self.assertRaises(
+                        (json.JSONDecodeError, ValueError)
+                    ) as raised:
+                        provider.complete_json(
+                            [{"role": "user", "content": "Return JSON"}],
+                            "test",
+                            {"type": "object"},
+                        )
+                stored = provider.attempts[0]["error"]
+                self.assertEqual(
+                    stored,
+                    f"{type(raised.exception).__name__}: {raised.exception}",
+                )
+                self.assertEqual(
+                    _transient_provider_failure({"error": stored}),
+                    expected,
+                )
 
     def test_empty_choices_body_raises_typed_provider_error(self) -> None:
         config = {
