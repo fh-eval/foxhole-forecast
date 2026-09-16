@@ -599,6 +599,81 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(provider.attempts[0]["error"], f"ProviderBodyError: {message}")
         self.assertEqual(provider.attempts[0]["returned_model"], "deepseek-flash")
 
+    def test_unusable_choices_shapes_raise_typed_provider_error(self) -> None:
+        config = {
+            "gateway": "openrouter",
+            "model": "google/gemini-3.8-flash",
+            "api_key_env": "TEST_OPENROUTER_KEY",
+        }
+        cases = {
+            "object choices": ({"a": 1}, "non-list choices value (dict)"),
+            "string choices": ("nope", "non-list choices value (str)"),
+            "int choices": (5, "non-list choices value (int)"),
+            "bool choices": (True, "non-list choices value (bool)"),
+            "list entry": ([[1]], "non-object choices entry (list)"),
+            "int entry": ([1, 2], "non-object choices entry (int)"),
+            "empty entry object": ([{}], "no completion message content"),
+            "string message": ([{"message": "text"}], "no completion message content"),
+            "message without content": (
+                [{"message": {"role": "assistant"}}],
+                "no completion message content",
+            ),
+        }
+        for label, (choices, expected) in cases.items():
+            payload = {"choices": choices, "model": "google/gemini-3.8-flash", "usage": {}}
+            with self.subTest(choices=label):
+                with patch.dict("os.environ", {"TEST_OPENROUTER_KEY": "secret"}), patch(
+                    "urllib.request.urlopen", return_value=_StaticResponse(payload)
+                ):
+                    provider = ModelProvider(config, Settings.load())
+                    with self.assertRaises(ProviderBodyError) as raised:
+                        provider.complete_json(
+                            [{"role": "user", "content": "Return JSON"}],
+                            "test",
+                            {"type": "object"},
+                        )
+
+                message = str(raised.exception)
+                self.assertIn(expected, message)
+                for symptom in ("KeyError", "AttributeError", "TypeError", "IndexError"):
+                    self.assertNotIn(symptom, message)
+                self.assertEqual(provider.attempts[0]["error"], f"ProviderBodyError: {message}")
+                self.assertEqual(provider.attempts[0]["raw_response"], payload)
+                self.assertEqual(provider.attempts[0]["reasoning_trace_returned"], False)
+
+    def test_usable_choices_still_record_reasoning_trace(self) -> None:
+        config = {
+            "gateway": "openrouter",
+            "model": "google/gemini-3.8-flash",
+            "api_key_env": "TEST_OPENROUTER_KEY",
+        }
+        payload = {
+            "choices": [
+                {
+                    "message": {
+                        "content": "{\"ok\":true}",
+                        "reasoning_content": "trace",
+                    }
+                }
+            ],
+            "model": "google/gemini-3.8-flash",
+            "usage": {"completion_tokens_details": {"reasoning_tokens": 7}},
+        }
+        with patch.dict("os.environ", {"TEST_OPENROUTER_KEY": "secret"}), patch(
+            "urllib.request.urlopen", return_value=_StaticResponse(payload)
+        ):
+            provider = ModelProvider(config, Settings.load())
+            response = provider.complete_json(
+                [{"role": "user", "content": "Return JSON"}],
+                "test",
+                {"type": "object"},
+            )
+
+        self.assertEqual(response.parsed, {"ok": True})
+        self.assertIs(provider.attempts[0]["reasoning_trace_returned"], True)
+        self.assertEqual(provider.attempts[0]["reasoning_tokens"], 7)
+        self.assertNotIn("error", provider.attempts[0])
+
     def test_error_envelope_with_choices_present_still_raises_typed_error(self) -> None:
         config = {
             "gateway": "openrouter",

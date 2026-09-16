@@ -105,6 +105,14 @@ def _redact_provider_error(detail: str, api_key: str | None = None) -> str:
     return json.dumps(scrub(value), separators=(",", ":"), ensure_ascii=False)
 
 
+def _usable_completion_choice(choice: Any) -> bool:
+    """Return whether a ``choices`` entry carries message content to parse."""
+    if not isinstance(choice, dict):
+        return False
+    message = choice.get("message")
+    return isinstance(message, dict) and "content" in message
+
+
 def _provider_body_error_detail(raw: Any, api_key: str | None = None) -> str | None:
     """Describe a body-level provider failure, or return None for a completion.
 
@@ -120,12 +128,20 @@ def _provider_body_error_detail(raw: Any, api_key: str | None = None) -> str | N
     if not error:
         # A falsy ``error`` (absent, null, "", {}, []) is not an envelope; the
         # ordinary choices check decides. Any truthy value still signals failure.
-        if isinstance(choices, list) and choices:
+        if isinstance(choices, list) and choices and _usable_completion_choice(choices[0]):
             return None
         if choices is None:
             return "upstream error: response contained no choices"
-        if isinstance(choices, list):
+        if isinstance(choices, list) and not choices:
             return "upstream error: response contained an empty choices list"
+        if isinstance(choices, list):
+            entry = choices[0]
+            if isinstance(entry, dict):
+                return "upstream error: response contained no completion message content"
+            return (
+                "upstream error: response contained a non-object choices entry "
+                f"({type(entry).__name__})"
+            )
         return (
             "upstream error: response contained a non-list choices value "
             f"({type(choices).__name__})"
@@ -265,7 +281,14 @@ class ModelProvider:
         cost = _cost(self.config["model"], usage)
         self.accumulated_cost += cost
         prompt = json.dumps(messages, separators=(",", ":"), ensure_ascii=False)
-        response_message = (payload.get("choices") or [{}])[0].get("message", {})
+        choices = payload.get("choices")
+        response_message = (
+            choices[0]["message"]
+            if isinstance(choices, list)
+            and choices
+            and _usable_completion_choice(choices[0])
+            else {}
+        )
         reasoning_trace_returned = any(
             response_message.get(key) not in (None, "", [])
             for key in ("reasoning", "reasoning_content", "reasoning_details")
