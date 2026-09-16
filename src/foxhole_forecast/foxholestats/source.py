@@ -7,11 +7,17 @@ from typing import Any, Callable
 from urllib.request import Request, urlopen
 
 from ..storage import isoformat
-from .parse import EVENT_PATTERN
+from .parse import EVENT_PATTERN, NEUTRAL_EVENT_PATTERN
 
 SOURCE_URL = "https://www.foxholestats.com/?days=30&slim=1&lang=EN"
 RECOVERY_FETCH_TIMEOUT_SECONDS = 15
-RECOVERY_MAX_SOURCE_BYTES = 4_000_000
+# A sanity bound, not a recurring tripwire.  The source is a rolling 30-day
+# window of the current war, so it grows with the war: ~4.07 MB at war day 22
+# (war 140, 2026-09-16) while the window was still filling.  Leave a wide
+# margin so ordinary growth never fails a scheduled recovery run, and keep an
+# upper bound so a runaway or hostile response is still rejected before it is
+# read into memory.
+RECOVERY_MAX_SOURCE_BYTES = 24_000_000
 
 
 class RecoverySourceError(ValueError):
@@ -85,13 +91,22 @@ def _validate_recovery_source(
         raise RecoverySourceError("source_event_log_parse_incomplete")
     timestamps: list[int] = []
     source_ids: list[str] = []
+    neutral_event_count = 0
     for event in parsed:
         if not event.get("source_event_id"):
             raise RecoverySourceError("source_event_missing_id")
         source_ids.append(str(event["source_event_id"]))
-        match = EVENT_PATTERN.match(str(event.get("text", "")))
+        text = str(event.get("text", ""))
+        match = EVENT_PATTERN.match(text)
         if not match:
-            raise RecoverySourceError("source_has_malformed_event")
+            # Faction-less events are recognized, counted, and then dropped:
+            # they carry no ownership claim, so they never enter the coverage
+            # evidence below.  Every node must still be one of the two known
+            # classes; anything else stays a malformed event.
+            if not NEUTRAL_EVENT_PATTERN.match(text):
+                raise RecoverySourceError("source_has_malformed_event")
+            neutral_event_count += 1
+            continue
         timestamps.append(int(match.group("timestamp")))
     if len(source_ids) != len(set(source_ids)):
         raise RecoverySourceError("source_duplicate_event_id")
@@ -100,7 +115,12 @@ def _validate_recovery_source(
     if not start_epoch:
         raise RecoverySourceError("war_start_missing")
     end_value = war.get("conquestEndTime") or war.get("resistanceStartTime")
-    end_epoch = int(float(end_value) / 1000) if end_value else max(timestamps)
+    # An open war has no end time, so the observed ownership span stands in for
+    # it.  A page holding only faction-less events leaves that span empty and
+    # is rejected below as the wrong war rather than supported coverage.
+    end_epoch = (
+        int(float(end_value) / 1000) if end_value else max(timestamps, default=start_epoch)
+    )
     current_timestamps = sorted(
         timestamp for timestamp in timestamps if start_epoch <= timestamp <= end_epoch
     )
@@ -137,12 +157,14 @@ def _validate_recovery_source(
         "last_event_at": isoformat(datetime.fromtimestamp(current_timestamps[-1], tz=UTC)),
         "current_war_events": len(current_timestamps),
         "parsed_events": len(parsed),
+        "neutral_event_count": neutral_event_count,
         "unique_current_war_events": len(set(current_timestamps)),
         "coverage_evidence": (
             "closed_document_full_event_nodes_unique_ids_ordered_current_war_history"
         ),
         "source_completeness_assumption": (
-            "all_current_war_event_nodes_are_present_and_parseable;"
+            "all_current_war_event_nodes_are_present_and_each_is_a_recognized_ownership"
+            "_or_factionless_event;ownership_coverage_counts_only_faction_claims;"
             "absence is used only for bases with consistent official boundaries"
         ),
         "boundary_state_required": True,

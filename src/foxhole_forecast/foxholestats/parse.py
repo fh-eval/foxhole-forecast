@@ -12,6 +12,18 @@ EVENT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# The page also carries a second, ownership-neutral event class whose actor is
+# ``Someone`` instead of a faction (observed: structures destroyed with no
+# attributing side, "was Nuked by Someone").  Such a node is a real event, but
+# it makes no ownership claim, so it must never be read as one.  Recognizing it
+# separately lets the completeness tripwire distinguish "recognized but not
+# modeled" from "unparsable" without weakening the tripwire itself.
+NEUTRAL_EVENT_PATTERN = re.compile(
+    r"^(?P<region>.+?)\s+-\s+(?P<asset>.+?)\s+was\s+(?P<action>.+?)\s+by\s+"
+    r"(?P<actor>Someone)\s+Game Day\s+(?P<game_day>\d+),\s+(?P<timestamp>\d+)\s*$",
+    re.IGNORECASE,
+)
+
 
 class FoxholeStatsParser(HTMLParser):
     def __init__(self) -> None:
