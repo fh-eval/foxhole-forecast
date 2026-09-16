@@ -349,11 +349,18 @@ def _max_spend(prior: Any, candidate: Any, *, grouped: bool) -> dict[str, Any]:
     written back as ``spent + this run's cost`` (provider_call.py:221,240, with
     ``spent`` read by ``_budget`` at provider_call.py:332-352), so every value is
     an accumulated total for its bucket and the larger total is the correct
-    merged value. Keeping the maximum makes recorded spend monotonic: no merge
-    can hand ``_budget`` a smaller ``spent`` than either writer recorded, so the
-    daily cap cannot be widened by a merge. An overlapping pair under-counts by
-    at most the smaller run's own increment, because neither side observed the
-    other's addition.
+    merged value. In this topology the maximum is exact, not merely bounded:
+    spend maps are written only by the forecasting paths -- every
+    ``ModelProvider``/``_run_model`` construction lives inside ``forecast.yml``,
+    which the ``foxhole-forecast-cohort`` group fully serialises -- so the
+    collection side never carries spend of its own and ``max(forecast,
+    collection)`` is the forecaster's own value. If a spending writer is ever
+    added outside that group the rule degrades from exact to bounded: an
+    overlapping pair would then under-count by at most the smaller run's own
+    increment, because neither side observed the other's addition. Keeping the
+    maximum is still monotonic in either case: no merge can hand ``_budget`` a
+    smaller ``spent`` than either writer recorded, so the daily cap cannot be
+    widened by a merge.
 
     The winning side's original value is kept, so an int stays an int and repeat
     merges are byte-stable.
@@ -382,6 +389,16 @@ def _max_spend(prior: Any, candidate: Any, *, grouped: bool) -> dict[str, Any]:
     return merged
 
 
+def _war_id(state: dict[str, Any]) -> str | None:
+    """Return the war identifier the state document describes, if any."""
+    war = state.get("war")
+    if isinstance(war, dict):
+        war_id = war.get("warId")
+        if isinstance(war_id, str) and war_id:
+            return war_id
+    return None
+
+
 def _later_slot(current: Any, candidate: Any) -> Any:
     """Return the later of two ``last_forecast_slot`` values.
 
@@ -393,7 +410,9 @@ def _later_slot(current: Any, candidate: Any) -> Any:
     manual ``force_forecast=false`` dispatch inside it could run a second paid
     cohort. Missing or unparseable values lose to a parseable one; if neither
     parses, the first argument (the side chosen by ``last_collected_at``) is
-    kept.
+    kept. Callers must pass slots that belong to the war being merged: see
+    ``_merge_state``, which drops the slot of a side that describes a different
+    war.
     """
     current_time, candidate_time = _time(current), _time(candidate)
     if current_time and candidate_time:
@@ -438,7 +457,21 @@ def _merge_state(current: Path, generated: Path) -> None:
     for key, value in other.items():
         merged.setdefault(key, value)
     if _SLOT_FIELD in existing or _SLOT_FIELD in candidate:
-        merged[_SLOT_FIELD] = _later_slot(existing.get(_SLOT_FIELD), candidate.get(_SLOT_FIELD))
+        existing_slot = existing.get(_SLOT_FIELD)
+        candidate_slot = candidate.get(_SLOT_FIELD)
+        merged_war = _war_id(merged)
+        if merged_war is not None:
+            # A slot describes only the war the run forecast. The collector
+            # deliberately clears it when the war changes (collector.py:44-49),
+            # so a slot carried by the side describing a different war must not
+            # be claimed by a document describing the new war: the slot guard
+            # (orchestration.py:40-44) would keep reporting the new war as
+            # already forecast and delay its first cohort by up to one slot.
+            if _war_id(existing) not in (None, merged_war):
+                existing_slot = None
+            if _war_id(candidate) not in (None, merged_war):
+                candidate_slot = None
+        merged[_SLOT_FIELD] = _later_slot(existing_slot, candidate_slot)
     for field in _SPEND_FIELDS:
         if field in existing or field in candidate:
             merged[field] = _max_spend(

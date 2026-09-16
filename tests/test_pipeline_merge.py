@@ -6,7 +6,9 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 
 SCRIPT = Path(__file__).parents[1] / ".github/scripts/merge-generated-data.py"
@@ -550,6 +552,75 @@ class ForecastArtifactMergeTests(unittest.TestCase):
             merged = json.loads((data / "state.json").read_text(encoding="utf-8"))
             self.assertEqual(merged["last_forecast_slot"], "2026-09-16T15:00:00Z")
             self.assertEqual(merged["last_collected_at"], "2026-09-16T13:30:00Z")
+
+    def test_merge_state_clears_a_stale_slot_when_the_war_changes(self) -> None:
+        """Mirrors the collector's war-change reset (collector.py:44-49)."""
+        # Imported here so the rest of this module stays a pure subprocess test.
+        from foxhole_forecast.forecasting.orchestration import forecast_due
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "data"
+            generated = root / "generated"
+            # The checkout still describes the old war and carries its slot.
+            write_json(
+                data / "state.json",
+                {
+                    "schema_version": 1,
+                    "war": {"warId": "war-140"},
+                    "war_active": True,
+                    "maps": {"home": "old-map"},
+                    "etag": {"war": "old-etag"},
+                    "last_hourly_sample": "2026-09-16T08:00:00Z",
+                    "last_collected_at": "2026-09-16T08:30:00Z",
+                    "last_forecast_slot": "2026-09-16T09:00:00Z",
+                    "daily_costs": {"2026-09-16": 1.0},
+                },
+            )
+            # The collection artifact observed a new war, deliberately reset the
+            # slot and carries a newer last_collected_at.
+            write_json(
+                generated / "state.json",
+                {
+                    "schema_version": 1,
+                    "war": {"warId": "war-141"},
+                    "war_active": True,
+                    "maps": {},
+                    "etag": {"war": "new-etag"},
+                    "last_hourly_sample": None,
+                    "last_collected_at": "2026-09-16T09:05:00Z",
+                    "last_forecast_slot": None,
+                    "daily_costs": {"2026-09-16": 1.0},
+                },
+            )
+            settings = SimpleNamespace(forecast_interval_hours=3)
+            now = datetime(2026, 9, 16, 9, 17, tzinfo=UTC)
+
+            self._merge(generated, data)
+            merged = json.loads((data / "state.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(merged["war"]["warId"], "war-141")
+            # The old war's slot is not claimed by a document describing war-141.
+            self.assertIsNone(merged["last_forecast_slot"])
+            # The new war's first cohort is due again ...
+            self.assertEqual(
+                forecast_due(merged, settings, now),
+                (True, "2026-09-16T09:00:00Z"),
+            )
+            # ... whereas keeping the old war's slot would report not due.
+            self.assertEqual(
+                forecast_due(
+                    {**merged, "last_forecast_slot": "2026-09-16T09:00:00Z"},
+                    settings,
+                    now,
+                ),
+                (False, "2026-09-16T09:00:00Z"),
+            )
+            # The rest of the collection reset travels with the document.
+            self.assertEqual(merged["maps"], {})
+            self.assertIsNone(merged["last_hourly_sample"])
+            self.assertEqual(merged["etag"], {"war": "new-etag"})
+            self.assertEqual(merged["last_collected_at"], "2026-09-16T09:05:00Z")
 
     def test_merge_state_spend_is_monotonic(self) -> None:
         for artifact_is_newer in (True, False):
