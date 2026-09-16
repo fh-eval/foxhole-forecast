@@ -1,5 +1,14 @@
 # DeepSeek V4.1 Flash cohort change
 
+## Retirement status
+
+The V4 Flash series (`deepseek-v4-flash-direct-json-event-v5`) is retired
+upstream: the account catalog no longer exposes `deepseek-v4-flash`, and the
+entry is now disabled (`"enabled": false`) in `config/models.json`. Only V4.1
+Flash is active. Statements below that describe running both series in the
+same cohort are superseded; the V4 Flash entry's identity, budget group,
+catalog-retirement handling, and recorded history are retained.
+
 ## Outcome
 
 Start a distinct DeepSeek V4.1 Flash series in future forecast cohorts. Keep
