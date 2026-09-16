@@ -54,7 +54,17 @@ concurrency:
 jobs:
   evaluate:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # The cohort step runs every enabled series and then the deterministic
+    # recovery pass, which can now replay a transient provider failure
+    # automatically.  A provider that hangs costs its request timeout times its
+    # transport retries (~15 minutes at the current settings) and the automatic
+    # replay can add another such span, so the previous 45-minute budget was one
+    # hanging series short of discarding a whole cohort: run 35136756988
+    # finished in 39.5 minutes, and a timeout here drops the artifact before it
+    # is ever uploaded.  90 minutes leaves room for two such series; a third
+    # would still exceed it, which is why moving the recovery pass after the
+    # artifact upload is recorded as a follow-up.
+    timeout-minutes: 90
     permissions:
       contents: read
       actions: read
