@@ -45,6 +45,13 @@ class Settings:
 
 
 def load_models(path: Path | None = None) -> list[dict[str, Any]]:
+    """Return the configured model series exactly as ``models.json`` states them.
+
+    Deliberately the pristine configuration: tests and operator views pin the
+    shipped file, and only a new forecast run should see the reasoning overrides
+    a war boundary applied.  ``war_settings.merge_effective_overrides`` layers
+    the applied set (``data/war_settings.json``) onto this list at that point.
+    """
     return read_json(path or CONFIG_DIR / "models.json")["models"]
 
 

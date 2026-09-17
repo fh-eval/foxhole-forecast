@@ -195,6 +195,180 @@ class PipelineMergeTests(unittest.TestCase):
             self.assertEqual(json.loads(shard.read_text().splitlines()[0])["run_id"], "r9")
 
 
+class WarSettingsMergeTests(unittest.TestCase):
+    """``data/war_settings.json`` crosses the evaluate/persist boundary too."""
+
+    APPLIED = "war_settings.json"
+
+    def _entry(self, war_id: str, preset_id: str, applied_at: str) -> dict:
+        return {
+            "war_id": war_id,
+            "war_number": int(war_id.split("-")[1]),
+            "preset_id": preset_id,
+            "applied_at": applied_at,
+            "source_commit": "0" * 40,
+            "series": ["series-a"],
+        }
+
+    def test_merge_unions_history_and_keeps_the_later_effective_set(self) -> None:
+        first = self._entry("war-141", "preset-one", "2026-09-17T09:00:00Z")
+        second = self._entry("war-142", "preset-two", "2026-10-01T09:00:00Z")
+        effective_one = {"series-a": {"reasoning": {"effort": "xhigh"}}}
+        effective_two = {
+            **effective_one,
+            "series-b": {"request_extra": {"reasoning_effort": "high"}},
+        }
+        cases = (
+            # The artifact applied a newer preset than the checkout has.
+            ({"applied": [first], "effective": effective_one}, {"applied": [first, second], "effective": effective_two}, 2, effective_two),
+            # The checkout already applied a newer preset than the artifact has.
+            ({"applied": [first, second], "effective": effective_two}, {"applied": [first], "effective": effective_one}, 2, effective_two),
+        )
+        for current, generated, expected_entries, expected_effective in cases:
+            with self.subTest(generated=generated["applied"]):
+                with tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary)
+                    data = root / "data"
+                    artifact = root / "generated"
+                    write_json(data / self.APPLIED, {"schema_version": 1, **current})
+                    write_json(artifact / self.APPLIED, {"schema_version": 1, **generated})
+
+                    subprocess.run(
+                        [sys.executable, str(SCRIPT), str(artifact), str(data)],
+                        check=True,
+                    )
+
+                    merged = json.loads((data / self.APPLIED).read_text())
+
+        self.assertEqual(merged["schema_version"], 1)
+        self.assertEqual(
+            [entry["preset_id"] for entry in merged["applied"]],
+            ["preset-one", "preset-two"],
+        )
+        self.assertEqual(len(merged["applied"]), expected_entries)
+        self.assertEqual(merged["effective"], expected_effective)
+
+    def test_merge_is_idempotent_and_tolerates_a_missing_artifact(self) -> None:
+        entry = self._entry("war-141", "preset-one", "2026-09-17T09:00:00Z")
+        record = {
+            "schema_version": 1,
+            "effective": {"series-a": {"reasoning": {"effort": "xhigh"}}},
+            "applied": [entry],
+            "pending_status": {
+                "status": "applied",
+                "preset_id": "preset-one",
+                "checked_at": "2026-09-17T09:00:00Z",
+            },
+            "record_recovery": None,
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "data"
+            artifact = root / "generated"
+            write_json(data / self.APPLIED, record)
+
+            # A collection that never detected a war change uploads no record at
+            # all: the checkout's copy must survive untouched.
+            subprocess.run([sys.executable, str(SCRIPT), str(artifact), str(data)], check=True)
+            self.assertEqual(json.loads((data / self.APPLIED).read_text()), record)
+
+            write_json(artifact / self.APPLIED, record)
+            for _ in range(2):
+                subprocess.run(
+                    [sys.executable, str(SCRIPT), str(artifact), str(data)], check=True
+                )
+            merged = json.loads((data / self.APPLIED).read_text())
+
+        self.assertEqual(merged, record)
+
+    def test_merge_carries_the_latest_pending_status(self) -> None:
+        rejected = {
+            "status": "invalid",
+            "preset_id": "preset-one",
+            "checked_at": "2026-09-17T09:00:00Z",
+            "error": "series-typo: unknown series",
+        }
+        accepted = {
+            "status": "applied",
+            "preset_id": "preset-two",
+            "checked_at": "2026-10-01T09:00:00Z",
+        }
+        cases = (
+            # The artifact's boundary check is the later one.
+            (rejected, accepted, accepted),
+            # The checkout already carries the later boundary check.
+            (accepted, rejected, accepted),
+        )
+        for current_status, artifact_status, expected in cases:
+            with self.subTest(artifact=artifact_status["status"]):
+                with tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary)
+                    data = root / "data"
+                    artifact = root / "generated"
+                    write_json(
+                        data / self.APPLIED,
+                        {
+                            "schema_version": 1,
+                            "effective": {},
+                            "applied": [],
+                            "pending_status": current_status,
+                        },
+                    )
+                    write_json(
+                        artifact / self.APPLIED,
+                        {
+                            "schema_version": 1,
+                            "effective": {},
+                            "applied": [],
+                            "pending_status": artifact_status,
+                        },
+                    )
+                    subprocess.run(
+                        [sys.executable, str(SCRIPT), str(artifact), str(data)],
+                        check=True,
+                    )
+                    merged = json.loads((data / self.APPLIED).read_text())
+
+                self.assertEqual(merged["pending_status"], expected)
+
+    def test_merge_carries_a_record_recovery_trail(self) -> None:
+        trail = {
+            "detected_at": "2026-09-17T09:00:00Z",
+            "error": "data/war_settings.json: JSONDecodeError: Expecting ',' delimiter",
+        }
+        cases = (
+            (trail, None, trail),
+            (None, trail, trail),
+        )
+        for current_trail, artifact_trail, expected in cases:
+            with self.subTest(artifact=artifact_trail is not None):
+                with tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary)
+                    data = root / "data"
+                    artifact = root / "generated"
+                    for target, recovery in (
+                        (data, current_trail),
+                        (artifact, artifact_trail),
+                    ):
+                        write_json(
+                            target / self.APPLIED,
+                            {
+                                "schema_version": 1,
+                                "effective": {},
+                                "applied": [],
+                                "pending_status": None,
+                                "record_recovery": recovery,
+                            },
+                        )
+                    subprocess.run(
+                        [sys.executable, str(SCRIPT), str(artifact), str(data)],
+                        check=True,
+                    )
+                    merged = json.loads((data / self.APPLIED).read_text())
+
+                self.assertEqual(merged["record_recovery"], expected)
+
+
 class ForecastArtifactMergeTests(unittest.TestCase):
     """A forecast artifact may be older than the checkout it is merged into."""
 
