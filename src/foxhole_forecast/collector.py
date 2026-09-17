@@ -7,7 +7,12 @@ from typing import Any
 from .config import CONFIG_DIR, DATA_DIR, Settings
 from .domain import extract_bases, transition_events
 from .storage import append_jsonl, append_jsonl_once, isoformat, read_json, write_json
-from .war_settings import APPLIED_FILENAME, PRESET_FILENAME, apply_pending_preset
+from .war_settings import (
+    APPLIED_FILENAME,
+    PRESET_FILENAME,
+    apply_pending_preset,
+    load_record,
+)
 from .warapi import WarApiClient
 from .war_lifecycle import (
     should_emit_transitions,
@@ -70,6 +75,19 @@ def collect_once(settings: Settings, now: datetime | None = None) -> dict[str, A
                 f"collection continues: {applied_settings.get('error')}",
                 file=sys.stderr,
             )
+
+    # A settings record that cannot be read must not stop observation polling
+    # either: it is reported here and every consumer falls back to the shipped
+    # configuration until the file is repaired.  Nothing is written for it, so
+    # the unreadable bytes stay on disk for whoever repairs them.
+    record_status = load_record(DATA_DIR / APPLIED_FILENAME).get("record_status")
+    if record_status:
+        print(
+            "foxhole-forecast: the war-settings record is unreadable; predictions "
+            "fall back to the shipped configuration until it is repaired: "
+            f"{record_status.get('error')}",
+            file=sys.stderr,
+        )
 
     active = war_is_active(war)
     lifecycle = update_war_registry(
@@ -208,6 +226,8 @@ def collect_once(settings: Settings, now: datetime | None = None) -> dict[str, A
     }
     if applied_settings:
         summary["war_settings"] = applied_settings
+    if record_status:
+        summary["war_settings_record"] = record_status
     append_jsonl(
         DATA_DIR / "collector_runs.jsonl",
         {"schema_version": 1, "status": "ok", **summary},

@@ -501,6 +501,78 @@ class ApplyTests(unittest.TestCase):
         )
         self.assertEqual(record["pending_status"]["status"], "applied")
 
+    def test_unusable_preset_file_is_reported_not_ignored(self) -> None:
+        """A present-but-unusable preset is not the same as 'no preset staged'."""
+        cases = {
+            "directory": lambda target: target.mkdir(),
+            "broken symlink": lambda target: target.symlink_to(
+                target.parent / "renamed-target.json"
+            ),
+        }
+        for label, build in cases.items():
+            with self.subTest(case=label), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                preset_file, applied_file, models_file = self._paths(root)
+                self._write_config(root)
+                build(preset_file)
+                status = apply_pending_preset(
+                    {"warId": "war-141", "warNumber": 141},
+                    preset_file=preset_file,
+                    applied_file=applied_file,
+                    models_file=models_file,
+                )
+                record = war_settings.load_record(applied_file)
+
+                self.assertEqual(status["status"], "invalid")
+                self.assertIn(str(preset_file), status["error"])
+                self.assertIn(label, status["error"])
+                self.assertEqual(record["effective"], {})
+                self.assertEqual(record["applied"], [])
+                self.assertEqual(record["pending_status"]["error"], status["error"])
+
+    def test_valid_symlink_preset_still_applies(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            preset_file, applied_file, models_file = self._paths(root)
+            self._write_config(root)
+            staged = root / "staged" / "preset.json"
+            staged.parent.mkdir()
+            write_json(staged, preset_document())
+            preset_file.symlink_to(staged)
+            status = apply_pending_preset(
+                {"warId": "war-141", "warNumber": 141},
+                preset_file=preset_file,
+                applied_file=applied_file,
+                models_file=models_file,
+            )
+            record = read_json(applied_file)
+
+        self.assertEqual(status["status"], "applied")
+        self.assertEqual(status["war_id"], "war-141")
+        self.assertEqual(len(record["applied"]), 1)
+        self.assertEqual(
+            record["effective"], {"series-luna": {"reasoning": {"effort": "xhigh"}}}
+        )
+
+    def test_unreadable_record_is_reported_and_falls_back_to_shipped(self) -> None:
+        cases = {"torn json": '{"effective": {"series-luna"', "not an object": '["a"]'}
+        for label, contents in cases.items():
+            with self.subTest(case=label), tempfile.TemporaryDirectory() as directory:
+                applied_file = Path(directory) / APPLIED_FILENAME
+                applied_file.write_text(contents, encoding="utf-8")
+                record = war_settings.load_record(applied_file)
+                models = [
+                    {"series_id": "series-luna", "reasoning": {"effort": "medium"}}
+                ]
+                merged = merge_effective_overrides(models, applied_file)
+
+                self.assertEqual(record["record_status"]["status"], "invalid")
+                self.assertIn(str(applied_file), record["record_status"]["error"])
+                self.assertTrue(record["record_status"]["checked_at"].endswith("Z"))
+                self.assertEqual(record["effective"], {})
+                self.assertEqual(record["applied"], [])
+                self.assertIs(merged, models)
+
     def test_record_without_an_interface_is_normalised(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             applied_file = Path(directory) / APPLIED_FILENAME
@@ -610,6 +682,63 @@ class CollectorWarChangeTests(unittest.TestCase):
         self._collect("war-140", 140, "2026-09-16T12:00:00Z")
         self._collect("war-140", 140, "2026-09-16T12:15:00Z")
         self.assertFalse((self.data_dir / APPLIED_FILENAME).exists())
+
+    def test_unusable_preset_file_does_not_abort_collection(self) -> None:
+        """A committed symlink to a renamed target must not vanish silently."""
+        self._collect("war-140", 140, "2026-09-16T12:00:00Z")
+        preset = self.config_dir / PRESET_FILENAME
+        preset.unlink()
+        preset.symlink_to(self.config_dir / "renamed-away.json")
+        errors = StringIO()
+        with redirect_stderr(errors):
+            summary = self._collect("war-141", 141, "2026-09-17T09:00:00Z")
+
+        self.assertEqual(summary["war_id"], "war-141")
+        self.assertEqual(summary["war_settings"]["status"], "invalid")
+        self.assertIn("broken symlink", summary["war_settings"]["error"])
+        self.assertIn(str(preset), summary["war_settings"]["error"])
+        self.assertIn("pending war-settings preset rejected", errors.getvalue())
+        record = self._record()
+        self.assertEqual(record["effective"], {})
+        self.assertEqual(record["applied"], [])
+        self.assertEqual(record["pending_status"]["status"], "invalid")
+
+    def test_corrupt_record_does_not_stop_collection(self) -> None:
+        """A torn record falls back to the shipped settings and keeps polling."""
+        self._collect("war-140", 140, "2026-09-16T12:00:00Z")
+        record_path = self.data_dir / APPLIED_FILENAME
+        torn = '{"schema_version": 1, "effective": {"series-luna"'
+        record_path.write_text(torn, encoding="utf-8")
+
+        errors = StringIO()
+        with redirect_stderr(errors):
+            summary = self._collect("war-140", 140, "2026-09-16T12:15:00Z")
+
+        self.assertNotIn("war_settings", summary)
+        self.assertEqual(summary["war_settings_record"]["status"], "invalid")
+        self.assertIn(str(record_path), summary["war_settings_record"]["error"])
+        self.assertIn("JSONDecodeError", summary["war_settings_record"]["error"])
+        self.assertIn("war-settings record is unreadable", errors.getvalue())
+        # The unreadable bytes are left exactly where they are for a repair.
+        self.assertEqual(record_path.read_text(encoding="utf-8"), torn)
+        self.assertEqual(
+            read_json(self.data_dir / "state.json")["war"]["warId"], "war-140"
+        )
+        self.assertEqual(
+            read_jsonl(self.data_dir / "collector_runs.jsonl")[-1]["war_id"], "war-140"
+        )
+
+        # The next war boundary still applies the staged preset cleanly, and the
+        # rewritten record carries what had been wrong with the old one.
+        applied = self._collect("war-141", 141, "2026-09-17T09:00:00Z")
+        self.assertEqual(applied["war_settings"]["status"], "applied")
+        record = self._record()
+        self.assertEqual(len(record["applied"]), 1)
+        self.assertEqual(
+            record["effective"], {"series-luna": {"reasoning": {"effort": "xhigh"}}}
+        )
+        self.assertIn("JSONDecodeError", record["record_recovery"]["error"])
+        self.assertIsNone(record.get("record_status"))
 
     def test_invalid_preset_does_not_abort_collection(self) -> None:
         """A typo in a preset that is not due yet must not stop polling."""
@@ -860,6 +989,17 @@ class ForecastConsumptionTests(unittest.TestCase):
                     applied["reasoning"]["completion_ceiling_tokens"],
                     baseline["reasoning"]["completion_ceiling_tokens"],
                 )
+
+    def test_corrupt_record_falls_back_to_the_shipped_configuration(self) -> None:
+        models = self._models()
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            (data / APPLIED_FILENAME).write_text(
+                '{"effective": {"series-luna"', encoding="utf-8"
+            )
+            run = self._run(data, models)
+
+        self.assertEqual(run["reasoning"]["effort"], "medium")
 
     def test_load_models_stays_the_pristine_configuration(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1241,6 +1381,28 @@ class OperatorSurfaceTests(unittest.TestCase):
             self.assertEqual(report["pending"]["status"], "invalid")
             self.assertIn(str(root / PRESET_FILENAME), report["pending"]["error"])
             self.assertFalse((root / APPLIED_FILENAME).exists())
+
+    def test_cli_exits_nonzero_for_a_corrupt_record(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_json(root / "models.json", {"models": [{"series_id": "series-luna"}]})
+            write_json(root / PRESET_FILENAME, preset_document())
+            (root / APPLIED_FILENAME).write_text("{torn", encoding="utf-8")
+            printed = StringIO()
+            with (
+                patch("foxhole_forecast.war_settings.preset_path", lambda _path=None: root / PRESET_FILENAME),
+                patch("foxhole_forecast.war_settings.applied_path", lambda _path=None: root / APPLIED_FILENAME),
+                patch("foxhole_forecast.war_settings.models_path", lambda _path=None: root / "models.json"),
+                redirect_stdout(printed),
+            ):
+                exit_code = cli.main(["war-settings"])
+            report = json.loads(printed.getvalue())
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(report["record_status"]["status"], "invalid")
+        self.assertIn(str(root / APPLIED_FILENAME), report["record_status"]["error"])
+        self.assertEqual(report["effective"], {})
+        self.assertEqual(report["applied"], [])
 
     def test_cli_dry_run_succeeds_and_writes_nothing(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -553,6 +553,18 @@ def _merge_war_settings(current: Path, generated: Path) -> None:
         if statuses
         else None
     )
+    recoveries = [
+        side["record_recovery"]
+        for side in (existing, incoming)
+        if isinstance(side.get("record_recovery"), dict)
+    ]
+    # A record that had been unreadable leaves a trail that must survive the
+    # merge, whichever side carries it.
+    record_recovery = (
+        max(recoveries, key=lambda entry: str(entry.get("detected_at") or ""))
+        if recoveries
+        else None
+    )
     versions = [
         value
         for value in (existing.get("schema_version"), incoming.get("schema_version"))
@@ -565,6 +577,7 @@ def _merge_war_settings(current: Path, generated: Path) -> None:
             "effective": effective,
             "applied": applied,
             "pending_status": pending_status,
+            "record_recovery": record_recovery,
         },
     )
 

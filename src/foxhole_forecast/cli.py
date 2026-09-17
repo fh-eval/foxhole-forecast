@@ -233,7 +233,11 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, indent=2, ensure_ascii=False))
         if args.command == "war-settings":
             pending = result.get("pending") if isinstance(result, dict) else None
-            if isinstance(pending, dict) and pending.get("status") == "invalid":
+            invalid_pending = isinstance(pending, dict) and pending.get("status") == "invalid"
+            # A corrupt record is not fatal to collection, but it is an operator
+            # problem: the command that inspects it must exit non-zero.
+            corrupt_record = isinstance(result, dict) and bool(result.get("record_status"))
+            if invalid_pending or corrupt_record:
                 return 1
         return 0
     except Exception as error:

@@ -259,6 +259,7 @@ class WarSettingsMergeTests(unittest.TestCase):
                 "preset_id": "preset-one",
                 "checked_at": "2026-09-17T09:00:00Z",
             },
+            "record_recovery": None,
         }
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -329,6 +330,43 @@ class WarSettingsMergeTests(unittest.TestCase):
                     merged = json.loads((data / self.APPLIED).read_text())
 
                 self.assertEqual(merged["pending_status"], expected)
+
+    def test_merge_carries_a_record_recovery_trail(self) -> None:
+        trail = {
+            "detected_at": "2026-09-17T09:00:00Z",
+            "error": "data/war_settings.json: JSONDecodeError: Expecting ',' delimiter",
+        }
+        cases = (
+            (trail, None, trail),
+            (None, trail, trail),
+        )
+        for current_trail, artifact_trail, expected in cases:
+            with self.subTest(artifact=artifact_trail is not None):
+                with tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary)
+                    data = root / "data"
+                    artifact = root / "generated"
+                    for target, recovery in (
+                        (data, current_trail),
+                        (artifact, artifact_trail),
+                    ):
+                        write_json(
+                            target / self.APPLIED,
+                            {
+                                "schema_version": 1,
+                                "effective": {},
+                                "applied": [],
+                                "pending_status": None,
+                                "record_recovery": recovery,
+                            },
+                        )
+                    subprocess.run(
+                        [sys.executable, str(SCRIPT), str(artifact), str(data)],
+                        check=True,
+                    )
+                    merged = json.loads((data / self.APPLIED).read_text())
+
+                self.assertEqual(merged["record_recovery"], expected)
 
 
 class ForecastArtifactMergeTests(unittest.TestCase):

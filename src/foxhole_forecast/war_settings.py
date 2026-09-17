@@ -173,10 +173,26 @@ def validate_preset(preset: Any, known_series: Iterable[str]) -> dict[str, dict[
 
 
 def load_preset(path: Path | None = None) -> dict[str, Any] | None:
-    """Read the pending preset, or ``None`` when no preset is staged."""
+    """Read the pending preset, or ``None`` when no preset is staged at all.
+
+    Only a genuinely absent path means "nothing staged".  A path that exists but
+    cannot be read as a preset -- a directory, a broken symlink left behind by a
+    committed link to a renamed target, or any other non-regular file -- raises
+    ``PresetError`` naming the path and why, so the caller records and surfaces it
+    instead of reporting "no preset staged".  A valid symlink to a real preset
+    file reads normally.
+    """
     target = preset_path(path)
-    if not target.is_file():
+    if not target.exists() and not target.is_symlink():
         return None
+    if not target.is_file():
+        if target.is_dir():
+            reason = "it is a directory, not a preset document"
+        elif target.is_symlink():
+            reason = "it is a broken symlink whose target does not exist"
+        else:
+            reason = "it is not a readable regular file"
+        raise PresetError(f"{target} cannot be used as the pending preset: {reason}")
     preset = read_json(target)
     if not isinstance(preset, dict):
         raise PresetError(f"{target} must contain a JSON object")
@@ -247,23 +263,49 @@ def empty_record() -> dict[str, Any]:
         "effective": {},
         "applied": [],
         "pending_status": None,
+        "record_recovery": None,
+        "record_status": None,
     }
+
+
+def _unreadable_record(target: Path, reason: str) -> dict[str, Any]:
+    """The empty record plus a report of what could not be read and why."""
+    record = empty_record()
+    record["record_status"] = {
+        "status": "invalid",
+        "error": f"{target}: {reason}",
+        "checked_at": isoformat(),
+    }
+    return record
 
 
 def load_record(path: Path | None = None) -> dict[str, Any]:
     """Read the applied record; a missing file yields the empty record.
 
-    The shape is normalised instead of trusted so a partially written or
-    hand-edited file cannot make consumption fail, but malformed JSON still
-    raises: that is a data-integrity signal, not an empty record.
+    A record that cannot be read is reported, never raised: the caller gets the
+    empty record -- so consumption falls back to the shipped configuration, which
+    is the safe direction -- plus ``record_status`` naming the file and the parse
+    failure.  Nothing is written here, so the unreadable bytes stay exactly where
+    they are until the next successful write, and that write records what was
+    found in ``record_recovery`` so replacing the file does not erase the fact
+    that it had been corrupt.
     """
-    raw = read_json(applied_path(path), default=None)
-    if not isinstance(raw, dict):
+    target = applied_path(path)
+    if not target.exists() and not target.is_symlink():
         return empty_record()
+    try:
+        raw = read_json(target)
+    except (OSError, ValueError) as error:
+        return _unreadable_record(target, f"{type(error).__name__}: {error}")
+    if not isinstance(raw, dict):
+        return _unreadable_record(
+            target, f"expected a JSON object, found {type(raw).__name__}"
+        )
     effective = raw.get("effective")
     applied = raw.get("applied")
     version = raw.get("schema_version")
     pending = raw.get("pending_status")
+    recovery = raw.get("record_recovery")
     return {
         "schema_version": version if isinstance(version, int) else SCHEMA_VERSION,
         "effective": effective if isinstance(effective, dict) else {},
@@ -271,7 +313,19 @@ def load_record(path: Path | None = None) -> dict[str, Any]:
         if isinstance(applied, list)
         else [],
         "pending_status": pending if isinstance(pending, dict) else None,
+        "record_recovery": recovery if isinstance(recovery, dict) else None,
+        "record_status": None,
     }
+
+
+def _carry_recovery(record: dict[str, Any]) -> None:
+    """Persist a parse failure detected by this read into the rewritten record."""
+    status = record.get("record_status")
+    if isinstance(status, dict) and status.get("error"):
+        record["record_recovery"] = {
+            "detected_at": status.get("checked_at"),
+            "error": status["error"],
+        }
 
 
 def applied_preset_ids(record: dict[str, Any]) -> list[str]:
@@ -364,6 +418,8 @@ def apply_pending_preset(
         record = load_record(applied_file)
         rejected = _pending_status("invalid", preset_id, checked_at, error=error)
         record["pending_status"] = rejected
+        _carry_recovery(record)
+        record.pop("record_status", None)
         write_json(applied_path(applied_file), record)
         return dict(rejected)
     record = load_record(applied_file)
@@ -393,6 +449,8 @@ def apply_pending_preset(
         war_id=war_id,
         series=sorted(overrides),
     )
+    _carry_recovery(record)
+    record.pop("record_status", None)
     write_json(applied_path(applied_file), record)
     return {"status": "applied", **entry}
 
@@ -503,6 +561,8 @@ def war_settings_report(
         "effective": record["effective"],
         "applied": record["applied"],
         "pending_status": record["pending_status"],
+        "record_status": record.get("record_status"),
+        "record_recovery": record.get("record_recovery"),
         "pending": None,
     }
     preset, load_error = _load_preset_safely(preset_file)
