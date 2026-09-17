@@ -489,6 +489,73 @@ def _merge_state(current: Path, generated: Path) -> None:
     _write_json(current, merged)
 
 
+def _merge_war_settings(current: Path, generated: Path) -> None:
+    """Merge the war-boundary settings record.
+
+    ``applied`` is append-only history and ``effective`` is the override set
+    every later war inherits.  The evaluate artifact and the checkout it is
+    merged into can each hold an application the other lacks, so the histories
+    are unioned by ``(war_id, preset_id)``.  ``effective`` cannot be rebuilt from
+    the union -- a preset the checkout no longer carries cannot be replayed --
+    so it comes from the side whose last application is later, which is also the
+    side that has already applied every override the other one records.
+    """
+    incoming = _read_json(generated, None)
+    if not isinstance(incoming, dict):
+        return
+    existing = _read_json(current, None)
+    if not isinstance(existing, dict):
+        existing = {}
+
+    entries: dict[tuple[str, str], dict[str, Any]] = {}
+    for side in (existing, incoming):
+        for entry in side.get("applied") or []:
+            if not isinstance(entry, dict):
+                continue
+            key = (str(entry.get("war_id")), str(entry.get("preset_id")))
+            prior = entries.get(key)
+            prior_time = _time(prior.get("applied_at")) if prior else None
+            entry_time = _time(entry.get("applied_at"))
+            if prior is None or (
+                entry_time and (prior_time is None or entry_time > prior_time)
+            ):
+                entries[key] = entry
+    applied = sorted(
+        entries.values(),
+        key=lambda entry: (
+            str(entry.get("applied_at") or ""),
+            str(entry.get("war_id")),
+            str(entry.get("preset_id")),
+        ),
+    )
+
+    def last_applied_at(side: dict[str, Any]) -> str:
+        return max(
+            (
+                str(entry.get("applied_at") or "")
+                for entry in side.get("applied") or []
+                if isinstance(entry, dict)
+            ),
+            default="",
+        )
+
+    winner = incoming if last_applied_at(incoming) >= last_applied_at(existing) else existing
+    effective = winner.get("effective") if isinstance(winner.get("effective"), dict) else {}
+    versions = [
+        value
+        for value in (existing.get("schema_version"), incoming.get("schema_version"))
+        if isinstance(value, int) and not isinstance(value, bool)
+    ]
+    _write_json(
+        current,
+        {
+            "schema_version": max(versions) if versions else 1,
+            "effective": effective,
+            "applied": applied,
+        },
+    )
+
+
 def _merge_quarantine_sidecars(generated_root: Path, data_root: Path) -> None:
     """Carry append-recovery audit records across the evaluate/persist boundary."""
     sources = [
@@ -551,6 +618,9 @@ def merge(generated_root: Path, data_root: Path) -> None:
             elif not current_time or (candidate_time and candidate_time >= current_time):
                 _write_json(target, candidate)
     _merge_status(data_root / "recovery_status.json", generated_root / "recovery_status.json")
+    _merge_war_settings(
+        data_root / "war_settings.json", generated_root / "war_settings.json"
+    )
     generated_imports = generated_root / "imports"
     if generated_imports.is_dir():
         for source in generated_imports.glob("foxholestats-war-*.json"):

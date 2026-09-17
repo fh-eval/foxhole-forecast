@@ -30,6 +30,7 @@ from .foxholestats import (
 from .health import audit_model_runs
 from .storage import parse_time
 from .scoring import settle_and_score
+from .war_settings import war_settings_report
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -106,6 +107,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     subcommands.add_parser("score", help="Settle matured forecasts and rebuild scores")
     subcommands.add_parser("build-dashboard", help="Generate the static dashboard shards")
+    war_settings = subcommands.add_parser(
+        "war-settings",
+        help="Show the pending war-boundary settings preset and the applied set",
+    )
+    war_settings.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what the next war change would apply without writing anything",
+    )
     audit = subcommands.add_parser(
         "audit-model-runs", help="Find expected models missing from recent full cohorts"
     )
@@ -180,6 +190,8 @@ def main(argv: list[str] | None = None) -> int:
             result = settle_and_score(settings)
         elif args.command == "build-dashboard":
             result = build_dashboard_data()
+        elif args.command == "war-settings":
+            result = war_settings_report(dry_run=args.dry_run)
         elif args.command == "audit-model-runs":
             result = audit_model_runs(
                 parse_time(args.not_before) if args.not_before else None,
@@ -219,6 +231,10 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("Unknown command")
             return 2
         print(json.dumps(result, indent=2, ensure_ascii=False))
+        if args.command == "war-settings":
+            pending = result.get("pending") if isinstance(result, dict) else None
+            if isinstance(pending, dict) and pending.get("status") == "invalid":
+                return 1
         return 0
     except Exception as error:
         print(f"{type(error).__name__}: {error}", file=sys.stderr)

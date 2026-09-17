@@ -94,6 +94,19 @@ The importer preserves source IDs, URL, timestamp precision, and a SHA-256 prove
 
 `run` performs collection, a forecast when the current three-hour slot is due, settlement, and dashboard generation in one command. The legacy shared OpenRouter software ceiling is `$3.00` per UTC day. GLM 5.3 Flash has an independent `$0.25` daily ceiling, and each direct DeepSeek series has an independent `$0.50` daily ceiling. Provider-reported cost is recorded, with published token rates used as a conservative fallback. Missing keys skip the affected series without stopping collection or scoring.
 
+## Next-war settings presets
+
+A reasoning-settings change that belongs at the next war boundary is staged as a preset in `config/next_war_settings.json` instead of being edited directly in `config/models.json`. Collection applies it automatically the first time it observes a new `warId`, so nobody has to act at the turnover, and records the result in `data/war_settings.json`: the `effective` override set plus an append-only `applied` history naming the war, the preset, the timestamp, and the series it touched. Applied overrides carry forward — every later war inherits the effective set until a new preset supersedes it — and a preset already in the history is never re-applied.
+
+Only reasoning/thinking paths may be preset: `reasoning.effort`, `reasoning.enabled`, `reasoning.exclude`, `request_extra.reasoning_effort`, and `request_extra.thinking.*`. Every other field (gateway, model, expected returned model, API key env, paid flag, budget group, output ceiling, or an unknown key) is rejected by name, and unknown series ids and unknown effort values are rejected too, so a preset cannot smuggle in a different series or budget and a typo cannot silently fail to apply. The applied state lives under `data/` because it is a dated deployment fact produced by a scheduled run, so it travels through the same collection artifact and trusted data commit as the observations it was detected with, while the intent stays versioned in `config/`. Only newly generated runs consume the effective set: frozen replays keep the model configuration stored in their bundle, and every run records the reasoning settings it requested and got.
+
+```bash
+# Read-only: the staged preset, the effective set, and the applied history.
+PYTHONPATH=src python -m foxhole_forecast war-settings
+# What the next war change would apply, without writing anything:
+PYTHONPATH=src python -m foxhole_forecast war-settings --dry-run
+```
+
 ## Evaluation cautions
 
 - This is a base-ownership forecast, not a claim about server state unavailable through the public API.

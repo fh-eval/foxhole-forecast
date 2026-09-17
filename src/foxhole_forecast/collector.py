@@ -3,9 +3,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from .config import DATA_DIR, Settings
+from .config import CONFIG_DIR, DATA_DIR, Settings
 from .domain import extract_bases, transition_events
 from .storage import append_jsonl, append_jsonl_once, isoformat, read_json, write_json
+from .war_settings import APPLIED_FILENAME, PRESET_FILENAME, apply_pending_preset
 from .warapi import WarApiClient
 from .war_lifecycle import (
     should_emit_transitions,
@@ -42,11 +43,24 @@ def collect_once(settings: Settings, now: datetime | None = None) -> dict[str, A
     previous_war = state.get("war") or {}
     previous_war_id = previous_war.get("warId")
     war_changed = bool(previous_war_id and previous_war_id != war["warId"])
+    applied_settings: dict[str, Any] | None = None
     if war_changed:
         state["maps"] = {}
         state["etag"] = {"war": war_result.etag}
         state["last_hourly_sample"] = None
         state["last_forecast_slot"] = None
+        # A war boundary is this project's comparability break, so a staged
+        # settings preset lands exactly here: once per war id, recorded in
+        # data/war_settings.json, and inherited by later wars until a new preset
+        # supersedes it.  A fresh start has no previous war id, so nothing
+        # applies on the first collection.
+        applied_settings = apply_pending_preset(
+            war,
+            timestamp,
+            preset_file=CONFIG_DIR / PRESET_FILENAME,
+            applied_file=DATA_DIR / APPLIED_FILENAME,
+            models_file=CONFIG_DIR / "models.json",
+        )
 
     active = war_is_active(war)
     lifecycle = update_war_registry(
@@ -183,6 +197,8 @@ def collect_once(settings: Settings, now: datetime | None = None) -> dict[str, A
         "changed_maps": sorted(set(changed_maps)),
         "hourly_sample": sampled,
     }
+    if applied_settings:
+        summary["war_settings"] = applied_settings
     append_jsonl(
         DATA_DIR / "collector_runs.jsonl",
         {"schema_version": 1, "status": "ok", **summary},

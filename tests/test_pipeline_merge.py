@@ -195,6 +195,87 @@ class PipelineMergeTests(unittest.TestCase):
             self.assertEqual(json.loads(shard.read_text().splitlines()[0])["run_id"], "r9")
 
 
+class WarSettingsMergeTests(unittest.TestCase):
+    """``data/war_settings.json`` crosses the evaluate/persist boundary too."""
+
+    APPLIED = "war_settings.json"
+
+    def _entry(self, war_id: str, preset_id: str, applied_at: str) -> dict:
+        return {
+            "war_id": war_id,
+            "war_number": int(war_id.split("-")[1]),
+            "preset_id": preset_id,
+            "applied_at": applied_at,
+            "source_commit": "0" * 40,
+            "series": ["series-a"],
+        }
+
+    def test_merge_unions_history_and_keeps_the_later_effective_set(self) -> None:
+        first = self._entry("war-141", "preset-one", "2026-09-17T09:00:00Z")
+        second = self._entry("war-142", "preset-two", "2026-10-01T09:00:00Z")
+        effective_one = {"series-a": {"reasoning": {"effort": "xhigh"}}}
+        effective_two = {
+            **effective_one,
+            "series-b": {"request_extra": {"reasoning_effort": "high"}},
+        }
+        cases = (
+            # The artifact applied a newer preset than the checkout has.
+            ({"applied": [first], "effective": effective_one}, {"applied": [first, second], "effective": effective_two}, 2, effective_two),
+            # The checkout already applied a newer preset than the artifact has.
+            ({"applied": [first, second], "effective": effective_two}, {"applied": [first], "effective": effective_one}, 2, effective_two),
+        )
+        for current, generated, expected_entries, expected_effective in cases:
+            with self.subTest(generated=generated["applied"]):
+                with tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary)
+                    data = root / "data"
+                    artifact = root / "generated"
+                    write_json(data / self.APPLIED, {"schema_version": 1, **current})
+                    write_json(artifact / self.APPLIED, {"schema_version": 1, **generated})
+
+                    subprocess.run(
+                        [sys.executable, str(SCRIPT), str(artifact), str(data)],
+                        check=True,
+                    )
+
+                    merged = json.loads((data / self.APPLIED).read_text())
+
+        self.assertEqual(merged["schema_version"], 1)
+        self.assertEqual(
+            [entry["preset_id"] for entry in merged["applied"]],
+            ["preset-one", "preset-two"],
+        )
+        self.assertEqual(len(merged["applied"]), expected_entries)
+        self.assertEqual(merged["effective"], expected_effective)
+
+    def test_merge_is_idempotent_and_tolerates_a_missing_artifact(self) -> None:
+        entry = self._entry("war-141", "preset-one", "2026-09-17T09:00:00Z")
+        record = {
+            "schema_version": 1,
+            "effective": {"series-a": {"reasoning": {"effort": "xhigh"}}},
+            "applied": [entry],
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data = root / "data"
+            artifact = root / "generated"
+            write_json(data / self.APPLIED, record)
+
+            # A collection that never detected a war change uploads no record at
+            # all: the checkout's copy must survive untouched.
+            subprocess.run([sys.executable, str(SCRIPT), str(artifact), str(data)], check=True)
+            self.assertEqual(json.loads((data / self.APPLIED).read_text()), record)
+
+            write_json(artifact / self.APPLIED, record)
+            for _ in range(2):
+                subprocess.run(
+                    [sys.executable, str(SCRIPT), str(artifact), str(data)], check=True
+                )
+            merged = json.loads((data / self.APPLIED).read_text())
+
+        self.assertEqual(merged, record)
+
+
 class ForecastArtifactMergeTests(unittest.TestCase):
     """A forecast artifact may be older than the checkout it is merged into."""
 

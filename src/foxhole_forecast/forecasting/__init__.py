@@ -60,6 +60,7 @@ from ..validation import (
     validate_strategic_recommendation,
 )
 from ..war_lifecycle import war_ended_at, war_is_active
+from ..war_settings import APPLIED_FILENAME, merge_effective_overrides
 
 from .prompts import (
     CORRECTION_USER,
@@ -106,6 +107,7 @@ from .orchestration import (
 )
 
 __all__ = [
+    "APPLIED_FILENAME",
     "CORRECTION_USER",
     "DATA_DIR",
     "FORECAST_SYSTEM",
@@ -165,6 +167,7 @@ __all__ = [
     "isoformat",
     "json",
     "load_models",
+    "merge_effective_overrides",
     "os",
     "parse_time",
     "Path",
