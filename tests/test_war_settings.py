@@ -4,17 +4,25 @@ import json
 import re
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import ExitStack, contextmanager, redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from foxhole_forecast import cli, collector, war_settings
-from foxhole_forecast.config import Settings
-from foxhole_forecast.forecasting import run_forecast_cohort
+from foxhole_forecast.config import Settings, load_models
+from foxhole_forecast.forecasting import (
+    _canonical_hash,
+    _settings_payload,
+    replay_invalid_run,
+    retry_invalid_run,
+    run_forecast_cohort,
+)
 from foxhole_forecast.ledger import read_ledger
+from foxhole_forecast.packets import cohort_evidence_path
 from foxhole_forecast.providers import ProviderResponse
-from foxhole_forecast.storage import read_json, write_json
+from foxhole_forecast.storage import read_json, read_jsonl, write_json, write_jsonl
 from foxhole_forecast.war_settings import (
     APPLIED_FILENAME,
     PRESET_FILENAME,
@@ -298,6 +306,7 @@ class ApplyTests(unittest.TestCase):
                 )
             record = read_json(applied_file)
 
+        self.assertEqual(entry["status"], "applied")
         self.assertEqual(entry["war_id"], "war-141")
         self.assertEqual(entry["war_number"], 141)
         self.assertEqual(entry["preset_id"], "2026-01-01-test")
@@ -305,7 +314,16 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(entry["series"], ["series-luna", "series-nemotron"])
         self.assertTrue(entry["applied_at"].endswith("Z"))
         self.assertEqual(record["schema_version"], 1)
-        self.assertEqual(record["applied"], [entry])
+        # The stored history entry is exactly the returned status minus the
+        # action word, so the record can never disagree with the run.
+        self.assertEqual(
+            record["applied"],
+            [{key: value for key, value in entry.items() if key != "status"}],
+        )
+        self.assertEqual(record["pending_status"]["status"], "applied")
+        self.assertEqual(
+            record["pending_status"]["war_id"], "war-141"
+        )
         self.assertEqual(
             record["effective"],
             {
@@ -340,9 +358,9 @@ class ApplyTests(unittest.TestCase):
             )
             record = read_json(applied_file)
 
-        self.assertIsNotNone(first)
-        self.assertIsNone(second)
-        self.assertIsNone(third)
+        self.assertEqual(first["status"], "applied")
+        self.assertEqual(second["status"], "already_applied")
+        self.assertEqual(third["status"], "already_applied")
         self.assertEqual(len(record["applied"]), 1)
         self.assertEqual(
             record["effective"], {"series-luna": {"reasoning": {"effort": "xhigh"}}}
@@ -405,21 +423,83 @@ class ApplyTests(unittest.TestCase):
         self.assertIsNone(entry)
         self.assertFalse(applied_file.exists())
 
-    def test_invalid_preset_raises_instead_of_being_skipped(self) -> None:
+    def test_invalid_preset_is_recorded_and_does_not_apply(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             preset_file, applied_file, models_file = self._paths(root)
             self._write_config(root)
             write_json(preset_file, preset_document({"series-luna": {"model": "x"}}))
-            with self.assertRaisesRegex(PresetError, "series-luna: 'model'"):
-                apply_pending_preset(
-                    {"warId": "war-141", "warNumber": 141},
-                    preset_file=preset_file,
-                    applied_file=applied_file,
-                    models_file=models_file,
-                )
+            status = apply_pending_preset(
+                {"warId": "war-141", "warNumber": 141},
+                preset_file=preset_file,
+                applied_file=applied_file,
+                models_file=models_file,
+            )
+            record = read_json(applied_file)
 
-        self.assertFalse(applied_file.exists())
+        self.assertEqual(status["status"], "invalid")
+        self.assertIn("series-luna: 'model'", status["error"])
+        self.assertTrue(status["checked_at"].endswith("Z"))
+        self.assertEqual(record["effective"], {})
+        self.assertEqual(record["applied"], [])
+        self.assertEqual(record["pending_status"], status)
+
+    def test_invalid_preset_does_not_abort_the_caller_and_records_its_error(self) -> None:
+        """A rejected preset is an outcome, not an exception: polling continues."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            preset_file, applied_file, models_file = self._paths(root)
+            self._write_config(root)
+            for label, contents in (
+                ("malformed json", "{not json"),
+                ("not an object", '["a", "b"]'),
+            ):
+                with self.subTest(case=label):
+                    preset_file.write_text(contents, encoding="utf-8")
+                    status = apply_pending_preset(
+                        {"warId": "war-141", "warNumber": 141},
+                        preset_file=preset_file,
+                        applied_file=applied_file,
+                        models_file=models_file,
+                    )
+                    record = war_settings.load_record(applied_file)
+
+                    self.assertEqual(status["status"], "invalid")
+                    self.assertTrue(status["error"])
+                    self.assertIn(str(preset_file), status["error"])
+                    self.assertEqual(record["pending_status"]["error"], status["error"])
+                    self.assertEqual(record["effective"], {})
+                    self.assertEqual(record["applied"], [])
+
+    def test_a_later_valid_preset_still_applies_after_a_rejection(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            preset_file, applied_file, models_file = self._paths(root)
+            self._write_config(root)
+            write_json(preset_file, preset_document({"series-typo": {"reasoning": {"effort": "high"}}}))
+            rejected = apply_pending_preset(
+                {"warId": "war-141", "warNumber": 141},
+                preset_file=preset_file,
+                applied_file=applied_file,
+                models_file=models_file,
+            )
+            write_json(preset_file, preset_document())
+            applied = apply_pending_preset(
+                {"warId": "war-141", "warNumber": 141},
+                preset_file=preset_file,
+                applied_file=applied_file,
+                models_file=models_file,
+            )
+            record = read_json(applied_file)
+
+        self.assertEqual(rejected["status"], "invalid")
+        self.assertEqual(applied["status"], "applied")
+        self.assertEqual(applied["war_id"], "war-141")
+        self.assertEqual(len(record["applied"]), 1)
+        self.assertEqual(
+            record["effective"], {"series-luna": {"reasoning": {"effort": "xhigh"}}}
+        )
+        self.assertEqual(record["pending_status"]["status"], "applied")
 
     def test_record_without_an_interface_is_normalised(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -516,9 +596,10 @@ class CollectorWarChangeTests(unittest.TestCase):
         self.assertNotIn("war_settings", repeat)
         self.assertEqual(len(self._record()["applied"]), 1)
 
-        # A later war with no new preset inherits the effective set unchanged.
+        # A later war with no new preset inherits the effective set unchanged:
+        # the boundary check reports that this preset is already applied.
         inherited = self._collect("war-142", 142, "2026-10-01T09:00:00Z")
-        self.assertNotIn("war_settings", inherited)
+        self.assertEqual(inherited["war_settings"]["status"], "already_applied")
         record = self._record()
         self.assertEqual(len(record["applied"]), 1)
         self.assertEqual(
@@ -530,15 +611,158 @@ class CollectorWarChangeTests(unittest.TestCase):
         self._collect("war-140", 140, "2026-09-16T12:15:00Z")
         self.assertFalse((self.data_dir / APPLIED_FILENAME).exists())
 
-    def test_invalid_preset_stops_collection_loudly(self) -> None:
+    def test_invalid_preset_does_not_abort_collection(self) -> None:
+        """A typo in a preset that is not due yet must not stop polling."""
         self._collect("war-140", 140, "2026-09-16T12:00:00Z")
         write_json(
             self.config_dir / PRESET_FILENAME,
             preset_document({"series-typo": {"reasoning": {"effort": "high"}}}),
         )
-        with self.assertRaisesRegex(PresetError, "series-typo"):
-            self._collect("war-141", 141, "2026-09-17T09:00:00Z")
-        self.assertFalse((self.data_dir / APPLIED_FILENAME).exists())
+        errors = StringIO()
+        with redirect_stderr(errors):
+            summary = self._collect("war-141", 141, "2026-09-17T09:00:00Z")
+
+        # Collection completed normally: it observed, sampled, and appended a run.
+        self.assertEqual(summary["war_id"], "war-141")
+        self.assertEqual(
+            summary["war_settings"]["status"], "invalid"
+        )
+        self.assertIn("series-typo", summary["war_settings"]["error"])
+        self.assertIn("pending war-settings preset rejected", errors.getvalue())
+        self.assertIn("series-typo", errors.getvalue())
+        self.assertEqual(
+            read_json(self.data_dir / "state.json")["war"]["warId"], "war-141"
+        )
+        self.assertEqual(
+            read_jsonl(self.data_dir / "collector_runs.jsonl")[-1]["war_id"], "war-141"
+        )
+
+        # The rejection is in the record, and effective was left untouched.
+        record = self._record()
+        self.assertEqual(record["applied"], [])
+        self.assertEqual(record["effective"], {})
+        self.assertEqual(record["pending_status"]["status"], "invalid")
+        self.assertIn("series-typo", record["pending_status"]["error"])
+
+        # Fixing the preset still applies it: the next war change picks it up.
+        write_json(
+            self.config_dir / PRESET_FILENAME,
+            preset_document({"series-luna": {"reasoning": {"effort": "xhigh"}}}),
+        )
+        fixed = self._collect("war-142", 142, "2026-10-01T09:00:00Z")
+        self.assertEqual(fixed["war_settings"]["status"], "applied")
+        record = self._record()
+        self.assertEqual(len(record["applied"]), 1)
+        self.assertEqual(
+            record["effective"], {"series-luna": {"reasoning": {"effort": "xhigh"}}}
+        )
+        self.assertEqual(record["pending_status"]["status"], "applied")
+
+
+def _war_packet() -> dict:
+    return {
+        "cutoff": "2026-09-17T03:10:00Z",
+        "war": {"warId": "war-141", "warNumber": 141},
+        "history_hours_available": 5,
+        "regions": [{"map_name": "TestHex"}],
+    }
+
+
+def _provider_stub() -> type:
+    """A provider stub that answers both stages without any network call."""
+
+    class ProviderStub:
+        def __init__(self, config, _settings):
+            self.config = config
+            self.attempts: list[dict] = []
+            self.accumulated_cost = 0.0
+
+        def complete_json(self, _messages, schema_name, _schema):
+            parsed = (
+                {"headline": "h", "war_summary": "s", "selected_regions": ["TestHex"]}
+                if schema_name == "foxhole_war_overview"
+                else {"predictions": [], "strategic_advice": []}
+            )
+            raw = {
+                "model": self.config["model"],
+                "choices": [{"message": {"content": json.dumps(parsed)}}],
+                "usage": {},
+            }
+            self.attempts.append(
+                {
+                    "stage": schema_name,
+                    "raw_response": raw,
+                    "requested_model": self.config["model"],
+                    "returned_model": self.config["model"],
+                    "usage": {},
+                    "cost_usd": 0.0,
+                }
+            )
+            return ProviderResponse(
+                parsed,
+                raw,
+                self.config["model"],
+                self.config["model"],
+                None,
+                {},
+                0.0,
+            )
+
+    return ProviderStub
+
+
+@contextmanager
+def offline_provider_path(data: Path):
+    """Patch stack for an offline provider path: synthetic packets, no network.
+
+    The evidence a path reads from disk is written for real by each test, so the
+    harness only replaces the packet builders and the provider itself.
+    """
+    packet = _war_packet()
+    detail_source = {
+        "packet_type": "detail_source",
+        "cutoff": packet["cutoff"],
+        "war": packet["war"],
+    }
+    detail_packet = {
+        "regions": {},
+        "selected_region_hourly_series": {},
+        "selected_regions": ["TestHex"],
+        "war": packet["war"],
+        "cutoff": packet["cutoff"],
+    }
+    ProviderStub = _provider_stub()
+    with ExitStack() as stack:
+        for item in (
+            patch.dict("os.environ", {"KEY": "secret"}),
+            patch("foxhole_forecast.forecasting.DATA_DIR", data),
+            patch("foxhole_forecast.forecasting.forecast_due", return_value=(True, "slot")),
+            patch("foxhole_forecast.forecasting.build_scout_packet", return_value=packet),
+            patch("foxhole_forecast.forecasting.build_detail_source", return_value=detail_source),
+            patch("foxhole_forecast.forecasting.current_strategic_base_ids", return_value=[]),
+            patch("foxhole_forecast.forecasting.ModelProvider", ProviderStub),
+            patch("foxhole_forecast.forecasting.validate_scout", return_value=None),
+            patch("foxhole_forecast.forecasting.validate_forecast", return_value=None),
+            patch("foxhole_forecast.forecasting.build_detail_packet", return_value=detail_packet),
+            patch(
+                "foxhole_forecast.forecasting._drop_invalid_predictions",
+                side_effect=lambda value, _packet: (value, []),
+            ),
+            patch(
+                "foxhole_forecast.forecasting._filter_forecast_output",
+                side_effect=lambda value, _packet, _settings: (value, [], []),
+            ),
+            patch(
+                "foxhole_forecast.forecasting._freeze_evidence",
+                side_effect=lambda value, *_args: value,
+            ),
+            patch(
+                "foxhole_forecast.forecasting.orchestration.war_is_active",
+                return_value=True,
+            ),
+        ):
+            stack.enter_context(item)
+        yield packet
 
 
 class ForecastConsumptionTests(unittest.TestCase):
@@ -567,85 +791,29 @@ class ForecastConsumptionTests(unittest.TestCase):
             }
         ]
 
-    def _run(self, data: Path, models: list[dict]) -> dict:
-        packet = {
-            "cutoff": "2026-09-17T03:10:00Z",
-            "war": {"warId": "war-141", "warNumber": 141},
-            "history_hours_available": 5,
-            "regions": [{"map_name": "TestHex"}],
+    def _applied_record(self, series_id: str, override: dict) -> dict:
+        return {
+            "schema_version": 1,
+            "effective": {series_id: override},
+            "applied": [
+                {
+                    "war_id": "war-141",
+                    "war_number": 141,
+                    "preset_id": "2026-01-01-test",
+                    "applied_at": "2026-09-17T09:00:00Z",
+                    "source_commit": None,
+                    "series": [series_id],
+                }
+            ],
+            "pending_status": {
+                "status": "applied",
+                "preset_id": "2026-01-01-test",
+                "checked_at": "2026-09-17T09:00:00Z",
+            },
         }
 
-        class ProviderStub:
-            def __init__(self, config, _settings):
-                self.config = config
-                self.attempts: list[dict] = []
-                self.accumulated_cost = 0.0
-
-            def complete_json(self, _messages, schema_name, _schema):
-                parsed = (
-                    {"headline": "h", "war_summary": "s", "selected_regions": ["TestHex"]}
-                    if schema_name == "foxhole_war_overview"
-                    else {"predictions": [], "strategic_advice": []}
-                )
-                raw = {
-                    "model": self.config["model"],
-                    "choices": [{"message": {"content": json.dumps(parsed)}}],
-                    "usage": {},
-                }
-                self.attempts.append(
-                    {
-                        "stage": schema_name,
-                        "raw_response": raw,
-                        "requested_model": self.config["model"],
-                        "returned_model": self.config["model"],
-                        "usage": {},
-                        "cost_usd": 0.0,
-                    }
-                )
-                return ProviderResponse(
-                    parsed,
-                    raw,
-                    self.config["model"],
-                    self.config["model"],
-                    None,
-                    {},
-                    0.0,
-                )
-
-        detail_source = {"packet_type": "detail_source", "cutoff": packet["cutoff"], "war": packet["war"]}
-        with (
-            patch.dict("os.environ", {"KEY": "secret"}),
-            patch("foxhole_forecast.forecasting.DATA_DIR", data),
-            patch("foxhole_forecast.forecasting.read_json", return_value=detail_source),
-            patch("foxhole_forecast.forecasting.forecast_due", return_value=(True, "slot")),
-            patch("foxhole_forecast.forecasting.load_models", return_value=models),
-            patch("foxhole_forecast.forecasting.build_scout_packet", return_value=packet),
-            patch("foxhole_forecast.forecasting.build_detail_source", return_value=detail_source),
-            patch("foxhole_forecast.forecasting.current_strategic_base_ids", return_value=[]),
-            patch("foxhole_forecast.forecasting.ModelProvider", ProviderStub),
-            patch("foxhole_forecast.forecasting.validate_scout", return_value=None),
-            patch("foxhole_forecast.forecasting.validate_forecast", return_value=None),
-            patch(
-                "foxhole_forecast.forecasting.build_detail_packet",
-                return_value={
-                    "regions": {},
-                    "selected_region_hourly_series": {},
-                    "selected_regions": ["TestHex"],
-                    "war": packet["war"],
-                    "cutoff": packet["cutoff"],
-                },
-            ),
-            patch(
-                "foxhole_forecast.forecasting._drop_invalid_predictions",
-                side_effect=lambda value, _packet: (value, []),
-            ),
-            patch(
-                "foxhole_forecast.forecasting._filter_forecast_output",
-                side_effect=lambda value, _packet, _settings: (value, [], []),
-            ),
-            patch("foxhole_forecast.forecasting._freeze_evidence", side_effect=lambda value, *_args: value),
-            patch("foxhole_forecast.forecasting.orchestration.war_is_active", return_value=True),
-        ):
+    def _run(self, data: Path, models: list[dict]) -> dict:
+        with patch("foxhole_forecast.forecasting.load_models", return_value=models), offline_provider_path(data):
             run_forecast_cohort(Settings.load(), force=True)
         rows = read_ledger("model_runs", data_dir=data)
         return rows[0]
@@ -713,6 +881,227 @@ class ForecastConsumptionTests(unittest.TestCase):
         self.assertEqual(luna["reasoning"], {"effort": "medium", "exclude": False})
 
 
+class InWarRecoveryConsumptionTests(unittest.TestCase):
+    """Every new provider call for the current war uses the effective settings."""
+
+    CUTOFF = "2026-09-17T03:10:00Z"
+
+    def _invalid_run(self, data: Path, series_id: str) -> str:
+        run_id = f"cohort-1:{series_id}"
+        write_jsonl(
+            data / "model_runs.jsonl",
+            [
+                {
+                    "run_id": run_id,
+                    "cohort_id": "cohort-1",
+                    "series_id": series_id,
+                    "status": "invalid",
+                    "cutoff": self.CUTOFF,
+                    "war_id": "war-141",
+                    "created_at": "2026-09-17T03:20:00Z",
+                    "error": "ProviderBodyError: upstream error 504 (timeout)",
+                }
+            ],
+        )
+        write_jsonl(
+            data / "cohorts.jsonl",
+            [
+                {
+                    "cohort_id": "cohort-1",
+                    "models": [
+                        {"run_id": run_id, "series_id": series_id, "status": "invalid"}
+                    ],
+                }
+            ],
+        )
+        write_json(
+            data / "wars.json",
+            {"wars": {"war-141": {"war_id": "war-141", "war_number": 141}}},
+        )
+        cohort = data / "raw" / "cohorts" / "cohort-1"
+        write_json(
+            cohort_evidence_path(cohort, f"{series_id}-scout-packet"),
+            {"cutoff": self.CUTOFF, "war": {"warId": "war-141"}},
+        )
+        write_json(
+            data / "frozen-latest.json",
+            {"observed_at": self.CUTOFF, "war": {"warId": "war-141"}, "maps": {}},
+        )
+        return run_id
+
+    def _openrouter_model(self) -> dict:
+        return {
+            "series_id": "series-luna",
+            "label": "Test Luna",
+            "gateway": "openrouter",
+            "model": "openai/test-luna",
+            "api_key_env": "KEY",
+            "reasoning": {"effort": "medium", "exclude": False},
+        }
+
+    def _applied_record(self, effort: str = "xhigh") -> dict:
+        return {
+            "schema_version": 1,
+            "effective": {"series-luna": {"reasoning": {"effort": effort}}},
+            "applied": [
+                {
+                    "war_id": "war-141",
+                    "war_number": 141,
+                    "preset_id": "2026-01-01-test",
+                    "applied_at": "2026-09-17T09:00:00Z",
+                    "source_commit": None,
+                    "series": ["series-luna"],
+                }
+            ],
+            "pending_status": None,
+        }
+
+    def test_in_war_retry_records_the_effective_reasoning_tier(self) -> None:
+        models = [self._openrouter_model()]
+        for applied, expected in ((False, "medium"), (True, "xhigh")):
+            with self.subTest(applied=applied):
+                with tempfile.TemporaryDirectory() as directory:
+                    data = Path(directory)
+                    run_id = self._invalid_run(data, "series-luna")
+                    if applied:
+                        write_json(data / APPLIED_FILENAME, self._applied_record())
+                    with (
+                        patch(
+                            "foxhole_forecast.forecasting.load_models",
+                            return_value=models,
+                        ),
+                        offline_provider_path(data),
+                    ):
+                        retry_invalid_run(
+                            Settings.load(), run_id, data / "frozen-latest.json"
+                        )
+                    rows = read_ledger("model_runs", data_dir=data)
+
+                # The retry is a new call in the current war: what it recorded as
+                # requested is what it actually sent the provider.
+                self.assertEqual(rows[0]["reasoning"]["effort"], expected)
+                self.assertEqual(rows[0]["retry_history"][0]["series_id"], "series-luna")
+                self.assertEqual(rows[0]["reasoning"]["enabled"], True)
+
+    def _frozen_bundle(self, data: Path, effort: str = "low") -> str:
+        series_id = "series-luna"
+        run_id = self._invalid_run(data, series_id)
+        cohort = data / "raw" / "cohorts" / "cohort-1"
+        scout = {"cutoff": self.CUTOFF, "war": {"warId": "war-141"}}
+        source = {
+            "packet_version": 2,
+            "packet_type": "detail_source",
+            "cutoff": self.CUTOFF,
+            "war": {"warId": "war-141"},
+            "data_dictionary": {},
+            "regions": {},
+            "limits": {},
+        }
+        detail = {
+            "packet_version": 2,
+            "packet_type": "detail",
+            "cutoff": self.CUTOFF,
+            "war": {"warId": "war-141"},
+            "selected_regions": [],
+            "data_dictionary": {},
+            "strategic_bases": [],
+            "selected_metrics": [],
+            "selected_region_hourly_series": {},
+            "recent_events": [],
+            "limits": {},
+        }
+        scout_path = cohort_evidence_path(cohort, f"{series_id}-scout-packet")
+        source_path = cohort_evidence_path(cohort, "replay-detail-source")
+        detail_path = cohort_evidence_path(cohort, f"{series_id}-detail-packet")
+        write_json(scout_path, scout)
+        write_json(source_path, source)
+        write_json(detail_path, detail)
+        write_json(
+            cohort_evidence_path(cohort, f"{series_id}-replay-bundle"),
+            {
+                "schema_version": 1,
+                "bundle_type": "forecast_replay",
+                "source_commit": "abc123",
+                "series_id": series_id,
+                "cutoff": self.CUTOFF,
+                "war_id": "war-141",
+                "model_config": {
+                    "series_id": series_id,
+                    "label": "Test Luna",
+                    "gateway": "openrouter",
+                    "model": "openai/test-luna",
+                    "api_key_env": "KEY",
+                    "paid": False,
+                    "reasoning": {"effort": effort, "exclude": False},
+                },
+                "settings": _settings_payload(Settings.load()),
+                "prompts": {
+                    "scout": "scout",
+                    "forecast": "forecast",
+                    "correction": "{error}",
+                },
+                "schemas": {"scout": {}, "forecast": {}},
+                "overview": {
+                    "headline": "Frozen headline",
+                    "war_summary": "Frozen summary",
+                    "selected_regions": [],
+                },
+                "inputs": {
+                    "scout_packet": scout_path.name,
+                    "scout_packet_sha256": _canonical_hash(scout),
+                    "detail_source": source_path.name,
+                    "detail_source_sha256": _canonical_hash(source),
+                    "detail_packet": detail_path.name,
+                    "detail_packet_sha256": _canonical_hash(detail),
+                },
+                "stage": "forecast",
+            },
+        )
+        return run_id
+
+    def test_frozen_replay_keeps_the_bundle_configuration_when_a_record_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            run_id = self._frozen_bundle(data, effort="low")
+            # An effective record exists and names this series, but a delayed
+            # replay reproduces the original episode's configuration instead.
+            write_json(data / APPLIED_FILENAME, self._applied_record("xhigh"))
+            provider = SimpleNamespace(
+                config={"validation_attempts": 1}, attempts=[], accumulated_cost=0.0
+            )
+            response = SimpleNamespace(
+                returned_model="openai/test-luna", upstream_provider="OpenAI"
+            )
+            forecast = {"predictions": [{"base_id": "base-1"}]}
+            with (
+                patch("foxhole_forecast.forecasting.DATA_DIR", data),
+                patch(
+                    "foxhole_forecast.forecasting.ModelProvider", return_value=provider
+                ) as provider_ctor,
+                patch(
+                    "foxhole_forecast.forecasting._call_validated",
+                    return_value=(response, forecast),
+                ),
+                patch(
+                    "foxhole_forecast.forecasting._freeze_evidence",
+                    return_value=forecast,
+                ),
+            ):
+                result = replay_invalid_run(Settings.load(), run_id)
+            rows = read_ledger("model_runs", data_dir=data)
+            effective = read_json(data / APPLIED_FILENAME)["effective"]
+
+        self.assertEqual(result["run_id"], f"{run_id}:replay-1")
+        # The provider was constructed from the frozen bundle configuration, and
+        # the episode records exactly that.
+        self.assertEqual(
+            provider_ctor.call_args.args[0]["reasoning"]["effort"], "low"
+        )
+        self.assertEqual(rows[-1]["submission_mode"], "delayed_replay")
+        self.assertEqual(rows[-1]["reasoning"]["effort"], "low")
+        self.assertEqual(effective["series-luna"]["reasoning"]["effort"], "xhigh")
+
+
 class OperatorSurfaceTests(unittest.TestCase):
     def _shipped_report(self, dry_run: bool) -> dict:
         return war_settings_report(dry_run=dry_run)
@@ -722,6 +1111,9 @@ class OperatorSurfaceTests(unittest.TestCase):
 
         self.assertEqual(report["schema_version"], 1)
         self.assertEqual(report["effective"], {})
+        # No war boundary has been observed in this checkout, so no check is on
+        # record yet.
+        self.assertIsNone(report["pending_status"])
         if report["pending"] is None:
             self.skipTest("No preset is staged in config/")
         self.assertEqual(report["pending"]["status"], "pending")
@@ -744,7 +1136,51 @@ class OperatorSurfaceTests(unittest.TestCase):
             change["reasoning_changes"][NEMOTRON],
             {"request_extra.reasoning_effort": {"before": "medium", "after": "high"}},
         )
+        # A series main has switched off may still be preset; the preview says
+        # so instead of leaving the operator to wonder why it never ran.
+        enabled = {
+            model["series_id"]: model.get("enabled", True) for model in load_models()
+        }
+        self.assertEqual(
+            change.get("disabled_series", []),
+            sorted(
+                series_id
+                for series_id in change["series"]
+                if not enabled.get(series_id, True)
+            ),
+        )
         self.assertEqual((ROOT / "data" / APPLIED_FILENAME).exists(), before)
+
+    def test_dry_run_marks_an_overridden_series_that_is_disabled(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_json(
+                root / "models.json",
+                {
+                    "models": [
+                        {
+                            "series_id": "series-luna",
+                            "enabled": False,
+                            "reasoning": {"effort": "medium", "exclude": False},
+                        },
+                        {"series_id": "series-other", "enabled": True},
+                    ]
+                },
+            )
+            write_json(
+                root / PRESET_FILENAME,
+                preset_document({"series-luna": {"reasoning": {"effort": "high"}}}),
+            )
+            report = war_settings_report(
+                dry_run=True,
+                preset_file=root / PRESET_FILENAME,
+                applied_file=root / APPLIED_FILENAME,
+                models_file=root / "models.json",
+            )
+
+        self.assertEqual(report["pending"]["status"], "pending")
+        self.assertEqual(report["next_war_change"]["action"], "apply")
+        self.assertEqual(report["next_war_change"]["disabled_series"], ["series-luna"])
 
     def test_invalid_pending_preset_is_reported_not_raised(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -785,6 +1221,26 @@ class OperatorSurfaceTests(unittest.TestCase):
                 exit_code = cli.main(["war-settings", "--dry-run"])
 
         self.assertEqual(exit_code, 1)
+
+    def test_cli_reports_an_unreadable_preset_and_exits_nonzero(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_json(root / "models.json", {"models": [{"series_id": "series-luna"}]})
+            (root / PRESET_FILENAME).write_text("{not json", encoding="utf-8")
+            printed = StringIO()
+            with (
+                patch("foxhole_forecast.war_settings.preset_path", lambda _path=None: root / PRESET_FILENAME),
+                patch("foxhole_forecast.war_settings.applied_path", lambda _path=None: root / APPLIED_FILENAME),
+                patch("foxhole_forecast.war_settings.models_path", lambda _path=None: root / "models.json"),
+                redirect_stdout(printed),
+            ):
+                exit_code = cli.main(["war-settings", "--dry-run"])
+
+            self.assertEqual(exit_code, 1)
+            report = json.loads(printed.getvalue())
+            self.assertEqual(report["pending"]["status"], "invalid")
+            self.assertIn(str(root / PRESET_FILENAME), report["pending"]["error"])
+            self.assertFalse((root / APPLIED_FILENAME).exists())
 
     def test_cli_dry_run_succeeds_and_writes_nothing(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

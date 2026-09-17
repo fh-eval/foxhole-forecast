@@ -24,11 +24,13 @@ ceiling a run uses.  The same allowlist filters the record on the way back out
 (``merge_effective_overrides``), so even a hand-edited ``data/`` file cannot
 change a model.
 
-A pending preset that fails validation raises instead of being skipped: a
-boundary change that silently does not apply is exactly the failure this
-mechanism exists to prevent.  The shipped preset is validated against the
-shipped ``config/models.json`` by the test suite, so a bad preset is caught
-before it can be merged and reach collection.
+A pending preset that cannot be applied is recorded, not fatal: ``pending_status``
+on the record names the offending path and reason, the collection summary and
+stderr carry it, and polling continues -- an unattended typo in a change that is
+not due yet must not stop data collection.  The safety net that makes that
+acceptable runs earlier: the test suite validates the shipped preset against the
+shipped ``config/models.json``, so a bad preset reddens the pull request before
+it can ever reach collection.
 """
 
 from __future__ import annotations
@@ -240,7 +242,12 @@ def allowed_overrides(
 
 
 def empty_record() -> dict[str, Any]:
-    return {"schema_version": SCHEMA_VERSION, "effective": {}, "applied": []}
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "effective": {},
+        "applied": [],
+        "pending_status": None,
+    }
 
 
 def load_record(path: Path | None = None) -> dict[str, Any]:
@@ -256,12 +263,14 @@ def load_record(path: Path | None = None) -> dict[str, Any]:
     effective = raw.get("effective")
     applied = raw.get("applied")
     version = raw.get("schema_version")
+    pending = raw.get("pending_status")
     return {
         "schema_version": version if isinstance(version, int) else SCHEMA_VERSION,
         "effective": effective if isinstance(effective, dict) else {},
         "applied": [entry for entry in applied if isinstance(entry, dict)]
         if isinstance(applied, list)
         else [],
+        "pending_status": pending if isinstance(pending, dict) else None,
     }
 
 
@@ -273,6 +282,47 @@ def applied_preset_ids(record: dict[str, Any]) -> list[str]:
     ]
 
 
+def _inspect_preset(
+    preset: dict[str, Any] | None, models_file: Path | None
+) -> tuple[dict[str, dict[str, Any]] | None, str | None]:
+    """Validate a staged preset without applying it.
+
+    Returns ``(overrides, None)`` for a valid preset and ``(None, error)`` for one
+    that cannot be applied.  Never raises for preset problems: a rejected preset
+    is an outcome to record and surface, not a control-flow error.
+    """
+    if preset is None:
+        return None, None
+    try:
+        return validate_preset(preset, load_series_ids(models_file)), None
+    except PresetError as error:
+        return None, str(error)
+    except (OSError, ValueError) as error:
+        # Unreadable models.json or malformed preset JSON: report it by path and
+        # reason instead of failing whatever the caller is doing.
+        return None, f"{models_path(models_file)}: {type(error).__name__}: {error}"
+
+
+def _load_preset_safely(
+    preset_file: Path | None,
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Read the staged preset, reporting an unreadable one instead of raising."""
+    try:
+        return load_preset(preset_file), None
+    except PresetError as error:
+        return None, str(error)
+    except (OSError, ValueError) as error:
+        # A malformed file reports its own path: the operator has to know which
+        # file to fix, and json.JSONDecodeError does not name it.
+        return None, f"{preset_path(preset_file)}: {type(error).__name__}: {error}"
+
+
+def _pending_status(
+    status: str, preset_id: str | None, checked_at: str, **extra: Any
+) -> dict[str, Any]:
+    return {"status": status, "preset_id": preset_id, "checked_at": checked_at, **extra}
+
+
 def apply_pending_preset(
     war: dict[str, Any],
     now: datetime | None = None,
@@ -280,25 +330,45 @@ def apply_pending_preset(
     applied_file: Path | None = None,
     models_file: Path | None = None,
 ) -> dict[str, Any] | None:
-    """Apply the pending preset for a newly observed war.
+    """Apply the pending preset for a newly observed war, or record why it did not.
 
-    Returns the ``applied`` entry when the preset landed, and ``None`` when
-    there is nothing to do: no preset staged, or this ``preset_id`` already
-    applied by an earlier war.  Carrying ``effective`` forward is therefore the
-    default -- a later war with no new preset inherits the last applied set, and
-    a repeated collection inside the same war re-applies nothing.
+    Returns a status dict -- ``applied``, ``invalid``, or ``already_applied`` --
+    and ``None`` when no preset is staged at all.  ``effective`` is only touched
+    by a valid preset; a rejected one leaves it exactly as it was.
 
-    The caller decides when a war change happened; this function never applies
-    on a fresh start, because collection only reaches it with a previous war id.
+    An invalid preset does **not** raise here.  Collection is the lifeblood of
+    this project, so a typo in a preset that is not due yet must not stop
+    observation polling: the rejection is written to the record's
+    ``pending_status``, returned in the collection summary, and printed to
+    stderr, while polling continues.  The safety net is earlier: CI validates the
+    shipped preset against the shipped ``models.json``, so a typo reddens the
+    pull request before it can ever reach collection.
+
+    Carrying ``effective`` forward is the default -- a later war with no new
+    preset inherits the last applied set, and a repeated collection inside the
+    same war re-applies nothing.  The caller decides when a war change happened;
+    this function never applies on a fresh start, because collection only reaches
+    it with a previous war id.
     """
-    preset = load_preset(preset_file)
-    if preset is None:
+    preset, load_error = _load_preset_safely(preset_file)
+    if preset is None and load_error is None:
         return None
-    overrides = validate_preset(preset, load_series_ids(models_file))
-    preset_id = str(preset["preset_id"])
+    checked_at = isoformat(now or datetime.now(UTC))
+    preset_id = preset.get("preset_id") if preset else None
+    preset_id = preset_id if isinstance(preset_id, str) else None
+    overrides = None
+    error = load_error
+    if error is None:
+        overrides, error = _inspect_preset(preset, models_file)
+    if overrides is None:
+        record = load_record(applied_file)
+        rejected = _pending_status("invalid", preset_id, checked_at, error=error)
+        record["pending_status"] = rejected
+        write_json(applied_path(applied_file), record)
+        return dict(rejected)
     record = load_record(applied_file)
-    if preset_id in applied_preset_ids(record):
-        return None
+    if preset_id is not None and preset_id in applied_preset_ids(record):
+        return _pending_status("already_applied", preset_id, checked_at)
     war_id = war.get("warId")
     if not war_id:
         raise ValueError("A war change needs a warId before settings can be applied")
@@ -309,15 +379,22 @@ def apply_pending_preset(
         "war_id": war_id,
         "war_number": war.get("warNumber"),
         "preset_id": preset_id,
-        "applied_at": isoformat(now or datetime.now(UTC)),
+        "applied_at": checked_at,
         "source_commit": os.environ.get("GITHUB_SHA") or None,
         "series": sorted(overrides),
     }
     record["schema_version"] = SCHEMA_VERSION
     record["effective"] = effective
     record["applied"] = [*record["applied"], entry]
+    record["pending_status"] = _pending_status(
+        "applied",
+        preset_id,
+        checked_at,
+        war_id=war_id,
+        series=sorted(overrides),
+    )
     write_json(applied_path(applied_file), record)
-    return dict(entry)
+    return {"status": "applied", **entry}
 
 
 def merge_effective_overrides(
@@ -383,6 +460,28 @@ def describe_changes(
     return changes
 
 
+def _disabled_series(
+    models: list[dict[str, Any]], overrides: dict[str, dict[str, Any]]
+) -> list[str]:
+    """Overridden series that are configured but currently disabled.
+
+    Such an override is recorded and dormant: it takes effect if the series is
+    enabled, which is the documented reason a preset may name a disabled entry
+    (a series can be temporarily switched off, like the Nemotron series, without
+    invalidating the settings staged for the next war).
+    """
+    by_series = {
+        model["series_id"]: model
+        for model in models
+        if isinstance(model, dict) and "series_id" in model
+    }
+    return sorted(
+        series_id
+        for series_id in overrides
+        if not by_series.get(series_id, {}).get("enabled", True)
+    )
+
+
 def war_settings_report(
     dry_run: bool = False,
     preset_file: Path | None = None,
@@ -403,10 +502,11 @@ def war_settings_report(
         "applied_file": str(applied_path(applied_file)),
         "effective": record["effective"],
         "applied": record["applied"],
+        "pending_status": record["pending_status"],
         "pending": None,
     }
-    preset = load_preset(preset_file)
-    if preset is None:
+    preset, load_error = _load_preset_safely(preset_file)
+    if preset is None and load_error is None:
         if dry_run:
             report["next_war_change"] = {
                 "action": "no_pending_preset",
@@ -415,22 +515,26 @@ def war_settings_report(
         return report
 
     applied_ids = applied_preset_ids(record)
+    preset_id = preset.get("preset_id") if preset else None
+    preset_id = preset_id if isinstance(preset_id, str) else None
     pending: dict[str, Any] = {
-        "preset_id": preset.get("preset_id"),
-        "description": preset.get("description"),
-        "overrides": preset.get("overrides"),
+        "preset_id": preset_id,
+        "description": preset.get("description") if preset else None,
+        "overrides": preset.get("overrides") if preset else None,
     }
-    try:
-        overrides = validate_preset(preset, load_series_ids(models_file))
-    except PresetError as error:
+    overrides = None
+    error = load_error
+    if error is None:
+        overrides, error = _inspect_preset(preset, models_file)
+    if overrides is None:
         pending["status"] = "invalid"
-        pending["error"] = str(error)
+        pending["error"] = error
         report["pending"] = pending
         if dry_run:
-            report["next_war_change"] = {"action": "invalid", "error": str(error)}
+            report["next_war_change"] = {"action": "invalid", "error": error}
         return report
 
-    applied = str(preset["preset_id"]) in applied_ids
+    applied = preset_id is not None and preset_id in applied_ids
     pending["status"] = "already_applied" if applied else "pending"
     pending["overrides"] = overrides
     report["pending"] = pending
@@ -446,18 +550,22 @@ def war_settings_report(
     if applied:
         report["next_war_change"] = {
             "action": "already_applied",
-            "preset_id": preset["preset_id"],
+            "preset_id": preset_id,
             "reason": (
-                f"Preset {preset['preset_id']} is already in the applied history; "
+                f"Preset {preset_id} is already in the applied history; "
                 "the next war inherits the effective set unchanged."
             ),
         }
         return report
     report["next_war_change"] = {
         "action": "apply",
-        "preset_id": preset["preset_id"],
+        "preset_id": preset_id,
         "series": sorted(overrides),
         "effective_after": effective_after,
         "reasoning_changes": describe_changes(models, overrides),
     }
+    dormant = _disabled_series(models, overrides)
+    if dormant:
+        # Recorded, but it cannot run until that series is enabled again.
+        report["next_war_change"]["disabled_series"] = dormant
     return report

@@ -296,7 +296,12 @@ def retry_invalid_run(
     if original.get("status") != "invalid":
         raise ValueError(f"Run {run_id} is not invalid")
 
-    models = _pkg.load_models()
+    # A retry is a new provider call made for a cohort in the current war, so it
+    # uses that war's effective settings, exactly like a new cohort.  Only a
+    # frozen replay reproduces the original episode's configuration instead.
+    models = _pkg.merge_effective_overrides(
+        _pkg.load_models(), _pkg.DATA_DIR / _pkg.APPLIED_FILENAME
+    )
     matching_models = [
         model for model in models if model.get("series_id") == original.get("series_id")
     ]

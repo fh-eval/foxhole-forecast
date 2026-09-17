@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from datetime import UTC, datetime
 from typing import Any
 
@@ -53,7 +54,9 @@ def collect_once(settings: Settings, now: datetime | None = None) -> dict[str, A
         # settings preset lands exactly here: once per war id, recorded in
         # data/war_settings.json, and inherited by later wars until a new preset
         # supersedes it.  A fresh start has no previous war id, so nothing
-        # applies on the first collection.
+        # applies on the first collection.  A preset that cannot be applied is
+        # recorded and reported but never stops collection (CI is the net that
+        # catches a bad preset before it can be merged).
         applied_settings = apply_pending_preset(
             war,
             timestamp,
@@ -61,6 +64,12 @@ def collect_once(settings: Settings, now: datetime | None = None) -> dict[str, A
             applied_file=DATA_DIR / APPLIED_FILENAME,
             models_file=CONFIG_DIR / "models.json",
         )
+        if applied_settings and applied_settings.get("status") == "invalid":
+            print(
+                "foxhole-forecast: pending war-settings preset rejected; "
+                f"collection continues: {applied_settings.get('error')}",
+                file=sys.stderr,
+            )
 
     active = war_is_active(war)
     lifecycle = update_war_registry(

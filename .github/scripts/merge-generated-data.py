@@ -541,6 +541,18 @@ def _merge_war_settings(current: Path, generated: Path) -> None:
 
     winner = incoming if last_applied_at(incoming) >= last_applied_at(existing) else existing
     effective = winner.get("effective") if isinstance(winner.get("effective"), dict) else {}
+    statuses = [
+        side["pending_status"]
+        for side in (existing, incoming)
+        if isinstance(side.get("pending_status"), dict)
+    ]
+    # ``pending_status`` records what the last boundary check found, including a
+    # rejected preset; the later check describes the newer checkout's preset file.
+    pending_status = (
+        max(statuses, key=lambda entry: str(entry.get("checked_at") or ""))
+        if statuses
+        else None
+    )
     versions = [
         value
         for value in (existing.get("schema_version"), incoming.get("schema_version"))
@@ -552,6 +564,7 @@ def _merge_war_settings(current: Path, generated: Path) -> None:
             "schema_version": max(versions) if versions else 1,
             "effective": effective,
             "applied": applied,
+            "pending_status": pending_status,
         },
     )
 
