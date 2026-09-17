@@ -321,6 +321,34 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(nemotron["request_extra"]["reasoning_effort"], "medium")
         self.assertNotIn("reasoning_budget", nemotron["request_extra"])
 
+    def test_nemotron_series_is_configured_but_temporarily_disabled(self) -> None:
+        """Pin the temporary disable so re-enabling is a deliberate edit."""
+        models = load_models()
+        nemotron = next(
+            model
+            for model in models
+            if model["series_id"] == "nvidia-nemotron-3-ultra-550b-a55b-event-v4"
+        )
+
+        self.assertIs(nemotron.get("enabled"), False)
+        self.assertEqual(nemotron["label"], "Nemotron 3 Ultra 550B A55B")
+        self.assertEqual(nemotron["gateway"], "nvidia_nim")
+        self.assertEqual(nemotron["model"], "nvidia/nemotron-3-ultra-550b-a55b")
+        self.assertEqual(nemotron["api_key_env"], "NVIDIA_API_KEY")
+        self.assertEqual(nemotron["max_tokens"], 32768)
+        self.assertEqual(nemotron["request_timeout_seconds"], 300)
+        self.assertIs(nemotron.get("omit_temperature"), True)
+        self.assertEqual(nemotron["request_extra"], {"reasoning_effort": "medium"})
+        self.assertIs(nemotron.get("paid"), False)
+        enabled_series = {
+            model["series_id"] for model in models if model.get("enabled", True)
+        }
+        self.assertNotIn("nvidia-nemotron-3-ultra-550b-a55b-event-v4", enabled_series)
+        enabled_models = {
+            model["model"] for model in models if model.get("enabled", True)
+        }
+        self.assertNotIn("nvidia/nemotron-3-ultra-550b-a55b", enabled_models)
+
     def test_glm_flash_config_pins_official_zai_with_max_reasoning(self) -> None:
         glm = next(
             model
