@@ -96,6 +96,7 @@ from .provider_call import (
 )
 from .orchestration import (
     _deepseek_catalogs,
+    _openrouter_catalogs,
     _has_stored_forecast_response,
     _identifier,
     forecast_due,
@@ -130,6 +131,7 @@ __all__ = [
     "_canonical_hash",
     "_drop_invalid_predictions",
     "_deepseek_catalogs",
+    "_openrouter_catalogs",
     "_drop_invalid_strategic_advice",
     "_dropped_prediction_error",
     "_filter_forecast_output",

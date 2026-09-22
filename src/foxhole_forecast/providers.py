@@ -197,11 +197,16 @@ class ModelProvider:
             raise MissingApiKey(f"Missing {model_config['api_key_env']}")
 
     def model_catalog(self) -> dict[str, Any]:
-        """Fetch DeepSeek's account-visible model catalog without generation."""
-        if self.config.get("gateway") != "deepseek":
-            raise ValueError("Model catalogs are only supported for DeepSeek")
+        """Fetch the configured gateway's model catalog without generation."""
+        gateway = self.config.get("gateway")
+        if gateway == "deepseek":
+            url = "https://api.deepseek.com/models"
+        elif gateway == "openrouter":
+            url = "https://openrouter.ai/api/v1/models"
+        else:
+            raise ValueError("Model catalogs are only supported for DeepSeek and OpenRouter")
         request = urllib.request.Request(
-            "https://api.deepseek.com/models",
+            url,
             method="GET",
             headers={
                 "Authorization": f"Bearer {self.api_key}",
@@ -458,6 +463,7 @@ def _cost(model: str, usage: dict[str, Any]) -> float:
         return round(input_cost + completion * output_price / 1_000_000, 8)
     prices = {
         "openai/gpt-5.6-luna": (0.20, 1.20),
+        "openai/gpt-6-luna": (0.10, 0.50),
         "google/gemini-3.7-flash": (0.75, 3.75),
         "google/gemini-3.8-flash": (0.75, 3.75),
         "meta/muse-spark-1.3-contributor": (0.10, 0.20),

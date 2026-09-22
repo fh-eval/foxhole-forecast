@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import tempfile
 import unittest
 from datetime import UTC, datetime
@@ -10,6 +12,85 @@ from foxhole_forecast.storage import write_json, write_jsonl
 
 
 class ModelRunHealthTests(unittest.TestCase):
+    def test_openrouter_retirement_requires_compact_complete_catalog_proof(self) -> None:
+        ids = ["google/gemini-3.7-flash", "openai/gpt-6-luna"]
+        digest = hashlib.sha256(
+            json.dumps(ids, separators=(",", ":")).encode()
+        ).hexdigest()
+        model = {
+            "gateway": "openrouter",
+            "model": "openai/gpt-5.6-luna",
+            "catalog_retirement_skip": True,
+        }
+        run = {
+            "requested_model": "openai/gpt-5.6-luna",
+            "catalog_checked_at": "2026-09-22T12:00:00Z",
+            "catalog_evidence": {
+                "source": "https://openrouter.ai/api/v1/models",
+                "model_ids": ids,
+                "model_count": len(ids),
+                "ids_sha256": digest,
+            },
+        }
+        self.assertTrue(_valid_retirement_skip(run, model))
+        self.assertFalse(
+            _valid_retirement_skip(
+                {**run, "catalog_evidence": {**run["catalog_evidence"], "model_ids": ["openai/gpt-6-luna"]}},
+                model,
+            )
+        )
+        self.assertFalse(
+            _valid_retirement_skip(
+                {**run, "catalog_checked_at": "not a timestamp"}, model
+            )
+        )
+
+    def test_openrouter_catalog_proof_accepts_retirement_skip_in_audit(self) -> None:
+        ids = ["openai/gpt-6-luna"]
+        digest = hashlib.sha256(
+            json.dumps(ids, separators=(",", ":")).encode()
+        ).hexdigest()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_json(
+                root / "models.json",
+                {"models": [{
+                    "series_id": "gpt56",
+                    "label": "GPT-5.6 Luna",
+                    "gateway": "openrouter",
+                    "model": "openai/gpt-5.6-luna",
+                    "catalog_retirement_skip": True,
+                }]},
+            )
+            write_jsonl(
+                root / "cohorts.jsonl",
+                [{"cohort_id": "c", "cutoff": "2026-09-22T12:00:00Z", "models": [
+                    {"series_id": "gpt56", "run_id": "c:gpt56", "status": "skipped_provider_unavailable"}
+                ]}],
+            )
+            write_jsonl(
+                root / "runs.jsonl",
+                [{
+                    "run_id": "c:gpt56",
+                    "status": "skipped_provider_unavailable",
+                    "reason": "model_absent_from_catalog",
+                    "requested_model": "openai/gpt-5.6-luna",
+                    "catalog_checked_at": "2026-09-22T12:00:00Z",
+                    "catalog_evidence": {
+                        "source": "https://openrouter.ai/api/v1/models",
+                        "model_ids": ids,
+                        "model_count": len(ids),
+                        "ids_sha256": digest,
+                    },
+                }],
+            )
+            audit = audit_model_runs(
+                cohorts_path=root / "cohorts.jsonl",
+                runs_path=root / "runs.jsonl",
+                models_path=root / "models.json",
+            )
+        self.assertEqual(audit["status"], "healthy")
+
     def test_catalog_proven_retirement_is_healthy_but_malformed_is_incident(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

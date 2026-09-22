@@ -25,6 +25,7 @@ from foxhole_forecast.forecasting import (
     _messages,
     _drop_invalid_predictions,
     _deepseek_catalogs,
+    _openrouter_catalogs,
     _previous_model_summary,
     _replay_bundle_path,
     _settings_payload,
@@ -37,13 +38,194 @@ from foxhole_forecast.forecasting import (
 )
 from foxhole_forecast.ledger import read_ledger
 from foxhole_forecast.packets import cohort_evidence_path
-from foxhole_forecast.providers import ProviderResponse
+from foxhole_forecast.providers import MissingApiKey, ProviderResponse
 from foxhole_forecast.schemas import forecast_schema
 from foxhole_forecast.storage import read_json, read_jsonl, write_json, write_jsonl
 from foxhole_forecast.validation import ValidationError
 
 
 class ForecastBudgetTests(unittest.TestCase):
+    def test_openrouter_retirement_skip_does_not_block_gpt_6_cohort_run(self) -> None:
+        models = [
+            {
+                "series_id": "gpt56",
+                "label": "GPT-5.6 Luna",
+                "gateway": "openrouter",
+                "model": "openai/gpt-5.6-luna",
+                "api_key_env": "KEY",
+                "catalog_retirement_skip": True,
+            },
+            {
+                "series_id": "gpt6",
+                "label": "GPT-6 Luna",
+                "gateway": "openrouter",
+                "model": "openai/gpt-6-luna",
+                "api_key_env": "KEY",
+            },
+        ]
+        packet = {
+            "cutoff": "2026-09-22T12:00:00Z",
+            "war": {"warId": "war", "warNumber": 1},
+            "history_hours_available": 5,
+            "regions": [{"map_name": "TestHex"}],
+        }
+        calls: list[str] = []
+
+        class ProviderStub:
+            def __init__(self, config, _settings):
+                self.config = config
+                self.attempts = []
+                self.accumulated_cost = 0.0
+
+            def model_catalog(self):
+                return {"data": [{"id": "openai/gpt-6-luna"}]}
+
+            def complete_json(self, _messages, schema_name, _schema):
+                calls.append(self.config["model"])
+                parsed = (
+                    {"headline": "h", "war_summary": "s", "selected_regions": ["TestHex"]}
+                    if schema_name == "foxhole_war_overview"
+                    else {"predictions": [], "strategic_advice": []}
+                )
+                raw = {
+                    "model": self.config["model"],
+                    "choices": [{"message": {"content": json.dumps(parsed)}}],
+                    "usage": {},
+                }
+                self.attempts.append(
+                    {
+                        "stage": schema_name,
+                        "raw_response": raw,
+                        "requested_model": self.config["model"],
+                        "returned_model": self.config["model"],
+                        "usage": {},
+                        "cost_usd": 0.0,
+                    }
+                )
+                return ProviderResponse(
+                    parsed, raw, self.config["model"], self.config["model"], None, {}, 0.0
+                )
+
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            "os.environ", {"KEY": "secret"}
+        ), patch("foxhole_forecast.forecasting.DATA_DIR", Path(directory)), patch(
+            "foxhole_forecast.forecasting.read_json",
+            return_value={"packet_type": "detail_source", "cutoff": packet["cutoff"], "war": packet["war"]},
+        ), patch(
+            "foxhole_forecast.forecasting.forecast_due",
+            return_value=(True, "slot"),
+        ), patch(
+            "foxhole_forecast.forecasting.load_models", return_value=models
+        ), patch(
+            "foxhole_forecast.forecasting.build_scout_packet", return_value=packet
+        ), patch(
+            "foxhole_forecast.forecasting.build_detail_source",
+            return_value={"packet_type": "detail_source", "cutoff": packet["cutoff"], "war": packet["war"]},
+        ), patch(
+            "foxhole_forecast.forecasting.current_strategic_base_ids", return_value=[]
+        ), patch(
+            "foxhole_forecast.forecasting.ModelProvider", ProviderStub
+        ), patch(
+            "foxhole_forecast.forecasting.validate_scout", return_value=None
+        ), patch(
+            "foxhole_forecast.forecasting.validate_forecast", return_value=None
+        ), patch(
+            "foxhole_forecast.forecasting.build_detail_packet",
+            return_value={"regions": {}, "selected_region_hourly_series": {}, "selected_regions": ["TestHex"], "war": packet["war"], "cutoff": packet["cutoff"]},
+        ), patch(
+            "foxhole_forecast.forecasting._drop_invalid_predictions",
+            side_effect=lambda value, _packet: (value, []),
+        ), patch(
+            "foxhole_forecast.forecasting._filter_forecast_output",
+            side_effect=lambda value, _packet, _settings: (value, [], []),
+        ), patch(
+            "foxhole_forecast.forecasting._freeze_evidence",
+            side_effect=lambda value, *_args: value,
+        ), patch(
+            "foxhole_forecast.forecasting.orchestration.war_is_active",
+            return_value=True,
+        ):
+            result = run_forecast_cohort(Settings.load(), force=True)
+            ledger = read_ledger("model_runs", data_dir=Path(directory))
+
+        self.assertEqual(calls, ["openai/gpt-6-luna"])
+        self.assertEqual(
+            [row["status"] for row in ledger],
+            ["skipped_provider_unavailable", "invalid"],
+        )
+        self.assertEqual(
+            [entry["status"] for entry in result["models"]],
+            ["skipped_provider_unavailable", "invalid"],
+        )
+        self.assertIn("catalog_evidence", ledger[0])
+        self.assertEqual(ledger[0]["catalog_checked_at"][:10], "2026-09-22")
+
+    def test_openrouter_retirement_catalog_is_compact_and_fails_open(self) -> None:
+        models = [
+            {
+                "series_id": "gpt56",
+                "gateway": "openrouter",
+                "model": "openai/gpt-5.6-luna",
+                "api_key_env": "KEY",
+                "catalog_retirement_skip": True,
+            },
+            {
+                "series_id": "gpt6",
+                "gateway": "openrouter",
+                "model": "openai/gpt-6-luna",
+                "api_key_env": "KEY",
+            },
+        ]
+        provider = SimpleNamespace(
+            model_catalog=lambda: {
+                "data": [
+                    {"id": "openai/gpt-6-luna"},
+                    {"id": "google/gemini-3.7-flash"},
+                ]
+            }
+        )
+        with patch.dict("os.environ", {"KEY": "secret"}), patch(
+            "foxhole_forecast.forecasting.ModelProvider", return_value=provider
+        ) as provider_ctor:
+            result = _openrouter_catalogs(Settings.load(), models)
+        self.assertEqual(provider_ctor.call_count, 1)
+        retired = result["KEY:openai/gpt-5.6-luna"]
+        self.assertFalse(retired["available"])
+        self.assertEqual(retired["reason"], "model_absent_from_catalog")
+        evidence = retired["catalog_evidence"]
+        self.assertEqual(evidence["model_count"], 2)
+        self.assertEqual(evidence["model_ids"], [
+            "google/gemini-3.7-flash", "openai/gpt-6-luna"
+        ])
+        self.assertNotIn("catalog", retired)
+        self.assertTrue(result["KEY"]["available"])
+
+    def test_openrouter_retirement_catalog_errors_preserve_normal_calls(self) -> None:
+        model = {
+            "series_id": "gpt56",
+            "gateway": "openrouter",
+            "model": "openai/gpt-5.6-luna",
+            "api_key_env": "KEY",
+            "catalog_retirement_skip": True,
+        }
+        for payload in ({"error": "offline"}, {}, {"data": []}, {"data": [None]}):
+            with self.subTest(payload=payload), patch.dict(
+                "os.environ", {"KEY": "secret"}
+            ), patch(
+                "foxhole_forecast.forecasting.ModelProvider",
+                return_value=SimpleNamespace(model_catalog=lambda payload=payload: payload),
+            ):
+                result = _openrouter_catalogs(Settings.load(), [model])
+            self.assertTrue(result["KEY"]["available"])
+            self.assertNotIn("KEY:openai/gpt-5.6-luna", result)
+
+        with patch.dict("os.environ", {}, clear=True), patch(
+            "foxhole_forecast.forecasting.ModelProvider",
+            side_effect=MissingApiKey,
+        ):
+            result = _openrouter_catalogs(Settings.load(), [model])
+        self.assertTrue(result["KEY"]["available"])
+
     def test_cohort_flow_skips_retired_v4_and_runs_v41(self) -> None:
         models = [
             {"series_id": "v4", "label": "V4", "gateway": "deepseek", "model": "deepseek-v4-flash", "api_key_env": "KEY", "catalog_retirement_skip": True},

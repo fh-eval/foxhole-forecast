@@ -362,6 +362,71 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(glm["reasoning"], {"effort": "max", "exclude": False})
         self.assertEqual(glm["max_paid_usd_per_day"], 0.25)
 
+    def test_gpt_6_luna_is_enabled_as_distinct_openai_series_at_high_reasoning(self) -> None:
+        models = load_models()
+        gpt_5_6 = next(
+            model
+            for model in models
+            if model["series_id"] == "openrouter-openai-gpt-5.6-luna-event-v4"
+        )
+        gpt_6 = next(
+            model
+            for model in models
+            if model["series_id"] == "openrouter-openai-gpt-6-luna-event-v1"
+        )
+
+        self.assertEqual(gpt_5_6["label"], "GPT-5.6 Luna")
+        self.assertEqual(gpt_5_6["model"], "openai/gpt-5.6-luna")
+        self.assertIs(gpt_5_6.get("catalog_retirement_skip"), True)
+        self.assertEqual(gpt_6["label"], "GPT-6 Luna")
+        self.assertEqual(gpt_6["model"], "openai/gpt-6-luna")
+        self.assertNotEqual(gpt_6["series_id"], gpt_5_6["series_id"])
+        self.assertIs(gpt_6.get("enabled"), True)
+        self.assertNotIn("catalog_retirement_skip", gpt_6)
+        self.assertEqual(gpt_6["gateway"], "openrouter")
+        self.assertEqual(gpt_6["provider_only"], ["openai"])
+        self.assertFalse(gpt_6["allow_fallbacks"])
+        self.assertEqual(gpt_6["reasoning"], {"effort": "high", "exclude": False})
+        self.assertEqual(gpt_6["max_tokens"], gpt_5_6["max_tokens"])
+        self.assertEqual(
+            gpt_6["request_timeout_seconds"], gpt_5_6["request_timeout_seconds"]
+        )
+        self.assertIs(gpt_6["omit_temperature"], True)
+
+    def test_gpt_6_luna_fallback_cost_uses_catalog_rates(self) -> None:
+        self.assertEqual(
+            _cost(
+                "openai/gpt-6-luna",
+                {"prompt_tokens": 1_000_000, "completion_tokens": 1_000_000},
+            ),
+            0.6,
+        )
+
+    def test_openrouter_model_catalog_uses_models_endpoint(self) -> None:
+        observed = {}
+
+        def urlopen(request, timeout):
+            observed["url"] = request.full_url
+            observed["method"] = request.get_method()
+            observed["authorization"] = request.get_header("Authorization")
+            observed["timeout"] = timeout
+            return _StaticResponse({"data": [{"id": "openai/gpt-6-luna"}]})
+
+        config = {
+            "gateway": "openrouter",
+            "model": "openai/gpt-6-luna",
+            "api_key_env": "TEST_OPENROUTER_KEY",
+        }
+        with patch.dict("os.environ", {"TEST_OPENROUTER_KEY": "secret"}), patch(
+            "urllib.request.urlopen", side_effect=urlopen
+        ):
+            catalog = ModelProvider(config, Settings.load()).model_catalog()
+
+        self.assertEqual(observed["url"], "https://openrouter.ai/api/v1/models")
+        self.assertEqual(observed["method"], "GET")
+        self.assertEqual(observed["authorization"], "Bearer secret")
+        self.assertEqual(catalog, {"data": [{"id": "openai/gpt-6-luna"}]})
+
     def test_gemini_38_config_pins_google_vertex_with_medium_reasoning(self) -> None:
         gemini = next(
             model
