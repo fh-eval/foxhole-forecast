@@ -307,6 +307,7 @@ class ProviderTests(unittest.TestCase):
             )
 
         self.assertEqual(captured["max_tokens"], 8192)
+        self.assertEqual(captured["response_format"], {"type": "json_object"})
         self.assertEqual(
             captured["chat_template_kwargs"], {"enable_thinking": False}
         )
@@ -348,6 +349,96 @@ class ProviderTests(unittest.TestCase):
             model["model"] for model in models if model.get("enabled", True)
         }
         self.assertNotIn("nvidia/nemotron-3-ultra-550b-a55b", enabled_models)
+
+    def test_openrouter_nemotron_free_series_is_enabled_and_pinned(self) -> None:
+        models = load_models()
+        nemotron = next(
+            model
+            for model in models
+            if model["series_id"]
+            == "openrouter-nvidia-nemotron-3-ultra-550b-a55b-free-event-v1"
+        )
+
+        self.assertEqual(nemotron["label"], "Nemotron 3 Ultra 550B A55B (OpenRouter free)")
+        self.assertEqual(nemotron["gateway"], "openrouter")
+        self.assertEqual(nemotron["model"], "nvidia/nemotron-3-ultra-550b-a55b:free")
+        self.assertEqual(nemotron["api_key_env"], "OPENROUTER_API_KEY")
+        self.assertEqual(nemotron["provider_only"], ["nvidia"])
+        self.assertFalse(nemotron["allow_fallbacks"])
+        self.assertEqual(nemotron["reasoning"], {"effort": "high", "exclude": False})
+        self.assertEqual(nemotron["max_tokens"], 32768)
+        self.assertEqual(nemotron["request_timeout_seconds"], 300)
+        self.assertIs(nemotron["paid"], False)
+        self.assertIs(nemotron["omit_response_format"], True)
+
+        enabled_series = {
+            model["series_id"] for model in models if model.get("enabled", True)
+        }
+        self.assertIn(nemotron["series_id"], enabled_series)
+        self.assertNotIn("nvidia-nemotron-3-ultra-550b-a55b-event-v4", enabled_series)
+
+    def test_openrouter_nemotron_request_omits_response_format_and_keeps_json_validation(self) -> None:
+        captured = {}
+        model = next(
+            candidate
+            for candidate in load_models()
+            if candidate["series_id"]
+            == "openrouter-nvidia-nemotron-3-ultra-550b-a55b-free-event-v1"
+        )
+
+        def urlopen(request, timeout):
+            captured.update(json.loads(request.data))
+            captured["timeout"] = timeout
+            return _StaticResponse(
+                {
+                    "choices": [{"message": {"content": "{\"ok\":true}"}}],
+                    "model": model["model"],
+                    "usage": {},
+                }
+            )
+
+        with patch.dict("os.environ", {"TEST_OPENROUTER_KEY": "secret"}), patch(
+            "urllib.request.urlopen", side_effect=urlopen
+        ):
+            provider = ModelProvider(
+                {**model, "api_key_env": "TEST_OPENROUTER_KEY"}, Settings.load()
+            )
+            provider.complete_json(
+                [{"role": "user", "content": "Return JSON"}],
+                "test",
+                {"type": "object"},
+            )
+
+        self.assertEqual(captured["model"], "nvidia/nemotron-3-ultra-550b-a55b:free")
+        self.assertEqual(captured["provider"], {"allow_fallbacks": False, "only": ["nvidia"]})
+        self.assertEqual(captured["reasoning"], {"effort": "high", "exclude": False})
+        self.assertEqual(captured["max_tokens"], 32768)
+        self.assertEqual(captured["timeout"], 300)
+        self.assertNotIn("response_format", captured)
+
+        def invalid_urlopen(_request, timeout):
+            del timeout
+            return _StaticResponse(
+                {
+                    "choices": [{"message": {"content": "This is not JSON"}}],
+                    "model": model["model"],
+                    "usage": {},
+                }
+            )
+
+        with patch.dict("os.environ", {"TEST_OPENROUTER_KEY": "secret"}), patch(
+            "urllib.request.urlopen", side_effect=invalid_urlopen
+        ):
+            provider = ModelProvider(
+                {**model, "api_key_env": "TEST_OPENROUTER_KEY"}, Settings.load()
+            )
+            with self.assertRaises(json.JSONDecodeError):
+                provider.complete_json(
+                    [{"role": "user", "content": "Return JSON"}],
+                    "test",
+                    {"type": "object"},
+                )
+        self.assertIn("JSONDecodeError", provider.attempts[0]["error"])
 
     def test_glm_flash_config_pins_official_zai_with_max_reasoning(self) -> None:
         glm = next(
@@ -494,6 +585,32 @@ class ProviderTests(unittest.TestCase):
             {"effort": "high", "exclude": False},
         )
         self.assertEqual(provider.attempts[0]["request_max_tokens"], 32768)
+        self.assertEqual(captured["response_format"]["type"], "json_schema")
+
+    def test_openrouter_structured_outputs_opt_out_keeps_json_object_format(self) -> None:
+        captured = {}
+
+        def urlopen(request, timeout):
+            del timeout
+            captured.update(json.loads(request.data))
+            return _Response()
+
+        config = {
+            "gateway": "openrouter",
+            "model": "google/gemini-3.8-flash",
+            "api_key_env": "TEST_OPENROUTER_KEY",
+            "structured_outputs": False,
+        }
+        with patch.dict("os.environ", {"TEST_OPENROUTER_KEY": "secret"}), patch(
+            "urllib.request.urlopen", side_effect=urlopen
+        ):
+            ModelProvider(config, Settings.load()).complete_json(
+                [{"role": "user", "content": "Return JSON"}],
+                "test",
+                {"type": "object"},
+            )
+
+        self.assertEqual(captured["response_format"], {"type": "json_object"})
 
     def test_model_can_extend_request_timeout_for_reasoning(self) -> None:
         observed = {}
