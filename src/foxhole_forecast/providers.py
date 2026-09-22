@@ -246,8 +246,9 @@ class ModelProvider:
             "messages": messages,
             "max_tokens": int(self.config.get("max_tokens", self.settings.output_token_limit)),
             "stream": False,
-            "response_format": response_format,
         }
+        if not self.config.get("omit_response_format", False):
+            body["response_format"] = response_format
         if not self.config.get("omit_temperature", False):
             body["temperature"] = self.settings.temperature
         if gateway == "openrouter":
