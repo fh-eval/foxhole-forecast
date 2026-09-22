@@ -11,6 +11,17 @@ WORKFLOWS = Path(__file__).parents[1] / ".github" / "workflows"
 
 
 class WorkflowAuthenticationTests(unittest.TestCase):
+    def test_model_triage_uses_gpt_6_luna_at_high_reasoning(self) -> None:
+        workflow = (WORKFLOWS / "model-triage.yml").read_text(encoding="utf-8")
+        registration = (WORKFLOWS.parents[1] / "opencode.json").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("--model openrouter/openai/gpt-6-luna", workflow)
+        self.assertIn('"openai/gpt-6-luna"', registration)
+        self.assertIn('"model": "openrouter/openai/gpt-6-luna"', registration)
+        self.assertIn('"reasoningEffort": "high"', registration)
+        self.assertNotIn("openai/gpt-5.6-luna", workflow)
+
     def assert_scoped_app_authentication(self, job: str) -> None:
         self.assertIn("permissions:\n      contents: read", job)
         self.assertNotIn("permissions:\n      contents: write", job)

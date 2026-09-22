@@ -108,6 +108,7 @@ def run_forecast_cohort(
     )
     model_results: list[dict[str, Any]] = []
     deepseek_catalogs = _deepseek_catalogs(settings, models)
+    openrouter_catalogs = _openrouter_catalogs(settings, models)
     for model_config in models:
         if series_id and model_config["series_id"] != series_id:
             continue
@@ -118,6 +119,9 @@ def run_forecast_cohort(
                     f"{model_config.get('api_key_env')}:{model_config.get('model')}"
                 ) or deepseek_catalogs.get(model_config.get("api_key_env"))
                 if model_config.get("gateway") == "deepseek" else None,
+                openrouter_catalog=openrouter_catalogs.get(
+                    f"{model_config.get('api_key_env')}:{model_config.get('model')}"
+                ) if model_config.get("gateway") == "openrouter" else None,
             )
             result = externalize_run_responses(result, _pkg.DATA_DIR)
             _pkg.append_ledger(
@@ -847,5 +851,78 @@ def _deepseek_catalogs(
                         "reason": "model_absent_from_catalog",
                     }
         except Exception:
+            catalogs[env_name] = {"available": True}
+    return catalogs
+
+
+def _openrouter_catalogs(
+    settings: Settings, models: list[dict[str, Any]]
+) -> dict[str, dict[str, Any]]:
+    """Preflight explicitly opted-in OpenRouter retirements once per key."""
+    catalogs: dict[str, dict[str, Any]] = {}
+    for config in models:
+        if (
+            not config.get("enabled", True)
+            or config.get("gateway") != "openrouter"
+            or config.get("catalog_retirement_skip") is not True
+        ):
+            continue
+        env_name = config["api_key_env"]
+        if catalogs:
+            # OpenRouter's model list is shared by every configured OpenRouter
+            # model; issue no more than one catalog request in this operation.
+            continue
+        try:
+            provider = _pkg.ModelProvider(config, settings)
+        except _pkg.MissingApiKey:
+            catalogs[env_name] = {"available": True}
+            continue
+        try:
+            catalog = provider.model_catalog()
+            entries = catalog.get("data") if isinstance(catalog, dict) else None
+            if not isinstance(entries, list) or not entries:
+                raise TypeError("OpenRouter model catalog has no data entries")
+            model_ids: list[str] = []
+            for entry in entries:
+                if (
+                    not isinstance(entry, dict)
+                    or not isinstance(entry.get("id"), str)
+                    or not entry["id"].strip()
+                ):
+                    raise TypeError("OpenRouter model catalog contains an invalid entry")
+                model_ids.append(entry["id"])
+            if len(set(model_ids)) != len(model_ids):
+                raise ValueError("OpenRouter model catalog contains duplicate IDs")
+            model_ids.sort()
+            digest = hashlib.sha256(
+                json.dumps(model_ids, ensure_ascii=False, separators=(",", ":")).encode()
+            ).hexdigest()
+            evidence = {
+                "source": "https://openrouter.ai/api/v1/models",
+                "model_ids": model_ids,
+                "model_count": len(model_ids),
+                "ids_sha256": digest,
+            }
+            catalogs[env_name] = {
+                "available": True,
+                "catalog_evidence": evidence,
+                "checked_at": isoformat(),
+            }
+            for candidate in models:
+                if (
+                    candidate.get("enabled", True)
+                    and candidate.get("gateway") == "openrouter"
+                    and candidate.get("api_key_env") == env_name
+                    and candidate.get("catalog_retirement_skip") is True
+                    and candidate.get("model") not in model_ids
+                ):
+                    catalogs[f"{env_name}:{candidate['model']}"] = {
+                        **catalogs[env_name],
+                        "available": False,
+                        "reason": "model_absent_from_catalog",
+                    }
+        except Exception:  # noqa: BLE001 - fail open on catalog outages and malformed responses
+            # Catalog availability is advisory: outages and malformed payloads
+            # must leave normal completion and health reporting in control.
             catalogs[env_name] = {"available": True}
     return catalogs

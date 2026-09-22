@@ -156,6 +156,7 @@ def _run_model(
     state: dict[str, Any],
     detail_snapshot: dict[str, Any] | None = None,
     deepseek_catalog: dict[str, Any] | None = None,
+    openrouter_catalog: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     run_id = f"{cohort_id}:{config['series_id']}"
     base = {
@@ -178,6 +179,17 @@ def _run_model(
             "reason": deepseek_catalog.get("reason", "model_absent_from_catalog"),
             "catalog": copy.deepcopy(deepseek_catalog.get("catalog")),
             "catalog_checked_at": deepseek_catalog.get("checked_at"),
+            "cost_usd": 0.0,
+        }
+    if openrouter_catalog and not openrouter_catalog.get("available", True):
+        return {
+            **base,
+            "status": "skipped_provider_unavailable",
+            "reason": openrouter_catalog.get("reason", "model_absent_from_catalog"),
+            "catalog_evidence": copy.deepcopy(
+                openrouter_catalog.get("catalog_evidence")
+            ),
+            "catalog_checked_at": openrouter_catalog.get("checked_at"),
             "cost_usd": 0.0,
         }
     date_key = scout_packet["cutoff"][:10]

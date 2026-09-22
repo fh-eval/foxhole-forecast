@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -20,6 +22,31 @@ def _valid_retirement_skip(run: dict[str, Any], model: dict[str, Any]) -> bool:
     """Accept a retirement skip only with intact catalog proof."""
     if not isinstance(run, dict) or run.get("requested_model") != model.get("model"):
         return False
+    if model.get("gateway") == "openrouter":
+        evidence = run.get("catalog_evidence")
+        if (
+            not isinstance(evidence, dict)
+            or evidence.get("source") != "https://openrouter.ai/api/v1/models"
+            or not isinstance(run.get("catalog_checked_at"), str)
+        ):
+            return False
+        try:
+            parse_time(run["catalog_checked_at"])
+        except (TypeError, ValueError):
+            return False
+        ids = evidence.get("model_ids")
+        if (
+            not isinstance(ids, list)
+            or not ids
+            or any(not isinstance(item, str) or not item.strip() for item in ids)
+            or ids != sorted(set(ids))
+            or evidence.get("model_count") != len(ids)
+        ):
+            return False
+        digest = hashlib.sha256(
+            json.dumps(ids, ensure_ascii=False, separators=(",", ":")).encode()
+        ).hexdigest()
+        return evidence.get("ids_sha256") == digest and model.get("model") not in ids
     catalog = run.get("catalog")
     if not isinstance(catalog, dict) or not isinstance(catalog.get("data"), list):
         return False
@@ -86,7 +113,7 @@ def audit_model_runs(
                 entry.get("status") == "skipped_provider_unavailable"
                 and (run or {}).get("status") == "skipped_provider_unavailable"
                 and (run or {}).get("reason") == "model_absent_from_catalog"
-                and model.get("gateway") == "deepseek"
+                and model.get("gateway") in {"deepseek", "openrouter"}
                 and model.get("catalog_retirement_skip") is True
                 and _valid_retirement_skip(run or {}, model)
             ):
