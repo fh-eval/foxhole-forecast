@@ -40,7 +40,7 @@ from foxhole_forecast.ledger import read_ledger
 from foxhole_forecast.packets import cohort_evidence_path
 from foxhole_forecast.providers import MissingApiKey, ProviderResponse
 from foxhole_forecast.schemas import forecast_schema
-from foxhole_forecast.storage import read_json, read_jsonl, write_json, write_jsonl
+from foxhole_forecast.storage import parse_time, read_json, read_jsonl, write_json, write_jsonl
 from foxhole_forecast.validation import ValidationError
 
 
@@ -145,7 +145,9 @@ class ForecastBudgetTests(unittest.TestCase):
             "foxhole_forecast.forecasting.orchestration.war_is_active",
             return_value=True,
         ):
+            started = datetime.now(UTC)
             result = run_forecast_cohort(Settings.load(), force=True)
+            finished = datetime.now(UTC)
             ledger = read_ledger("model_runs", data_dir=Path(directory))
 
         self.assertEqual(calls, ["openai/gpt-6-luna"])
@@ -158,7 +160,11 @@ class ForecastBudgetTests(unittest.TestCase):
             ["skipped_provider_unavailable", "invalid"],
         )
         self.assertIn("catalog_evidence", ledger[0])
-        self.assertEqual(ledger[0]["catalog_checked_at"][:10], "2026-09-22")
+        # The catalog is stamped when it is checked (now), not with the packet cutoff; a fixed
+        # date here only passed on the day the test was written.
+        checked_at = parse_time(ledger[0]["catalog_checked_at"])
+        self.assertLessEqual(started, checked_at)
+        self.assertLessEqual(checked_at, finished)
 
     def test_openrouter_retirement_catalog_is_compact_and_fails_open(self) -> None:
         models = [
