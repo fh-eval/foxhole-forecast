@@ -1,5 +1,14 @@
 # Foxhole Forecast
 
+> **Paused since 2026-09-28** to stop spending the model token budget. The last scheduled
+> collection ran at 16:03 UTC and the last scheduled forecast at 13:49 UTC that day. The last data
+> commits are 16:12 UTC (observations and scores) and 13:54 UTC (forecasts). A manual forecast
+> dispatched at 16:15 UTC was cancelled. The Collect observations, Forecast cohort, war-archive
+> maintenance, model-triage and notification-test workflows are disabled in GitHub Actions. CI,
+> the dashboard deploy and Dependabot stay on, so the site keeps serving the data up to the pause.
+> To resume, re-enable those workflows (Actions → each workflow → Enable). The first collection
+> after resuming starts a new observation gap from 2026-09-28.
+
 Foxhole Forecast is a small, budget-constrained experiment in LLM forecasting: do models make different battlefield calls, and which parts are hard for them? Every three hours, several models are asked for eight probabilistic, exact-ETA predictions about strategic base transitions using public war data frozen at the same cutoff. API observations settle those predictions, and a static dashboard publishes outcome counts and a custom partial-credit timing loss. Live submissions and delayed frozen-input replays are labeled separately.
 
 The implementation uses the [official Foxhole War API](https://github.com/clapfoot/warapi) by default. Provenance-tagged FoxholeStats event logs can recover documented polling outages without being presented as official observations.
